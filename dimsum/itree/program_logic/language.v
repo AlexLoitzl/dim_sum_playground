@@ -103,6 +103,8 @@ Section language.
       prim_step e σ κ e' σ' efs yld →
       ¬ yld ∨ if a is WeaklyAtomic then irreducible e' σ' else is_Some (to_val e').
 
+  (* idea: make configuration option nat * list expr * state where
+  None means we need to choose a new thread *)
   Inductive step (ρ1 : cfg Λ) (κ : list (observation Λ)) (ρ2 : cfg Λ) : Prop :=
     | step_atomic i1 i2 e1 σ1 e2 σ2 efs t (yld : bool) :
        ρ1 = (i1, t, σ1) →

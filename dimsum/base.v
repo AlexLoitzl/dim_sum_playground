@@ -1062,6 +1062,69 @@ Ltac simplify_map_list :=
              rewrite ->(map_preserved_eq' ns m)
          end.
 
+(** * [bi_mono1] *)
+(* TODO: rename to limo or lin_mon? for linear monotonicity *)
+Definition bi_mono1 {PROP : bi} {A} (P : (A → PROP) → PROP) : (A → PROP) → PROP :=
+  λ Q, (∃ Q', P Q' ∗ (∀ a, Q' a -∗ Q a))%I.
+
+Section bi_mono1.
+  Context {PROP : bi} {A : Type}.
+  Implicit Types (P : (A → PROP) → PROP).
+
+  Lemma bi_mono1_intro0 P Q :
+    P Q -∗
+    bi_mono1 P Q.
+  Proof. iIntros "?". iExists _. iFrame. iIntros (?) "$". Qed.
+
+  Lemma bi_mono1_mono P Q1 Q2 :
+    bi_mono1 P Q1 -∗
+    (∀ x, Q1 x -∗ Q2 x) -∗
+    bi_mono1 P Q2.
+  Proof.
+    iIntros "[% [HP HQ1]] HQ". iExists _. iFrame "HP". iIntros (?) "?".
+    iApply "HQ". by iApply "HQ1".
+  Qed.
+
+  Lemma bi_mono1_mono_l P1 P2 Q :
+    bi_mono1 P1 Q -∗
+    (∀ Q, P1 Q -∗ P2 Q) -∗
+    bi_mono1 P2 Q.
+  Proof.
+    iIntros "[% [HP HQ1]] HQ". iExists _. iFrame "HQ1". by iApply "HQ".
+  Qed.
+
+  Lemma bi_mono1_elim P Q :
+    bi_mono1 P Q -∗
+    (∀ Q', (∀ x, Q' x -∗ Q x) -∗ P Q' -∗ P Q) -∗
+    P Q.
+  Proof. iIntros "[% [??]] HP". iApply ("HP" with "[$] [$]"). Qed.
+
+  (** Derived laws *)
+  Lemma bi_mono1_dup P Q :
+    bi_mono1 (bi_mono1 P) Q -∗
+    bi_mono1 P Q.
+  Proof.
+    iIntros "?".
+    iApply (bi_mono1_elim with "[$] []").
+    iIntros (?) "??". by iApply (bi_mono1_mono with "[$]").
+  Qed.
+
+  Lemma bi_mono1_intro P Q Q' :
+    P Q' -∗
+    (∀ x, Q' x -∗ Q x) -∗
+    bi_mono1 P Q.
+  Proof.
+    iIntros "HP HQ".
+    iApply (bi_mono1_mono with "[HP] HQ").
+    by iApply bi_mono1_intro0.
+  Qed.
+
+End bi_mono1.
+
+(* TODO: enable this and prevent clients from unfolding bi_mono1 *)
+(* Global Typeclasses Opaque bi_mono1. *)
+
+
 (** * Lemmas about [big_sepL] *)
 Section big_op.
 Context {PROP : bi}.

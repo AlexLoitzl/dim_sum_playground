@@ -16,6 +16,9 @@ Definition rec_expr_itree (e : expr) : itree (callE expr val +' moduleE rec_even
   match e with
   | Val v => Ret v
   | BinOp e1 op e2 =>
+      (* TODO: use a call that shortcircuits on val such that we have
+      rec_expr_itree BinOp e1 op e2 ≅ v ← rec_expr_itree e1;
+      rec_expr_itree BinOp v op e2 *)
       v1 ← call e1;
       v2 ← call e2;
       v ← eval_binop op v1 v2?;
