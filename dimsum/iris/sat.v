@@ -219,7 +219,7 @@ Section sat.
     iSplit; iIntros "[%x [% Hx]]".
     all: iDestruct (own_valid with "Hx") as "#Hvalid"; rewrite auth_frag_validI.
     (* TODO: Is this use of excluded middle necessary? *)
-    all: destruct (AxClassic (✓{0} x)); [|by iDestruct (uPred.cmra_valid_elim with "Hvalid") as %[]].
+    all: destruct (AxClassic (✓{0} x)); [|by iDestruct (uPred.cmra_valid_elim with "Hvalid") as %?].
     all: iExists _; iFrame; iPureIntro; by apply Heq.
   Qed.
 
@@ -233,7 +233,7 @@ Section sat.
     iExists _. iFrame.
     (* TODO: Is this use of excluded middle necessary? *)
     destruct (AxClassic (✓{0} m)); [iPureIntro; naive_solver|].
-    by iDestruct (uPred.cmra_valid_elim with "Hvalid") as %[].
+    by iDestruct (uPred.cmra_valid_elim with "Hvalid") as %?.
   Qed.
 
   Lemma sat_bupd γ P :
