@@ -257,15 +257,15 @@ Definition to_fns : gmap string fndef → fnsUR :=
 
 
 Class recPreGS (Σ : gFunctors) := RecPreGS {
-  rec_mapsto_ghost_map_preG :> ghost_mapG Σ loc val;
-  rec_alloc_ghost_map_preG :> ghost_mapG Σ prov Z;
-  rec_fn_preG :> inG Σ fnsUR;
+  rec_mapsto_ghost_map_preG :: ghost_mapG Σ loc val;
+  rec_alloc_ghost_map_preG :: ghost_mapG Σ prov Z;
+  rec_fn_preG :: inG Σ fnsUR;
 }.
 
 Class recGS (Σ : gFunctors) := RecGS {
-  rec_mapsto_ghost_mapG :> ghost_mapG Σ loc val;
-  rec_alloc_ghost_mapG :> ghost_mapG Σ prov Z;
-  rec_fnG :> inG Σ fnsUR;
+  rec_mapsto_ghost_mapG :: ghost_mapG Σ loc val;
+  rec_alloc_ghost_mapG :: ghost_mapG Σ prov Z;
+  rec_fnG :: inG Σ fnsUR;
   rec_mapsto_name : gname;
   rec_alloc_name : gname;
   rec_fn_name : gname;

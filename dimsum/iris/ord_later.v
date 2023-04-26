@@ -77,10 +77,10 @@ CoInductive spec (EV : Set) : Type@{Set+1} :=
 *)
 
 Class ord_laterPreG Σ := OrdLaterPreG {
-  ord_later_pre_inG :> inG Σ mono_ordR;
+  ord_later_pre_inG :: inG Σ mono_ordR;
 }.
 Class ord_laterGS Σ := OrdLaterGS {
-  ord_later_inG :> ord_laterPreG Σ;
+  ord_later_inG :: ord_laterPreG Σ;
   ord_later_name : gname;
 }.
 Definition ord_laterΣ : gFunctors :=
@@ -282,7 +282,7 @@ Global Arguments maybe_into_ord_later {_ _} _%I _%I {_}.
 Global Hint Mode MaybeIntoOrdLater + + ! -  : typeclass_instances.
 
 Class IntoOrdLater `{!ord_laterGS Σ} (P : iProp Σ) (Q : iProp Σ) :=
-  into_ord_later :> MaybeIntoOrdLater P Q.
+  into_ord_later :: MaybeIntoOrdLater P Q.
 Global Arguments IntoOrdLater {_ _} _%I _%I.
 Global Arguments into_ord_later {_ _} _%I _%I {_}.
 Global Hint Mode IntoOrdLater + + ! -  : typeclass_instances.

@@ -542,7 +542,7 @@ Inductive deep_asm_instr :=
 | Abranch_eq (abs : bool) (od : asm_operand) (r1 : string) (o : asm_operand)
 | Abranch_link (abs : bool) (o : asm_operand)
 | Aret
-| ASyscall
+| Asyscall
 .
 
 Definition deep_to_asm_instr (di : deep_asm_instr) : asm_instr :=

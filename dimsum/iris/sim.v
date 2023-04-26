@@ -7,13 +7,13 @@ Set Default Proof Using "Type".
 
 (** * dimsumGS *)
 Class dimsumPreG (Σ : gFunctors) := DimsumPreG {
-  dimsum_pre_invG :> invGpreS Σ;
-  dimsum_pre_ord_laterG :> ord_laterPreG Σ;
+  dimsum_pre_invG :: invGpreS Σ;
+  dimsum_pre_ord_laterG :: ord_laterPreG Σ;
 }.
 
 Class dimsumGS (Σ : gFunctors) := DimsumGS {
-  dimsum_invGS :> invGS_gen HasNoLc Σ;
-  dimsum_ord_laterGS :> ord_laterGS Σ;
+  dimsum_invGS :: invGS_gen HasNoLc Σ;
+  dimsum_ord_laterGS :: ord_laterGS Σ;
 }.
 Global Opaque dimsum_invGS.
 
