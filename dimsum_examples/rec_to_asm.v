@@ -217,7 +217,7 @@ Lemma r2a_mem_constant_excl a v1 v2 :
   r2a_mem_constant a v2 -∗
   False.
 Proof.
-  apply bi.wand_intro_r. rewrite -uPred.ownM_op.
+  apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id. rewrite -uPred.ownM_op.
   etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [?/=/gmap_view_frag_op_valid[??]].
   naive_solver.
 Qed.
@@ -248,7 +248,7 @@ Qed.
 
 Lemma r2a_heap_alloc' rh p b:
   rh !! p = None →
-  r2a_heap_auth rh ==∗ r2a_heap_auth (<[p := R2AConstant b]> rh) ∗ r2a_heap_constant p b.
+  r2a_heap_auth rh ⊢ |==> r2a_heap_auth (<[p := R2AConstant b]> rh) ∗ r2a_heap_constant p b.
 Proof.
   move => ?.
   rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
@@ -258,7 +258,7 @@ Qed.
 
 Lemma r2a_heap_alloc_big' rh rh' :
   (R2AConstant <$> rh') ##ₘ rh →
-  r2a_heap_auth rh ==∗ r2a_heap_auth ((R2AConstant <$> rh') ∪ rh) ∗ [∗ map] p↦a∈rh', r2a_heap_constant p a.
+  r2a_heap_auth rh ⊢ |==> r2a_heap_auth ((R2AConstant <$> rh') ∪ rh) ∗ [∗ map] p↦a∈rh', r2a_heap_constant p a.
 Proof.
   iIntros (?) "Hh".
   iInduction rh' as [|p a rh' ?] "IH" using map_ind;
@@ -271,7 +271,7 @@ Proof.
 Qed.
 
 Lemma r2a_heap_to_shared' p h rh a:
-  r2a_heap_auth rh ∗ r2a_heap_constant p h ==∗ r2a_heap_auth (<[p := R2AShared a]> rh) ∗ r2a_heap_shared p a.
+  r2a_heap_auth rh ∗ r2a_heap_constant p h ⊢ |==> r2a_heap_auth (<[p := R2AShared a]> rh) ∗ r2a_heap_shared p a.
 Proof.
   rewrite -!uPred.ownM_op. apply uPred.bupd_ownM_update.
   rewrite -!pair_op_1. apply prod_update; [|done].
@@ -282,7 +282,7 @@ Qed.
 
 Lemma r2a_heap_alloc_shared' rh p a:
   rh !! p = None →
-  r2a_heap_auth rh ==∗ r2a_heap_auth (<[p := R2AShared a]> rh) ∗ r2a_heap_shared p a.
+  r2a_heap_auth rh ⊢ |==> r2a_heap_auth (<[p := R2AShared a]> rh) ∗ r2a_heap_shared p a.
 Proof.
   iIntros (?) "?".
   iMod (r2a_heap_alloc' _ _ ∅ with "[$]"); [done|].
@@ -291,7 +291,7 @@ Qed.
 
 Lemma r2a_heap_alloc_shared_big' rh rh' :
   (R2AShared <$> rh') ##ₘ rh →
-  r2a_heap_auth rh ==∗ r2a_heap_auth ((R2AShared <$> rh') ∪ rh) ∗ [∗ map] p↦a∈rh', r2a_heap_shared p a.
+  r2a_heap_auth rh ⊢ |==> r2a_heap_auth ((R2AShared <$> rh') ∪ rh) ∗ [∗ map] p↦a∈rh', r2a_heap_shared p a.
 Proof.
   iIntros (?) "Hh".
   iInduction rh' as [|p a rh' ?] "IH" using map_ind;
@@ -304,7 +304,7 @@ Proof.
 Qed.
 
 Lemma r2a_heap_update' p h h' rh :
-  r2a_heap_auth rh ∗ r2a_heap_constant p h ==∗ r2a_heap_auth (<[p := R2AConstant h']> rh) ∗ r2a_heap_constant p h'.
+  r2a_heap_auth rh ∗ r2a_heap_constant p h ⊢ |==> r2a_heap_auth (<[p := R2AConstant h']> rh) ∗ r2a_heap_constant p h'.
 Proof.
   rewrite -!uPred.ownM_op. apply uPred.bupd_ownM_update.
   rewrite -!pair_op_1. apply prod_update; [|done].
@@ -312,7 +312,7 @@ Proof.
 Qed.
 
 Lemma r2a_heap_free' h p h' :
-  r2a_heap_auth h ∗ r2a_heap_constant p h' ==∗ r2a_heap_auth (delete p h).
+  r2a_heap_auth h ∗ r2a_heap_constant p h' ⊢ |==> r2a_heap_auth (delete p h).
 Proof.
   rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
   rewrite -pair_op_1. apply prod_update; [|done].
@@ -336,7 +336,7 @@ Lemma r2a_heap_lookup' h p h' :
   r2a_heap_constant p h' -∗
   ⌜h !! p = Some (R2AConstant h')⌝.
 Proof.
-  apply bi.wand_intro_r. rewrite -uPred.ownM_op.
+  apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id. rewrite -uPred.ownM_op.
   etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [/gmap_view_both_valid_L??]. naive_solver.
 Qed.
 
@@ -345,7 +345,7 @@ Lemma r2a_heap_shared_lookup' h p a :
   r2a_heap_shared p a -∗
   ⌜h !! p = Some (R2AShared a)⌝.
 Proof.
-  apply bi.wand_intro_r. rewrite -uPred.ownM_op.
+  apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id. rewrite -uPred.ownM_op.
   etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [/gmap_view_both_valid_L??]. naive_solver.
 Qed.
 
@@ -380,7 +380,7 @@ Lemma r2a_heap_shared_ag p a1 a2 :
   r2a_heap_shared p a2 -∗
   ⌜a1 = a2⌝.
 Proof.
-  apply bi.wand_intro_r. rewrite -uPred.ownM_op.
+  apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id. rewrite -uPred.ownM_op.
   etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [/=/gmap_view_frag_op_valid[??]?].
   naive_solver.
 Qed.
@@ -399,7 +399,7 @@ Qed.
 
 Lemma r2a_mem_alloc' a v amem :
   amem !! a = None →
-  r2a_mem_auth amem ==∗ r2a_mem_auth (<[a := v]> amem) ∗ r2a_mem_constant a v.
+  r2a_mem_auth amem ⊢ |==> r2a_mem_auth (<[a := v]> amem) ∗ r2a_mem_constant a v.
 Proof.
   move => ?.
   rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
@@ -409,7 +409,7 @@ Qed.
 
 Lemma r2a_mem_alloc_big' mem mem' :
   mem' ##ₘ mem →
-  r2a_mem_auth mem ==∗ r2a_mem_auth (mem' ∪ mem) ∗ r2a_mem_map mem'.
+  r2a_mem_auth mem ⊢ |==> r2a_mem_auth (mem' ∪ mem) ∗ r2a_mem_map mem'.
 Proof.
   iIntros (?) "Hmem". rewrite /r2a_mem_map.
   iInduction mem' as [|a v mem' ?] "IH" using map_ind; decompose_map_disjoint.
@@ -420,7 +420,7 @@ Proof.
 Qed.
 
 Lemma r2a_mem_update' v' a v amem :
-  r2a_mem_auth amem ∗ r2a_mem_constant a v ==∗ r2a_mem_auth (<[a := v']> amem) ∗ r2a_mem_constant a v'.
+  r2a_mem_auth amem ∗ r2a_mem_constant a v ⊢ |==> r2a_mem_auth (<[a := v']> amem) ∗ r2a_mem_constant a v'.
 Proof.
   rewrite -!uPred.ownM_op. apply uPred.bupd_ownM_update.
   rewrite -!pair_op_2. apply prod_update; [done|].
@@ -428,7 +428,7 @@ Proof.
 Qed.
 
 Lemma r2a_mem_delete' a v amem :
-  r2a_mem_auth amem ∗ r2a_mem_constant a v ==∗ r2a_mem_auth (delete a amem).
+  r2a_mem_auth amem ∗ r2a_mem_constant a v ⊢ |==> r2a_mem_auth (delete a amem).
 Proof.
   rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
   rewrite -pair_op_2. apply prod_update; [done|].
@@ -450,7 +450,7 @@ Lemma r2a_mem_lookup' a v amem :
   r2a_mem_constant a v -∗
   ⌜amem !! a = Some v⌝.
 Proof.
-  apply bi.wand_intro_r. rewrite -uPred.ownM_op.
+  apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id -uPred.ownM_op.
   etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [?/gmap_view_both_valid_L?]. naive_solver.
 Qed.
 

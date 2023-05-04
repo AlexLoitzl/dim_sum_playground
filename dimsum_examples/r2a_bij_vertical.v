@@ -789,7 +789,6 @@ Proof.
   { simpl. split_and!; [done..|].
     eexists moinit, ∅, moinit, ∅, ∅, ∅, ∅, ∅, ∅, ∅. split!.
     - by rewrite map_difference_diag.
-    - rewrite map_difference_empty. compute_done.
     - iSplit; iIntros!; [|done]. iFrame.
       rewrite /r2a_mem_map r2a_rh_shared_empty /r2a_combine_bij omap_empty !big_sepM_empty. done.
     - apply: satisfiable_mono; [apply r2a_res_init|]. iIntros!. iFrame.

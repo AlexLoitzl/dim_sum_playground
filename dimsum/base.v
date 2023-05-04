@@ -271,7 +271,7 @@ Global Hint Extern 0 (_ ⊒ _) => reflexivity : core.
 
 (** * map_union_weak *)
 Definition map_union_weak `{∀ A, Insert K A (M A), ∀ A, Empty (M A), ∀ A, Lookup K A (M A),
-    ∀ A, FinMapToList K A (M A)} {A} (m1 m2 : M A) :=
+    ∀ A, MapFold K A (M A)} {A} (m1 m2 : M A) :=
   map_imap (λ l v, Some (default v (m1 !! l))) m2.
 
 Section theorems.

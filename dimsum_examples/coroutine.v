@@ -338,10 +338,7 @@ Proof.
     } {
       rewrite !insert_union_l.
       erewrite coro_regs_mem_n_insert; [|done].
-      f_equal.
-      rewrite !lookup_total_alt. rewrite lookup_union_r //.
-      rewrite map_difference_union_r map_difference_empty_dom ?right_id_L //.
-      compute_done.
+      rewrite !lookup_total_alt. by rewrite lookup_union_r.
     } go.
     apply: Hloop. { etrans; [|done]. apply o_le_S. }
     split!. by simplify_map_eq'.

@@ -1006,10 +1006,9 @@ Proof.
       True
 ). }
   { split!.
-    - apply set_eq => ?. rewrite elem_of_hb_player_s. set_solver.
     - by apply satisfiable_pure_1.
     - apply heap_bij_eq_parts => /=. split; [apply map_eq|move => pl; split; apply set_eq] => ?.
-      + rewrite !hb_shared_lookup heap_bij_merge_lookup. by simplify_map_eq.
+      + rewrite !hb_shared_lookup. done.
       + by rewrite elem_of_hb_player_s.
       + by rewrite elem_of_hb_player_i.
   }

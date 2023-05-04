@@ -87,13 +87,13 @@ Section satisfiable.
 
   Lemma satisfiable_bmono x y:
     satisfiable x →
-    (x ==∗ y) →
+    (x ⊢ |==> y) →
     satisfiable y.
   Proof. move => ??. apply satisfiable_bupd_2. by apply: satisfiable_mono. Qed.
 
   Lemma satisfiable_init x y:
     ✓ x →
-    (uPred_ownM x ==∗ y) →
+    (uPred_ownM x ⊢ |==> y) →
     satisfiable y.
   Proof.
     move => /cmra_valid_validN Hvalid Hentails.
@@ -147,7 +147,7 @@ Section tactics.
 
   Lemma sat_start_bupd_intro_tac P (Φ : Prop) :
     satisfiable P →
-    (P ==∗ iSat_end Φ) →
+    (P ⊢ |==> iSat_end Φ) →
     Φ.
   Proof.
     move => /satisfiable_mono/[apply].
@@ -157,7 +157,7 @@ Section tactics.
 
   Lemma sat_start_intro_tac P (Φ : Prop) :
     satisfiable P →
-    (P -∗ iSat_end Φ) →
+    (P ⊢ iSat_end Φ) →
     Φ.
   Proof.
     move => /satisfiable_mono/[apply].
@@ -181,7 +181,7 @@ Proof. rewrite envs_entails_unseal=><-. done. Qed.
 
 Lemma tac_sat_start_proof Δ P :
   envs_entails Δ P →
-  sat_of_envs Δ -∗ P.
+  sat_of_envs Δ ⊢ P.
 Proof. rewrite envs_entails_unseal=><-. done. Qed.
 
 End tactics.
@@ -206,7 +206,7 @@ Notation "'--------------------------------------' ∗" := (sat_of_envs (Envs En
 (** internal tactics *)
 Ltac iSatStartProof :=
   lazymatch goal with
-  | |- sat_of_envs _ -∗ _ => apply tac_sat_start_proof
+  | |- sat_of_envs _ ⊢ _ => apply tac_sat_start_proof
   | _ => idtac
   end.
 Tactic Notation "iSatAccu" :=

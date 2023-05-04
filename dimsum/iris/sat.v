@@ -225,8 +225,8 @@ Section sat.
 
   (** ** Commuting connectives with [sat] *)
   Lemma sat_mono γ P1 P2 :
-    (P1 -∗ P2) →
-    sat γ P1 -∗ sat γ P2.
+    (P1 ⊢ P2) →
+    sat γ P1 ⊢ sat γ P2.
   Proof.
     iIntros ([Hwand]) "[%m [%Hholds Hm]]".
     iDestruct (own_valid with "Hm") as "#Hvalid". rewrite auth_frag_validI.
@@ -283,11 +283,11 @@ Section sat.
   Qed.
 
   Lemma sat_pure γ Φ :
-    sat γ ⌜Φ⌝ -∗ ⌜Φ⌝.
+    sat γ ⌜Φ⌝ ⊢ ⌜Φ⌝.
   Proof. iIntros "[%m [%Hholds H]]". do [uPred.unseal] in Hholds. done. Qed.
 
   Lemma sat_persistently_1 γ P :
-    sat γ (<pers> P) -∗ <pers> sat γ P.
+    sat γ (<pers> P) ⊢ <pers> sat γ P.
   Proof.
     iIntros "[%m1 [%Hholds1 H1]]".
     iExists (core m1).
@@ -302,7 +302,7 @@ Section sat.
   Proof. by rewrite !bi.affine_affinely. Qed.
 
   Lemma sat_intuitionistically_1 γ P :
-    sat γ (□ P) -∗ □ sat γ P.
+    sat γ (□ P) ⊢ □ sat γ P.
   Proof.
     rewrite sat_affinely /bi_intuitionistically. f_equiv.
     apply sat_persistently_1.
@@ -350,7 +350,7 @@ Section sat.
   Qed.
 
   Lemma sat_switch γ P Q G :
-    (P -∗ ∃ P', P' ∗ ⌜sat γ P' ∗ Q -∗ G⌝) →
+    (P ⊢ ∃ P', P' ∗ ⌜sat γ P' ∗ Q -∗ G⌝) →
     sat γ P ∗ Q -∗ G.
   Proof using Hdiscrete.
     iIntros (Himpl) "[Hsat HQ]".
@@ -360,7 +360,7 @@ Section sat.
   Qed.
 
   Lemma sat_switch_sep γ P Q G1 G2 :
-    (P -∗ ∃ P', G1 ∗ P' ∗ ⌜sat γ P' ∗ Q -∗ G2⌝) →
+    (P ⊢ ∃ P', G1 ∗ P' ∗ ⌜sat γ P' ∗ Q -∗ G2⌝) →
     sat γ P ∗ Q -∗ sat γ G1 ∗ G2.
   Proof using Hdiscrete.
     iIntros (Himpl). iApply sat_switch.
@@ -370,7 +370,7 @@ Section sat.
   Qed.
 
   Lemma sat_switch_bupd γ P Q G :
-    (P ==∗ ∃ P', P' ∗ ⌜sat_open γ ∗ sat γ P' ∗ Q -∗ G⌝) →
+    (P ⊢ |==> ∃ P', P' ∗ ⌜sat_open γ ∗ sat γ P' ∗ Q -∗ G⌝) →
     sat_open γ ∗ sat γ P ∗ Q ==∗ G.
   Proof using Hdiscrete.
     iIntros (Himpl) "[Hauth [Hsat HQ]]".

@@ -1459,7 +1459,7 @@ Lemma bij_alloc_opt_refines :
   trefines (rec_mod (<["f" := bij_alloc_opt]> ∅))
            (rec_heap_bij (rec_mod (<["f" := bij_alloc]> ∅))).
 Proof.
-  apply: rec_heap_bij_proof. { set_solver. }
+  apply: rec_heap_bij_proof. { compute_done. }
   { move => ??. setoid_rewrite lookup_insert_Some. setoid_rewrite lookup_empty. naive_solver. }
   move => n K1 K2 f fn1 fn2 vs1 vs2 h1 h2 r rf Hf1 ???? Hcall Hret.
   move: Hf1. rewrite !lookup_insert_Some => ?; destruct!; simplify_map_eq/=.
@@ -1491,7 +1491,7 @@ Qed.
 Lemma bij_alloc_ctx_refines :
   rec_ctx_refines (<["f" := bij_alloc_opt]> ∅) (<["f" := bij_alloc]> ∅).
 Proof.
-  apply: rec_heap_bij_trefines_implies_ctx_refines. { set_solver. }
+  apply: rec_heap_bij_trefines_implies_ctx_refines. { compute_done. }
   apply bij_alloc_opt_refines.
 Qed.
 End rec_heap_bij_example.

@@ -153,7 +153,7 @@ Section lemmas.
   Proof. unseal. solve_proper. Qed.
 
   Lemma ord_later_intro P:
-    P -∗ ▷ₒ P.
+    P ⊢ ▷ₒ P.
   Proof.
     unseal. iIntros "HP [% Hctx]".
     iExists _. iFrame. by iIntros.
@@ -178,7 +178,7 @@ Section lemmas.
   Qed.
 
   Lemma ord_later_ctx_alloc n :
-    ord_later_auth n -∗ ord_later_ctx.
+    ord_later_auth n ⊢ ord_later_ctx.
   Proof. unseal. rewrite {1}mono_ord_auth_ub_op. iIntros "[??]". iExists _. iFrame. Qed.
 
   Lemma ord_later_update n n':
@@ -188,7 +188,7 @@ Section lemmas.
 
   (* The other direction seems hard to prove. *)
   Lemma ord_later_sep P1 P2:
-    (▷ₒ P1 ∗ ▷ₒ P2) -∗
+    (▷ₒ P1 ∗ ▷ₒ P2) ⊢
     ▷ₒ (P1 ∗ P2).
   Proof.
     unseal. iIntros "[HP1 HP2] #Hctx".
@@ -202,7 +202,7 @@ Section lemmas.
   Qed.
 
   Lemma ord_later_pers P :
-    □ ▷ₒ P -∗ ▷ₒ □ P.
+    □ ▷ₒ P ⊢ ▷ₒ □ P.
   Proof.
     iIntros "#HP".
     unseal. iIntros "#Hctx".
@@ -212,7 +212,7 @@ Section lemmas.
   Qed.
 
   Lemma ord_later_and P Q :
-    ▷ₒ P ∧ ▷ₒ Q -∗ ▷ₒ (P ∧ Q).
+    ▷ₒ P ∧ ▷ₒ Q ⊢ ▷ₒ (P ∧ Q).
   Proof.
     iIntros "HPQ".
     unseal. iIntros "#Hctx".
@@ -243,7 +243,7 @@ Section lemmas.
   Qed.
 
   Lemma ord_later_sep_pers P1 P2:
-    □ ▷ₒ (P1 ∗ P2) -∗
+    □ ▷ₒ (P1 ∗ P2) ⊢
     (□ ▷ₒ P1 ∗ □ ▷ₒ P2).
   Proof.
     iIntros "#HP". iSplit; iModIntro; iApply (ord_later_mono with "[$]"); by iIntros "[??]".

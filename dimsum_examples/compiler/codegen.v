@@ -332,7 +332,7 @@ Definition stack_slot_uninit (sz : N) (slots : list N) : uPred _ :=
 
 Lemma stack_slot_uninit_to_uninit slots sz:
   let adrs := (λ slot, pf_sp - Z.of_N slot - 1) <$> slots in
-  stack_slot_uninit sz slots -∗
+  stack_slot_uninit sz slots ⊢
   ⌜Forall (λ a, pf_sp - Z.of_N sz ≤ a < pf_sp) adrs⌝ ∗ [∗ list] a∈adrs, ∃ v, r2a_mem_constant a (Some v).
 Proof.
   iIntros "Hslots".
@@ -439,7 +439,7 @@ Definition sim (n : ordinal) (b : bool) (dins : list deep_asm_instr) (e : expr)
            (SMProg, Rec e h pf_fns, (PPInside, R2A pf_cs lr, uPred_shrink rf))).
 
 Lemma to_sim n b dins e s rs h h' :
-  sim n b dins e s rs h h' -∗ sim n b dins e s rs h h'.
+  sim n b dins e s rs h h' ⊢ sim n b dins e s rs h h'.
 Proof. done. Qed.
 
 Lemma sim_mono_s n b dins e s s' rs h h':
@@ -454,7 +454,7 @@ Proof.
 Qed.
 
 Lemma sim_mono_b n b dins e s rs h h':
-  sim n b dins e s rs h h'-∗
+  sim n b dins e s rs h h' ⊢
   sim n true dins e s rs h h'.
 Proof.
   iIntros "Hcont" (????) "Hrf ?".
