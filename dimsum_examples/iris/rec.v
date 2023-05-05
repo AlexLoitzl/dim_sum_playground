@@ -980,8 +980,7 @@ Section memmove.
   Lemma sim_locle s fns fns1 Φ l1 l2 Π_s :
     let Π := λ κ P, (∀ σl, (σl ⤇ₜ λ Π, TGT locle_spec [{Π}] {{_, _, _, False}}) -∗
               link_tgt_left_handler (rec_link_filter fns1 {["locle"]}) Π_s s σl κ P)%I in
-    (* TODO: change to -∗ once https://gitlab.mpi-sws.org/iris/iris/-/merge_requests/921 is merged *)
-    rec_fn_auth fns ⊢
+    rec_fn_auth fns -∗
     "locle" ↪ None -∗
     (∀ b, ⌜l1.1 = l2.1 → b = bool_decide (l1.2 ≤ l2.2)⌝ -∗ Φ (Val (ValBool b)) None Π) -∗
     TGT Call "locle" [Val (ValLoc l1); Val $ ValLoc l2] [{ Π }] {{ Φ }}.

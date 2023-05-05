@@ -636,7 +636,7 @@ Proof. move => ?. destruct vs => //=. case_match; naive_solver. Qed.
 
 (** *** heap_through_bij *)
 Program Definition heap_through_bij (bij : heap_bij) (h : heap_state) : heap_state :=
-  Heap (list_to_map $ omap (OMap:=list_omap) (λ '(l, v), if hb_bij bij !! l.1 is Some (HBShared p) then
+  Heap (list_to_map $ omap (λ '(l, v), if hb_bij bij !! l.1 is Some (HBShared p) then
          Some ((p, l.2), val_through_bij bij v) else None) (map_to_list (h_heap h)))
        (hb_shared_i bij) _.
 Next Obligation.
