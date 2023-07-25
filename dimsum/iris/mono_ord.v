@@ -158,7 +158,7 @@ Section mono_ord.
   Proof. rewrite mono_ord_both_frac_valid. naive_solver. Qed.
 
   Lemma mono_ord_ub_mono n1 n2 : n2 ⊆ n1 → mono_ord_ub n1 ≼ mono_ord_ub n2.
-  Proof. intros. by apply auth_frag_mono, Some_included_2, min_ord_included. Qed.
+  Proof. intros. by apply auth_frag_mono, Some_included_mono, min_ord_included. Qed.
 
   Lemma mono_ord_included q n : mono_ord_ub n ≼ mono_ord_auth q n.
   Proof. apply cmra_included_r. Qed.
