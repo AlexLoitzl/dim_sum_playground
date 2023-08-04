@@ -302,7 +302,7 @@ Proof.
   - split.
     + move => ?? ->. apply ord_later_pers.
     + move => ??. apply ord_later_and.
-  - iIntros (???). done.
+  - move => ???. done.
   - apply ord_later_intro.
   - iIntros (?? Himpl) "HP". iApply (ord_later_mono with "HP"). iApply Himpl.
   - iIntros (??) "[??]". iApply ord_later_sep. iFrame.
@@ -312,4 +312,4 @@ Definition modality_ord_later `{!ord_laterGS Σ} :=
 
 Global Instance from_modal_ord_later `{!ord_laterGS Σ} P :
   FromModal True modality_ord_later (▷ₒ P) (▷ₒ P) P.
-Proof. rewrite /FromModal/=. iIntros (?) "$".  Qed.
+Proof. rewrite /FromModal/=. iIntros (?) "$". Qed.
