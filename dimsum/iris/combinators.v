@@ -97,7 +97,7 @@ Section seq_product.
 
   Lemma sim_tgt_seq_product_None (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 Π :
     (∀ p, ▷ₒ Π (Some (SPENone p)) (λ P, P (p, σ1, σ2))) -∗
-    (SPNone, σ1, σ2) ≈{seq_product_trans m1 m2}≈>ₜ Π.
+    (None, σ1, σ2) ≈{seq_product_trans m1 m2}≈>ₜ Π.
   Proof.
     iIntros "HΠ". iApply (sim_tgt_bi_mono with "[-]").
     iApply (sim_tgt_step_end with "[-]"). iIntros (???). inv_all @m_step. iSpecialize ("HΠ" $! _).
@@ -107,15 +107,15 @@ Section seq_product.
 
   Lemma sim_tgt_seq_product_left (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 Π :
     (σ1 ≈{m1}≈>ₜ λ κ Pσ,
-      ∀ s', ⌜if κ is None then s' = SPLeft else True⌝ -∗
+      ∀ s', ⌜if κ is None then s' = Some SPLeft else True⌝ -∗
          Π ((λ e, SPELeft e s') <$> κ) (λ P, Pσ (λ σ', P (s', σ', σ2)))) -∗
-    (SPLeft, σ1, σ2) ≈{seq_product_trans m1 m2}≈>ₜ Π.
+    (Some SPLeft, σ1, σ2) ≈{seq_product_trans m1 m2}≈>ₜ Π.
   Proof.
     iIntros "Hsim".
     pose (F := (λ σ Π', (∀ κ Pσ, Π' κ Pσ -∗
-         ∀ s', ⌜if κ is None then s' = SPLeft else True⌝ -∗
+         ∀ s', ⌜if κ is None then s' = Some SPLeft else True⌝ -∗
          Π ((λ e, SPELeft e s') <$> κ) (λ P, Pσ (λ σ', P (s', σ', σ2)))) -∗
-         (SPLeft, σ, σ2) ≈{seq_product_trans m1 m2}≈>ₜ Π)%I).
+         (Some SPLeft, σ, σ2) ≈{seq_product_trans m1 m2}≈>ₜ Π)%I).
     iAssert (∀ Π, σ1 ≈{ m1 }≈>ₜ Π -∗ F σ1 Π)%I as "Hgen"; last first.
     { iApply ("Hgen" with "Hsim"). iIntros (??) "?". done. }
     iIntros (?) "Hsim".
@@ -145,15 +145,15 @@ Section seq_product.
 
   Lemma sim_tgt_seq_product_right (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 Π :
     (σ2 ≈{m2}≈>ₜ λ κ Pσ,
-      ∀ s', ⌜if κ is None then s' = SPRight else True⌝ -∗
+      ∀ s', ⌜if κ is None then s' = Some SPRight else True⌝ -∗
          Π ((λ e, SPERight e s') <$> κ) (λ P, Pσ (λ σ', P (s', σ1, σ')))) -∗
-    (SPRight, σ1, σ2) ≈{seq_product_trans m1 m2}≈>ₜ Π.
+    (Some SPRight, σ1, σ2) ≈{seq_product_trans m1 m2}≈>ₜ Π.
   Proof.
     iIntros "Hsim".
     pose (F := (λ σ Π', (∀ κ Pσ, Π' κ Pσ -∗
-         ∀ s', ⌜if κ is None then s' = SPRight else True⌝ -∗
+         ∀ s', ⌜if κ is None then s' = Some SPRight else True⌝ -∗
          Π ((λ e, SPERight e s') <$> κ) (λ P, Pσ (λ σ', P (s', σ1, σ')))) -∗
-         (SPRight, σ1, σ) ≈{seq_product_trans m1 m2}≈>ₜ Π)%I).
+         (Some SPRight, σ1, σ) ≈{seq_product_trans m1 m2}≈>ₜ Π)%I).
     iAssert (∀ Π, σ2 ≈{ m2 }≈>ₜ Π -∗ F σ2 Π)%I as "Hgen"; last first.
     { iApply ("Hgen" with "Hsim"). iIntros (??) "?". done. }
     iIntros (?) "Hsim".
@@ -183,22 +183,22 @@ Section seq_product.
 
   Lemma sim_src_seq_product_None p (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 Π :
     Π (Some (SPENone p)) (p, σ1, σ2) -∗
-    (SPNone, σ1, σ2) ≈{seq_product_trans m1 m2}≈>ₛ Π.
+    (None, σ1, σ2) ≈{seq_product_trans m1 m2}≈>ₛ Π.
   Proof.
     iIntros "HΠ". iApply (sim_src_step_end with "[-]"); [by econs|].
     iIntros (??). by simplify_eq.
   Qed.
 
   Lemma sim_src_seq_product_left (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 Π `{!VisNoAng m1} :
-    (σ1 ≈{m1}≈>ₛ λ κ σ', ∃ s', ⌜if κ is None then s' = SPLeft else True⌝ ∗
+    (σ1 ≈{m1}≈>ₛ λ κ σ', ∃ s', ⌜if κ is None then s' = Some SPLeft else True⌝ ∗
        Π ((λ e, SPELeft e s') <$> κ) (s', σ', σ2)) -∗
-    (SPLeft, σ1, σ2) ≈{seq_product_trans m1 m2}≈>ₛ Π.
+    (Some SPLeft, σ1, σ2) ≈{seq_product_trans m1 m2}≈>ₛ Π.
   Proof.
     iIntros "Hsim".
     pose (F := (λ σ Π', (∀ κ σ, Π' κ σ -∗
-         ∃ s', ⌜if κ is None then s' = SPLeft else True⌝ ∗
+         ∃ s', ⌜if κ is None then s' = Some SPLeft else True⌝ ∗
          Π ((λ e, SPELeft e s') <$> κ) (s', σ, σ2)) -∗
-         (SPLeft, σ, σ2) ≈{seq_product_trans m1 m2}≈>ₛ Π)%I).
+         (Some SPLeft, σ, σ2) ≈{seq_product_trans m1 m2}≈>ₛ Π)%I).
     iAssert (∀ Π, σ1 ≈{ m1 }≈>ₛ Π -∗ F σ1 Π)%I as "Hgen"; last first.
     { iApply ("Hgen" with "Hsim"). iIntros (??) "?". done. }
     iIntros (?) "Hsim".
@@ -222,15 +222,15 @@ Section seq_product.
   Qed.
 
   Lemma sim_src_seq_product_right (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 Π `{!VisNoAng m2} :
-    (σ2 ≈{m2}≈>ₛ λ κ σ', ∃ s', ⌜if κ is None then s' = SPRight else True⌝ ∗
+    (σ2 ≈{m2}≈>ₛ λ κ σ', ∃ s', ⌜if κ is None then s' = Some SPRight else True⌝ ∗
        Π ((λ e, SPERight e s') <$> κ) (s', σ1, σ')) -∗
-    (SPRight, σ1, σ2) ≈{seq_product_trans m1 m2}≈>ₛ Π.
+    (Some SPRight, σ1, σ2) ≈{seq_product_trans m1 m2}≈>ₛ Π.
   Proof.
     iIntros "Hsim".
     pose (F := (λ σ Π', (∀ κ σ, Π' κ σ -∗
-         ∃ s', ⌜if κ is None then s' = SPRight else True⌝ ∗
+         ∃ s', ⌜if κ is None then s' = Some SPRight else True⌝ ∗
          Π ((λ e, SPERight e s') <$> κ) (s', σ1, σ)) -∗
-         (SPRight, σ1, σ) ≈{seq_product_trans m1 m2}≈>ₛ Π)%I).
+         (Some SPRight, σ1, σ) ≈{seq_product_trans m1 m2}≈>ₛ Π)%I).
     iAssert (∀ Π, σ2 ≈{ m2 }≈>ₛ Π -∗ F σ2 Π)%I as "Hgen"; last first.
     { iApply ("Hgen" with "Hsim"). iIntros (??) "?". done. }
     iIntros (?) "Hsim".

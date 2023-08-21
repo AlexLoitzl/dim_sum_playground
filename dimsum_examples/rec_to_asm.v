@@ -1199,34 +1199,19 @@ Inductive rec_to_asm_combine_stacks (ins1 ins2 : gset Z) :
   list rec_to_asm_stack_item → list rec_to_asm_stack_item → list rec_to_asm_stack_item →
  Prop :=
 | RAC_nil :
-  rec_to_asm_combine_stacks ins1 ins2 SPNone [] [] [] []
-| RAC_NoneLeft ret rs ics cs cs1 cs2:
-  ret ∉ ins1 →
-  ret ∉ ins2 →
-  rec_to_asm_combine_stacks ins1 ins2 SPNone ics cs cs1 cs2 →
-  rec_to_asm_combine_stacks ins1 ins2 SPLeft (SPNone :: ics) ((R2AI false ret rs) :: cs) ((R2AI false ret rs) :: cs1) cs2
-| RAC_NoneRight ret rs ics cs cs1 cs2:
-  ret ∉ ins1 →
-  ret ∉ ins2 →
-  rec_to_asm_combine_stacks ins1 ins2 SPNone ics cs cs1 cs2 →
-  rec_to_asm_combine_stacks ins1 ins2 SPRight (SPNone :: ics) ((R2AI false ret rs) :: cs) cs1 ((R2AI false ret rs) :: cs2)
-| RAC_LeftRight ret rs ics cs cs1 cs2:
-  ret ∈ ins1 →
-  rec_to_asm_combine_stacks ins1 ins2 SPLeft ics cs cs1 cs2 →
-  rec_to_asm_combine_stacks ins1 ins2 SPRight (SPLeft :: ics) cs ((R2AI true ret rs) :: cs1) ((R2AI false ret rs) :: cs2)
-| RAC_LeftNone ret rs ics cs cs1 cs2:
-  ret ∈ ins1 →
-  rec_to_asm_combine_stacks ins1 ins2 SPLeft ics cs cs1 cs2 →
-  rec_to_asm_combine_stacks ins1 ins2 SPNone (SPLeft :: ics) ((R2AI true ret rs) :: cs) ((R2AI true ret rs) :: cs1) cs2
-| RAC_RightLeft ret rs ics cs cs1 cs2:
-  ret ∈ ins2 →
-  rec_to_asm_combine_stacks ins1 ins2 SPRight ics cs cs1 cs2 →
-  rec_to_asm_combine_stacks ins1 ins2 SPLeft (SPRight :: ics) cs ((R2AI false ret rs) :: cs1) ((R2AI true ret rs) :: cs2)
-| RAC_RightNone ret rs ics cs cs1 cs2:
-  ret ∈ ins2 →
-  rec_to_asm_combine_stacks ins1 ins2 SPRight ics cs cs1 cs2 →
-  rec_to_asm_combine_stacks ins1 ins2 SPNone (SPRight :: ics) ((R2AI true ret rs) :: cs) cs1 ((R2AI true ret rs) :: cs2)
-.
+  rec_to_asm_combine_stacks ins1 ins2 None [] [] [] []
+| RAC_cons s s' ret rs ics cs cs1 cs2 cs' cs1' cs2':
+  rec_to_asm_combine_stacks ins1 ins2 s ics cs cs1 cs2 →
+  s ≠ s' →
+  cs' = (if s is None then (R2AI false ret rs) :: cs else if s' is None then (R2AI true ret rs) :: cs else cs) →
+  cs1' = (if s is Some SPLeft then (R2AI true ret rs) :: cs1 else if s' is Some SPLeft then (R2AI false ret rs) :: cs1 else cs1) →
+  cs2' = (if s is Some SPRight then (R2AI true ret rs) :: cs2 else if s' is Some SPRight then (R2AI false ret rs) :: cs2 else cs2) →
+  match s with
+  | None => ret ∉ ins1 ∧ ret ∉ ins2
+  | Some SPLeft => ret ∈ ins1
+  | Some SPRight => ret ∈ ins2
+  end →
+  rec_to_asm_combine_stacks ins1 ins2 s' (s :: ics) cs' cs1' cs2'.
 
 Local Ltac go := repeat match goal with | x : asm_ev |- _ => destruct x end;
                  destruct!/=; destruct!/=.
@@ -1274,10 +1259,10 @@ Proof.
 
   unshelve apply: prepost_link. { exact (λ ips '(R2A cs1 lr1) '(R2A cs2 lr2) '(R2A cs lr) x1 x2 x s ics,
   rec_to_asm_combine_stacks ins1 ins2 ips ics cs cs1 cs2 ∧ s = None ∧
-  ((ips = SPNone ∧ (x ⊣⊢ x1 ∗ x2)) ∨
-  ((ips = SPLeft ∧ x1 = (x ∗ x2)%I
+  ((ips = None ∧ (x ⊣⊢ x1 ∗ x2)) ∨
+  ((ips = Some SPLeft ∧ x1 = (x ∗ x2)%I
       ∧ map_scramble touched_registers lr lr1) ∨
-  (ips = SPRight ∧ x2 = (x ∗ x1)%I
+  (ips = Some SPRight ∧ x2 = (x ∗ x1)%I
       ∧ map_scramble touched_registers lr lr2)))). }
   { move => ?? [] /=*; naive_solver. }
   { split!. econs. by rewrite /r2a_mem_map big_sepM_union. }
@@ -1299,7 +1284,7 @@ Proof.
     + move => *. destruct!.
       repeat case_bool_decide => //.
       revert select (rec_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
-      inversion Hstack; simplify_eq/= => //. 2: { exfalso. set_solver. }
+      inversion Hstack; repeat case_match; simplify_eq/= => //. 2: { exfalso. set_solver. }
       r2a_split!.
       1: { setoid_subst. iSatMono. iIntros!. iFrame. }
   - move => e ? e' /= ? ??.
@@ -1318,7 +1303,7 @@ Proof.
       1: by econs.
     + move => *. destruct!. repeat case_bool_decide => //.
       revert select (rec_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
-      inversion Hstack; simplify_eq/= => //.
+      inversion Hstack; repeat case_match; simplify_eq/= => //.
       r2a_split!.
       1: { setoid_subst. iSatMono. iIntros!. iFrame. }
   - move => [? [f vs h|v h]] ? /= *.
@@ -1331,7 +1316,7 @@ Proof.
       1: by econs.
     + repeat case_bool_decide => //. eexists false => /=.
       revert select (rec_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
-      inversion Hstack; simplify_eq/= => //.
+      inversion Hstack; repeat case_match; destruct!/= => //.
       r2a_split!.
       1: { iSatMono. iIntros!. iDestruct (big_sepL2_cons_inv_l with "[$]") as (???) "[??]". simplify_eq/=. iFrame. }
   - move => [? [f vs h|v h]] ? ? ? /= *.
@@ -1345,7 +1330,7 @@ Proof.
       1: by econs.
     + repeat case_bool_decide => //.
       revert select (rec_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
-      inversion Hstack; simplify_eq/= => //.
+      inversion Hstack; repeat case_match; destruct!/= => //.
       r2a_split!.
       1: { iSatMono. iIntros!. iFrame. }
   - move => [? [f vs h|v h]] ? /= *.
@@ -1358,7 +1343,7 @@ Proof.
       1: by econs.
     + repeat case_bool_decide => //.
       revert select (rec_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
-      inversion Hstack; simplify_eq/= => //. eexists false.
+      inversion Hstack; repeat case_match; destruct!/= => //. eexists false.
       r2a_split!.
       1: { iSatMono. iIntros!. iDestruct (big_sepL2_cons_inv_l with "[$]") as (???) "[??]". simplify_eq/=. iFrame. }
   - move => [? [f vs h|v h]] ? /= ? *.
@@ -1372,7 +1357,7 @@ Proof.
       1: by econs.
     + repeat case_bool_decide => //.
       revert select (rec_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
-      inversion Hstack; simplify_eq/= => //.
+      inversion Hstack; repeat case_match; destruct!/= => //.
       r2a_split!.
       1: { iSatMono. iIntros!. iFrame. }
 Qed.

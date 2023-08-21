@@ -18,9 +18,9 @@ Section link.
   .
   Fixpoint mod_link_state_to_product_state (s : link_case) : seq_product_case :=
     match s with
-    | MLFLeft => SPLeft
-    | MLFRight => SPRight
-    | MLFNone => SPNone
+    | MLFLeft => (Some SPLeft)
+    | MLFRight => (Some SPRight)
+    | MLFNone => None
     | MLFEmit e s => mod_link_state_to_product_state s
     | MLFExpect e s => mod_link_state_to_product_state s
     | MLFReturn s => mod_link_state_to_product_state s
@@ -28,24 +28,24 @@ Section link.
 
   Definition mod_link_to_state (s : seq_product_case) (e : EV) : link_case :=
     match s with
-    | SPNone => MLFEmit (Outgoing, e) (MLFReturn MLFNone)
-    | SPLeft => MLFReturn (MLFExpect (SPELeft (Incoming, e) SPLeft) (MLFReturn MLFLeft))
-    | SPRight => MLFReturn (MLFExpect (SPERight (Incoming, e) SPRight) (MLFReturn MLFRight))
+    | None => MLFEmit (Outgoing, e) (MLFReturn MLFNone)
+    | Some SPLeft => MLFReturn (MLFExpect (SPELeft (Incoming, e) (Some SPLeft)) (MLFReturn MLFLeft))
+    | Some SPRight => MLFReturn (MLFExpect (SPERight (Incoming, e) (Some SPRight)) (MLFReturn MLFRight))
     end.
 
   Inductive mod_link_filter_step R :
     (link_case * S) → option (sm_event (seq_product_event (io_event EV) (io_event EV)) (io_event EV)) →
     ((link_case * S) → Prop) → Prop :=
   | MLFLeftS s e p' s' e':
-    R SPLeft s e p' s' e' →
+    R (Some SPLeft) s e p' s' e' →
     mod_link_filter_step R (MLFLeft, s) (Some (SMERecv (SPELeft (Outgoing, e) p')))
       (λ σ, σ = (mod_link_to_state p' e', s'))
   | MLFRightS s e p' s' e':
-    R SPRight s e p' s' e' →
+    R (Some SPRight) s e p' s' e' →
     mod_link_filter_step R (MLFRight, s) (Some (SMERecv (SPERight (Outgoing, e) p')))
       (λ σ, σ = (mod_link_to_state p' e', s'))
   | MLFNoneS s e p' s' e':
-    R SPNone s e p' s' e' →
+    R None s e p' s' e' →
     mod_link_filter_step R (MLFNone, s) (Some (SMERecv (SPENone p')))
       (λ σ, σ = (MLFEmit (Incoming, e') (mod_link_to_state p' e'), s'))
   | MLFEmitS s' s e:
@@ -73,46 +73,39 @@ Section link.
                         (λ σ σ', σ' = mod_link_trans R m1 m2 σ).
 *)
   Inductive link_case :=
-  | MLFLeft | MLFRight | MLFNone
-  | MLFRecvL (e : EV) | MLFRecvR (e : EV)
+  | MLFRun (sp : seq_product_case)
+  | MLFRecv (sp : seq_product_side) (e : EV)
   | MLFUb (sp : seq_product_case).
 
   Definition link_to_case (ok : bool) (s : seq_product_case) (e : EV) : link_case :=
-    if ok then
-      match s with
-      | SPNone => MLFNone
-      | SPLeft => MLFRecvL e
-      | SPRight => MLFRecvR e
-      end
-    else
-      MLFUb s.
+    if ok then if s is Some s' then MLFRecv s' e else MLFRun None else MLFUb s.
+
   Inductive link_filter R : map_mod_fn (seq_product_event (io_event EV) (io_event EV)) (io_event EV) (link_case * S) :=
   | MLFLeftS s e p' s' e' ok:
-    R SPLeft s e p' s' e' ok →
-    link_filter R (MLFLeft, s) (SPELeft (Outgoing, e) p')
-                    (if p' is SPNone then Some (Outgoing, e') else None)
+    R (Some SPLeft) s e p' s' e' ok →
+    link_filter R (MLFRun (Some SPLeft), s) (SPELeft (Outgoing, e) p')
+                    (if p' is None then Some (Outgoing, e') else None)
                     (link_to_case ok p' e', s') ok
   | MLFLeftRecvS s e:
-    link_filter R (MLFRecvL e, s) (SPELeft (Incoming, e) SPLeft) None (MLFLeft, s) true
+    link_filter R (MLFRecv SPLeft e, s) (SPELeft (Incoming, e) (Some SPLeft)) None (MLFRun (Some SPLeft), s) true
   | MLFRightS s e p' s' e' ok:
-    R SPRight s e p' s' e' ok →
-    link_filter R (MLFRight, s) (SPERight (Outgoing, e) p')
-                    (if p' is SPNone then Some (Outgoing, e') else None)
+    R (Some SPRight) s e p' s' e' ok →
+    link_filter R (MLFRun (Some SPRight), s) (SPERight (Outgoing, e) p')
+                    (if p' is None then Some (Outgoing, e') else None)
                     (link_to_case ok p' e', s') ok
   | MLFRightRecvS s e:
-    link_filter R (MLFRecvR e, s) (SPERight (Incoming, e) SPRight) None (MLFRight, s) true
+    link_filter R (MLFRecv SPRight e, s) (SPERight (Incoming, e) (Some SPRight)) None (MLFRun (Some SPRight), s) true
   | MLFNoneS s e p' s' e' ok:
-    R SPNone s e p' s' e' ok →
-    link_filter R (MLFNone, s) (SPENone p')
+    R None s e p' s' e' ok →
+    link_filter R (MLFRun None, s) (SPENone p')
                     (Some (Incoming, e'))
                     (link_to_case ok p' e', s') ok
   .
 
   Definition link_state_trans R (m1 m2 : mod_trans (io_event EV)) (σ : link_case * S * m1.(m_state) * m2.(m_state)) :=
     (match σ.1.1.1 with
-          | MLFLeft | MLFRecvL _ => SPLeft
-          | MLFRight | MLFRecvR _ => SPRight
-          | MLFNone => SPNone
+          | MLFRun sp => sp
+          | MLFRecv sp _ => Some sp
           | MLFUb sp => sp
           end, σ.1.2, σ.2, (σ.1.1, if σ.1.1.1 is MLFUb _ then false else true)).
   Arguments link_state_trans _ _ _ _ /.
@@ -144,7 +137,7 @@ Section link.
   Qed.
 
   Definition link_mod R (m1 m2 : module (io_event EV)) (σ : S) : module (io_event EV) :=
-    Mod (link_trans R m1.(m_trans) m2.(m_trans)) (MLFNone, σ, m1.(m_init), m2.(m_init)).
+    Mod (link_trans R m1.(m_trans) m2.(m_trans)) (MLFRun None, σ, m1.(m_init), m2.(m_init)).
 
   Lemma link_mod_trefines R m1 m2 m1' m2' σ `{!VisNoAng m1.(m_trans)} `{!VisNoAng m2.(m_trans)}:
     trefines m1 m1' →
@@ -158,16 +151,16 @@ Section link.
   Qed.
 
   Lemma link_trans_step_left_i R m1 m2 s σ1 σ2 P `{!TStepI m1 σ1 P} :
-    TStepI (link_trans R m1 m2) (MLFLeft, s, σ1, σ2) (λ G, P (λ b κ P',
+    TStepI (link_trans R m1 m2) (MLFRun (Some SPLeft), s, σ1, σ2) (λ G, P (λ b κ P',
       match κ with
-      | None => G b None (λ G', P' (λ x, G' (MLFLeft, s, x, σ2)))
-      | Some κ' => ∀ p' s' e' ok, R SPLeft s κ'.2 p' s' e' ok → κ'.1 = Outgoing →
-                              G b (if p' is SPNone then Some (Outgoing, e') else None)
+      | None => G b None (λ G', P' (λ x, G' (MLFRun (Some SPLeft), s, x, σ2)))
+      | Some κ' => ∀ p' s' e' ok, R (Some SPLeft) s κ'.2 p' s' e' ok → κ'.1 = Outgoing →
+                              G b (if p' is None then Some (Outgoing, e') else None)
                                (λ G', P' (λ x, G' (link_to_case ok p' e', s', x, σ2)))
       end)).
   Proof.
     constructor => G /(@tstepi_proof _ _ _ _ ltac:(done))?. clear TStepI0.
-    apply: (steps_impl_submodule _ (link_trans _ _ _) (λ x, (MLFLeft, s, x, σ2))); [done| |].
+    apply: (steps_impl_submodule _ (link_trans _ _ _) (λ x, (MLFRun (Some SPLeft), s, x, σ2))); [done| |].
     - naive_solver.
     - move => /= ??? Hs. inv_all @state_transform_step. inv_all/= @m_step.
       + case_match; simplify_eq. naive_solver.
@@ -178,16 +171,16 @@ Section link.
   Qed.
 
   Lemma link_trans_step_right_i R m1 m2 s σ1 σ2 P `{!TStepI m2 σ2 P} :
-    TStepI (link_trans R m1 m2) (MLFRight, s, σ1, σ2) (λ G, P (λ b κ P',
+    TStepI (link_trans R m1 m2) (MLFRun (Some SPRight), s, σ1, σ2) (λ G, P (λ b κ P',
       match κ with
-      | None => G b None (λ G', P' (λ x, G' (MLFRight, s, σ1, x)))
-      | Some κ' => ∀ p' s' e' ok, R SPRight s κ'.2 p' s' e' ok → κ'.1 = Outgoing →
-                              G b (if p' is SPNone then Some (Outgoing, e') else None)
+      | None => G b None (λ G', P' (λ x, G' (MLFRun (Some SPRight), s, σ1, x)))
+      | Some κ' => ∀ p' s' e' ok, R (Some SPRight) s κ'.2 p' s' e' ok → κ'.1 = Outgoing →
+                              G b (if p' is None then Some (Outgoing, e') else None)
                                (λ G', P' (λ x, G' (link_to_case ok p' e', s', σ1, x)))
       end)).
   Proof.
     constructor => G /(@tstepi_proof _ _ _ _ ltac:(done))?. clear TStepI0.
-    apply: (steps_impl_submodule _ (link_trans _ _ _) (λ x, (MLFRight, s, σ1, x))); [done| |].
+    apply: (steps_impl_submodule _ (link_trans _ _ _) (λ x, (MLFRun (Some SPRight), s, σ1, x))); [done| |].
     - naive_solver.
     - move => /= ??? Hs. inv_all @state_transform_step. inv_all/= @m_step.
       + case_match; simplify_eq. naive_solver.
@@ -198,14 +191,14 @@ Section link.
   Qed.
 
   Lemma link_trans_step_left_recv_i R m1 m2 s σ1 σ2 e P `{!TStepI m1 σ1 P} :
-    TStepI (link_trans R m1 m2) (MLFRecvL e, s, σ1, σ2) (λ G, P (λ b κ P',
+    TStepI (link_trans R m1 m2) (MLFRecv SPLeft e, s, σ1, σ2) (λ G, P (λ b κ P',
       match κ with
-      | None => G b None (λ G', P' (λ x, G' (MLFRecvL e, s, x, σ2)))
-      | Some κ' => κ' = (Incoming, e) → G b None (λ G', P' (λ x, G' (MLFLeft, s, x, σ2)))
+      | None => G b None (λ G', P' (λ x, G' (MLFRecv SPLeft e, s, x, σ2)))
+      | Some κ' => κ' = (Incoming, e) → G b None (λ G', P' (λ x, G' (MLFRun (Some SPLeft), s, x, σ2)))
       end)).
   Proof.
     constructor => G /(@tstepi_proof _ _ _ _ ltac:(done))?. clear TStepI0.
-    apply: (steps_impl_submodule _ (link_trans _ _ _) (λ x, (MLFRecvL e, s, x, σ2))); [done| |].
+    apply: (steps_impl_submodule _ (link_trans _ _ _) (λ x, (MLFRecv SPLeft e, s, x, σ2))); [done| |].
     - naive_solver.
     - move => /= ??? Hs. inv_all @state_transform_step. inv_all/= @m_step.
       + case_match; simplify_eq. naive_solver.
@@ -213,14 +206,14 @@ Section link.
   Qed.
 
   Lemma link_trans_step_right_recv_i R m1 m2 s σ1 σ2 e P `{!TStepI m2 σ2 P} :
-    TStepI (link_trans R m1 m2) (MLFRecvR e, s, σ1, σ2) (λ G, P (λ b κ P',
+    TStepI (link_trans R m1 m2) (MLFRecv SPRight e, s, σ1, σ2) (λ G, P (λ b κ P',
       match κ with
-      | None => G b None (λ G', P' (λ x, G' (MLFRecvR e, s, σ1, x)))
-      | Some κ' => κ' = (Incoming, e) → G b None (λ G', P' (λ x, G' (MLFRight, s, σ1, x)))
+      | None => G b None (λ G', P' (λ x, G' (MLFRecv SPRight e, s, σ1, x)))
+      | Some κ' => κ' = (Incoming, e) → G b None (λ G', P' (λ x, G' (MLFRun (Some SPRight), s, σ1, x)))
       end)).
   Proof.
     constructor => G /(@tstepi_proof _ _ _ _ ltac:(done))?. clear TStepI0.
-    apply: (steps_impl_submodule _ (link_trans _ _ _) (λ x, (MLFRecvR e, s, σ1, x))); [done| |].
+    apply: (steps_impl_submodule _ (link_trans _ _ _) (λ x, (MLFRecv SPRight e, s, σ1, x))); [done| |].
     - naive_solver.
     - move => /= ??? Hs. inv_all @state_transform_step. inv_all/= @m_step.
       + case_match; simplify_eq. naive_solver.
@@ -228,7 +221,7 @@ Section link.
   Qed.
 
   Lemma link_trans_step_none_i R m1 m2 s σ1 σ2 :
-    TStepI (link_trans R m1 m2) (MLFNone, s, σ1, σ2) (λ G, ∀ e p' s' e' ok, R SPNone s e p' s' e' ok →
+    TStepI (link_trans R m1 m2) (MLFRun None, s, σ1, σ2) (λ G, ∀ e p' s' e' ok, R None s e p' s' e' ok →
       G true (Some (Incoming, e')) (λ G', G' (link_to_case ok p' e', s', σ1, σ2))).
   Proof.
     constructor => G HG. apply steps_impl_step_end => ???.
@@ -237,11 +230,11 @@ Section link.
   Qed.
 
   Lemma link_trans_step_left_s R m1 m2 s σ1 σ2 P `{!TStepS m1 σ1 P} :
-    TStepS (link_trans R m1 m2) (MLFLeft, s, σ1, σ2) (λ G, P (λ κ P',
+    TStepS (link_trans R m1 m2) (MLFRun (Some SPLeft), s, σ1, σ2) (λ G, P (λ κ P',
       match κ with
-      | None => G None (λ G', P' (λ x, G' (MLFLeft, s, x, σ2)))
-      | Some (Outgoing, e) => ∃ p' s' e' ok, R SPLeft s e p' s' e' ok ∧
-                              G (if p' is SPNone then Some (Outgoing, e') else None)
+      | None => G None (λ G', P' (λ x, G' (MLFRun (Some SPLeft), s, x, σ2)))
+      | Some (Outgoing, e) => ∃ p' s' e' ok, R (Some SPLeft) s e p' s' e' ok ∧
+                              G (if p' is None then Some (Outgoing, e') else None)
                                (λ G', P' (λ σ', G' (link_to_case ok p' e', s', σ', σ2)))
       | Some _ => False
       end)).
@@ -250,15 +243,15 @@ Section link.
     destruct κ as [[[] e]|] => //; destruct!.
     all: eexists _, _; split; [done|] => G' /= /HG'?; tstep_s.
     all: split!; [..|apply: steps_spec_mono; [done|]] => //=; try by econs.
-    all: move => ?? [[[p?]?]?]//=?; destruct p => //; by simplify_eq/=.
+    all: move => ?? [[[p?]?]?]//=?; repeat case_match; by simplify_eq/=.
   Qed.
 
   Lemma link_trans_step_right_s R m1 m2 s σ1 σ2 P `{!TStepS m2 σ2 P} :
-    TStepS (link_trans R m1 m2) (MLFRight, s, σ1, σ2) (λ G, P (λ κ P',
+    TStepS (link_trans R m1 m2) (MLFRun (Some SPRight), s, σ1, σ2) (λ G, P (λ κ P',
       match κ with
-      | None => G None (λ G', P' (λ x, G' (MLFRight, s, σ1, x)))
-      | Some (Outgoing, e) => ∃ p' s' e' ok, R SPRight s e p' s' e' ok ∧
-                              G (if p' is SPNone then Some (Outgoing, e') else None)
+      | None => G None (λ G', P' (λ x, G' (MLFRun (Some SPRight), s, σ1, x)))
+      | Some (Outgoing, e) => ∃ p' s' e' ok, R (Some SPRight) s e p' s' e' ok ∧
+                              G (if p' is None then Some (Outgoing, e') else None)
                                (λ G', P' (λ σ', G' (link_to_case ok p' e', s', σ1, σ')))
       | Some _ => False
       end)).
@@ -267,14 +260,14 @@ Section link.
     destruct κ as [[[] e]|] => //; destruct!.
     all: eexists _, _; split; [done|] => G' /= /HG'?; tstep_s.
     all: split!; [..|apply: steps_spec_mono; [done|]] => //=; try by econs.
-    all: move => ?? [[[p?]?]?]//=?; destruct p => //; by simplify_eq/=.
+    all: move => ?? [[[p?]?]?]//=?; repeat case_match; by simplify_eq/=.
   Qed.
 
   Lemma link_trans_step_left_recv_s R m1 m2 s σ1 σ2 e P `{!TStepS m1 σ1 P} :
-    TStepS (link_trans R m1 m2) (MLFRecvL e, s, σ1, σ2) (λ G, P (λ κ P',
+    TStepS (link_trans R m1 m2) (MLFRecv SPLeft e, s, σ1, σ2) (λ G, P (λ κ P',
       match κ with
-      | None => G None (λ G', P' (λ x, G' (MLFRecvL e, s, x, σ2)))
-      | Some (Incoming, e') => G None (λ G', e = e' ∧ P' (λ x, G' (MLFLeft, s, x, σ2)))
+      | None => G None (λ G', P' (λ x, G' (MLFRecv SPLeft e, s, x, σ2)))
+      | Some (Incoming, e') => G None (λ G', e = e' ∧ P' (λ x, G' (MLFRun (Some SPLeft), s, x, σ2)))
       | Some _ => False
       end)).
   Proof.
@@ -286,10 +279,10 @@ Section link.
   Qed.
 
   Lemma link_trans_step_right_recv_s R m1 m2 s σ1 σ2 e P `{!TStepS m2 σ2 P} :
-    TStepS (link_trans R m1 m2) (MLFRecvR e, s, σ1, σ2) (λ G, P (λ κ P',
+    TStepS (link_trans R m1 m2) (MLFRecv SPRight e, s, σ1, σ2) (λ G, P (λ κ P',
       match κ with
-      | None => G None (λ G', P' (λ x, G' (MLFRecvR e, s, σ1, x)))
-      | Some (Incoming, e') => G None (λ G', e = e' ∧ P' (λ x, G' (MLFRight, s, σ1, x)))
+      | None => G None (λ G', P' (λ x, G' (MLFRecv SPRight e, s, σ1, x)))
+      | Some (Incoming, e') => G None (λ G', e = e' ∧ P' (λ x, G' (MLFRun (Some SPRight), s, σ1, x)))
       | Some _ => False
       end)).
   Proof.
@@ -301,7 +294,7 @@ Section link.
   Qed.
 
   Lemma link_trans_step_none_s R m1 m2 s σ1 σ2 :
-    TStepS (link_trans R m1 m2) (MLFNone, s, σ1, σ2) (λ G, ∃ e p' s' e' ok, R SPNone s e p' s' e' ok ∧
+    TStepS (link_trans R m1 m2) (MLFRun None, s, σ1, σ2) (λ G, ∃ e p' s' e' ok, R None s e p' s' e' ok ∧
       G (Some (Incoming, e')) (λ G', G' (link_to_case ok p' e', s', σ1, σ2))).
   Proof.
     constructor => G [?[?[?[?[?[??]]]]]]. split!; [done|] => /=??.

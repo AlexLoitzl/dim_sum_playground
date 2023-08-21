@@ -1768,7 +1768,7 @@ Definition rec_link_filter (fns1 fns2 : gset string) : seq_product_case → list
     ok = true ∧
     match e with
     | ERCall f vs h =>
-        p' = (if bool_decide (f ∈ fns1) then SPLeft else if bool_decide (f ∈ fns2) then SPRight else SPNone) ∧
+        p' = (if bool_decide (f ∈ fns1) then Some SPLeft else if bool_decide (f ∈ fns2) then Some SPRight else None) ∧
         (cs' = p::cs) ∧
         p ≠ p'
     | ERReturn v h =>
@@ -1781,7 +1781,7 @@ Definition rec_link_trans (fns1 fns2 : gset string) (m1 m2 : mod_trans rec_event
   link_trans (rec_link_filter fns1 fns2) m1 m2.
 
 Definition rec_link (fns1 fns2 : gset string) (m1 m2 : module rec_event) : module rec_event :=
-  Mod (rec_link_trans fns1 fns2 m1.(m_trans) m2.(m_trans)) (MLFNone, [], m1.(m_init), m2.(m_init)).
+  Mod (rec_link_trans fns1 fns2 m1.(m_trans) m2.(m_trans)) (MLFRun None, [], m1.(m_init), m2.(m_init)).
 
 Lemma rec_link_trefines m1 m1' m2 m2' fns1 fns2 `{!VisNoAng m1.(m_trans)} `{!VisNoAng m2.(m_trans)}:
   trefines m1 m1' →
@@ -1793,34 +1793,34 @@ Proof. move => ??. by apply link_mod_trefines. Qed.
 Inductive rec_link_combine_ectx :
   nat → bool → bool → link_case rec_ev → list seq_product_case → list expr_ectx → list expr_ectx → list expr_ectx → Prop :=
 | RPCENil:
-  rec_link_combine_ectx 0 false false MLFNone [] [] [] []
+  rec_link_combine_ectx 0 false false (MLFRun None) [] [] [] []
 | RPCENoneToLeft n cs K Kl Kr bl br:
-  rec_link_combine_ectx n bl br MLFNone cs K Kl Kr →
-  rec_link_combine_ectx (S n) bl br MLFLeft (SPNone :: cs)
+  rec_link_combine_ectx n bl br (MLFRun None) cs K Kl Kr →
+  rec_link_combine_ectx (S n) bl br (MLFRun (Some SPLeft)) (None :: cs)
                              (ReturnExtCtx (bl || br)::K) (ReturnExtCtx bl::Kl) Kr
 | RPCENoneToRight n cs K Kl Kr bl br:
-  rec_link_combine_ectx n bl br MLFNone cs K Kl Kr →
-  rec_link_combine_ectx (S n) bl br MLFRight (SPNone :: cs)
+  rec_link_combine_ectx n bl br (MLFRun None) cs K Kl Kr →
+  rec_link_combine_ectx (S n) bl br (MLFRun (Some SPRight)) (None :: cs)
                              (ReturnExtCtx (bl || br)::K) Kl (ReturnExtCtx br::Kr)
 | RPCELeftToRight n cs K Kl Kl' Kr bl br:
-  rec_link_combine_ectx n bl br MLFLeft cs K Kl Kr →
+  rec_link_combine_ectx n bl br (MLFRun (Some SPLeft)) cs K Kl Kr →
   is_static_expr true (expr_fill Kl' (Var "")) →
-  rec_link_combine_ectx (S n) true br MLFRight (SPLeft :: cs)
+  rec_link_combine_ectx (S n) true br (MLFRun (Some SPRight)) (Some SPLeft :: cs)
                              (Kl' ++ K) (Kl' ++ Kl) (ReturnExtCtx br::Kr)
 | RPCELeftToNone n cs K Kl Kl' Kr bl br:
-  rec_link_combine_ectx n bl br MLFLeft cs K Kl Kr →
+  rec_link_combine_ectx n bl br (MLFRun (Some SPLeft)) cs K Kl Kr →
   is_static_expr true (expr_fill Kl' (Var "")) →
-  rec_link_combine_ectx (S n) true br MLFNone (SPLeft :: cs)
+  rec_link_combine_ectx (S n) true br (MLFRun None) (Some SPLeft :: cs)
                              (Kl' ++ K) (Kl' ++ Kl) Kr
 | RPCERightToLeft n cs K Kl Kr' Kr bl br:
-  rec_link_combine_ectx n bl br MLFRight cs K Kl Kr →
+  rec_link_combine_ectx n bl br (MLFRun (Some SPRight)) cs K Kl Kr →
   is_static_expr true (expr_fill Kr' (Var "")) →
-  rec_link_combine_ectx (S n) bl true MLFLeft (SPRight :: cs)
+  rec_link_combine_ectx (S n) bl true (MLFRun (Some SPLeft)) (Some SPRight :: cs)
                              (Kr' ++ K) (ReturnExtCtx bl::Kl) (Kr' ++ Kr)
 | RPCERightToNone n cs K Kl Kr' Kr bl br:
-  rec_link_combine_ectx n bl br MLFRight cs K Kl Kr →
+  rec_link_combine_ectx n bl br (MLFRun (Some SPRight)) cs K Kl Kr →
   is_static_expr true (expr_fill Kr' (Var "")) →
-  rec_link_combine_ectx (S n) bl true MLFNone (SPRight :: cs)
+  rec_link_combine_ectx (S n) bl true (MLFRun None) (Some SPRight :: cs)
                              (Kr' ++ K) Kl (Kr' ++ Kr)
 .
 
@@ -1836,11 +1836,11 @@ Definition rec_link_inv (bv : bool) (fns1 fns2 : gmap string fndef) (σ1 : rec_t
   el = expr_fill Kl el' ∧
   er = expr_fill Kr er' ∧
   match σf with
-  | MLFLeft => e1' = el' ∧ is_static_expr true el' ∧ er' = Waiting br ∧ h1 = hl
+  | MLFRun (Some SPLeft) => e1' = el' ∧ is_static_expr true el' ∧ er' = Waiting br ∧ h1 = hl
               ∧ (if bv then to_val el' = None else True)
-  | MLFRight => e1' = er' ∧ is_static_expr true er' ∧ el' = Waiting bl ∧ h1 = hr
+  | MLFRun (Some SPRight) => e1' = er' ∧ is_static_expr true er' ∧ el' = Waiting bl ∧ h1 = hr
                ∧ (if bv then to_val er' = None else True)
-  | MLFNone => e1' = Waiting (bl || br) ∧ el' = Waiting bl ∧ er' = Waiting br
+  | (MLFRun None) => e1' = Waiting (bl || br) ∧ el' = Waiting bl ∧ er' = Waiting br
   | _ => False
   end.
 
@@ -1862,7 +1862,7 @@ Proof.
     move => [m [K [Kl [Kr [e1' [el' [er' [bl [br [?[?[?[HK[?[?[? Hm]]]]]]]]]]]]]]]]; simplify_eq.
     elim/lt_wf_ind: m ipfs h1 hl hr cs K Kl Kr e1' el' er' bl br HK Hm => m IHm.
     move => ipfs h1 hl hr cs K Kl Kr e1' el' er' bl br HK Hmatch.
-    case_match; destruct!/=.
+    repeat case_match; destruct!/=.
     - destruct (to_val el') eqn:?; [ |apply: Hloop; naive_solver].
       destruct el'; simplify_eq/=.
       inversion HK; clear HK; simplify_eq/=.
@@ -1880,7 +1880,7 @@ Proof.
         rewrite !expr_fill_app. apply: IHm; [|done|]; [lia|]. split!. by apply is_static_expr_expr_fill.
     - apply: Hloop; naive_solver.
   }
-  destruct!/=. case_match; destruct!.
+  destruct!/=. repeat case_match; destruct!.
   - tstep_both. apply: steps_impl_step_end => ?? /prim_step_inv[//|?[?[?[?[??]]]]].
     simplify_eq. revert select (Is_true (is_static_expr _ _)) => /is_static_expr_expr_fill/=[??]//.
     rewrite -expr_fill_app.
@@ -1980,7 +1980,7 @@ Proof.
   unshelve apply: tsim_remember. { exact: (λ _, flip (rec_link_inv false fns1 fns2)). }
   { split!. 1: by econs. all: done. } { done. }
   move => /= {}n _ Hloop [[[ipfs cs] [el hl fnsl]] [er hr fnsr]] [e1 h1 fns1'] [m [K [Kl [Kr ?]]]].
-  destruct!/=. case_match; destruct!.
+  destruct!/=. repeat case_match; destruct!.
   - destruct (to_val el') eqn:?.
     + destruct el'; simplify_eq/=.
       revert select (rec_link_combine_ectx _ _ _ _ _ _ _ _) => HK.
@@ -2113,9 +2113,9 @@ Inductive rec_prod_assoc_state :=
 (*   link_case rec_ev → list seq_product_case → link_case rec_ev → list seq_product_case → *)
 (*   link_case rec_ev → list seq_product_case → link_case rec_ev → list seq_product_case → Prop := *)
 (* | IPASNil : *)
-(*   rec_prod_assoc_stack m1 m2 m3 MLFNone [] MLFNone [] MLFNone [] MLFNone [] *)
+(*   rec_prod_assoc_stack m1 m2 m3 (MLFRun None) [] (MLFRun None) [] (MLFRun None) [] (MLFRun None) [] *)
 (* | IPASNil : *)
-(*   rec_prod_assoc_stack m1 m2 m3 MLFNone [] MLFNone [] MLFNone [] MLFNone [] *)
+(*   rec_prod_assoc_stack m1 m2 m3 (MLFRun None) [] (MLFRun None) [] (MLFRun None) [] (MLFRun None) [] *)
 (* . *)
 
 Definition rec_prod_assoc_inv (fns1 fns2 fns3 : gset string) (m1 m2 m3 : module rec_event)
@@ -2132,7 +2132,7 @@ Definition rec_prod_assoc_inv (fns1 fns2 fns3 : gset string) (m1 m2 m3 : module 
   | IPA1 => False
   | IPA2 => False
   | IPA3 => False
-  | IPANone => σfi1 = MLFNone ∧ σfi2 = MLFNone ∧ σfs1 = MLFNone ∧ σfs2 = MLFNone
+  | IPANone => σfi1 = (MLFRun None) ∧ σfi2 = (MLFRun None) ∧ σfs1 = (MLFRun None) ∧ σfs2 = (MLFRun None)
   end.
   (* rec_prod_assoc_stack m1 m2 m3 σfi1 csi1 σfi2 csi2 σfs1 css1 σfs2 css2. *)
 

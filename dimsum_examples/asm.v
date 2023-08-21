@@ -295,7 +295,6 @@ Inductive asm_closed_event : Type :=
 | EACStart (rs : gmap string Z) (mem : gmap Z (option Z))
 | EACSyscallCall (args : list Z) (mem : gmap Z (option Z))
 | EACSyscallRet (ret : Z) (mem : gmap Z (option Z))
-| EACPagefault (a : Z)
 .
 
 (* s tells us if we already started the execution *)
@@ -335,9 +334,8 @@ Definition asm_ctx_refines (instrsi instrss : gmap Z asm_instr) :=
 
 (** ** Semantic linking *)
 (* State s says whether we are currently in the environment and
-expecting a syscall return. Some SPNone means that the program
-executed a page fault and is not waiting for any return. *)
-Definition asm_link_filter (ins1 ins2 : gset Z) : seq_product_case → option seq_product_case → asm_ev → seq_product_case → option seq_product_case → asm_ev → bool → Prop :=
+expecting a syscall return. *)
+Definition asm_link_filter (ins1 ins2 : gset Z) : seq_product_case → option seq_product_side → asm_ev → seq_product_case → option seq_product_side → asm_ev → bool → Prop :=
   λ p s e p' s' e' ok,
     e' = e ∧
     ok = true ∧
@@ -345,18 +343,18 @@ Definition asm_link_filter (ins1 ins2 : gset Z) : seq_product_case → option se
     | EAJump rs mem =>
         s = None ∧
         s' = None ∧
-        p' = (if bool_decide (rs !!! "PC" ∈ ins1) then SPLeft else if bool_decide (rs !!! "PC" ∈ ins2) then SPRight else SPNone) ∧
+        p' = (if bool_decide (rs !!! "PC" ∈ ins1) then Some SPLeft else if bool_decide (rs !!! "PC" ∈ ins2) then Some SPRight else None) ∧
         p ≠ p'
     | EASyscallCall _ _ =>
         s = None ∧
-        s' = Some p ∧
-        p' = SPNone ∧
-        p ≠ SPNone
+        s' = p ∧
+        p' = None ∧
+        p ≠ None
     | EASyscallRet _ _ =>
-        s = Some p' ∧
+        s = p' ∧
         s' = None ∧
-        p' ≠ SPNone ∧
-        p  = SPNone
+        p' ≠ None ∧
+        p  = None
     end.
 Arguments asm_link_filter _ _ _ _ _ _ _ _ /.
 
@@ -364,7 +362,7 @@ Definition asm_link_trans (ins1 ins2 : gset Z) (m1 m2 : mod_trans asm_event) : m
   link_trans (asm_link_filter ins1 ins2) m1 m2.
 
 Definition asm_link (ins1 ins2 : gset Z) (m1 m2 : module asm_event) : module asm_event :=
-  Mod (asm_link_trans ins1 ins2 m1.(m_trans) m2.(m_trans)) (MLFNone, None, m1.(m_init), m2.(m_init)).
+  Mod (asm_link_trans ins1 ins2 m1.(m_trans) m2.(m_trans)) (MLFRun None, None, m1.(m_init), m2.(m_init)).
 
 Lemma asm_link_trefines m1 m1' m2 m2' ins1 ins2 `{!VisNoAng m1.(m_trans)} `{!VisNoAng m2.(m_trans)}:
   trefines m1 m1' →
@@ -373,7 +371,7 @@ Lemma asm_link_trefines m1 m1' m2 m2' ins1 ins2 `{!VisNoAng m1.(m_trans)} `{!Vis
 Proof. move => ??. by apply link_mod_trefines. Qed.
 
 (** ** Relating semantic and syntactic linking *)
-Definition asm_link_inv (ins1 ins2 : gmap Z asm_instr) (σ1 : asm_trans.(m_state)) (σ2 : link_case asm_ev * option seq_product_case * asm_state * asm_state) : Prop :=
+Definition asm_link_inv (ins1 ins2 : gmap Z asm_instr) (σ1 : asm_trans.(m_state)) (σ2 : link_case asm_ev * option seq_product_side * asm_state * asm_state) : Prop :=
   let 'AsmState i1 rs1 mem1 ins1' := σ1 in
   let '(σf, s, AsmState il rsl meml insl, AsmState ir rsr memr insr) := σ2 in
   ins1' = ins1 ∪ ins2 ∧
@@ -381,9 +379,9 @@ Definition asm_link_inv (ins1 ins2 : gmap Z asm_instr) (σ1 : asm_trans.(m_state
   insr = ins2 ∧
   s = None ∧
   match σf with
-  | MLFLeft => ∃ i, i1 = ARunning i ∧ il = i1 ∧ rsl = rs1 ∧ meml = mem1 ∧ ir = AWaiting
-  | MLFRight => ∃ i, i1 = ARunning i ∧ ir = i1 ∧ rsr = rs1 ∧ memr = mem1 ∧ il = AWaiting
-  | MLFNone => i1 = AWaiting ∧ ir = AWaiting ∧ il = AWaiting
+  | MLFRun (Some SPLeft) => ∃ i, i1 = ARunning i ∧ il = i1 ∧ rsl = rs1 ∧ meml = mem1 ∧ ir = AWaiting
+  | MLFRun (Some SPRight) => ∃ i, i1 = ARunning i ∧ ir = i1 ∧ rsr = rs1 ∧ memr = mem1 ∧ il = AWaiting
+  | MLFRun None => i1 = AWaiting ∧ ir = AWaiting ∧ il = AWaiting
   | _ => False
   end.
 
@@ -397,7 +395,7 @@ Proof.
   unshelve apply: tsim_remember. { exact: (λ _, asm_link_inv ins1 ins2). }
   { naive_solver. } { done. }
   move => /= {}n _ Hloop [i1 rs1 mem1 ins1'] [[[σf s] [il rsl meml insl]] [ir rsr memr insr]] [? [? [? Hinv]]].
-  case_match; destruct!.
+  repeat case_match; destruct!.
   - destruct i as [|[??|???|???|]?].
     + tstep_i => pc ?. case_match eqn: Hunion. 1: move: Hunion => /lookup_union_Some_raw[Hl|[? Hl]].
       * tstep_s. split!. simplify_option_eq. apply: Hloop; [done|]. naive_solver.
@@ -452,7 +450,7 @@ Proof.
   unshelve apply: tsim_remember. { exact: (λ _, flip (asm_link_inv ins1 ins2)). }
   { naive_solver. } { done. }
   move => /= {}n _ Hloop [[[σf ?] [il rsl meml insl]] [ir rsr memr insr]] [i1 rs1 mem1 ins1'] [? [? [? Hinv]]].
-  case_match; destruct!.
+  repeat case_match; destruct!.
   - destruct i as [|[??|???|???|]?].
     + tstep_i => pc ?. case_match => *; destruct!/=.
       * tstep_s. split!. erewrite lookup_union_Some_l by done.

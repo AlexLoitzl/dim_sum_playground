@@ -27,9 +27,9 @@ Section link.
 
   Lemma sim_tgt_link_None R m1 m2 s σ1 σ2 Π :
     ▷ₒ (∀ e p' s' e' ok,
-        ⌜R SPNone s e p' s' e' ok⌝ -∗
+        ⌜R None s e p' s' e' ok⌝ -∗
         Π (Some (Incoming, e')) (λ P, P (link_to_case ok p' e', s', σ1, σ2))) -∗
-    (MLFNone, s, σ1, σ2) ≈{link_trans R m1 m2}≈>ₜ Π.
+    (MLFRun None, s, σ1, σ2) ≈{link_trans R m1 m2}≈>ₜ Π.
   Proof.
     iIntros "HΠ".
     iApply (sim_tgt_bi_mono1 with "[-]").
@@ -38,7 +38,7 @@ Section link.
     iApply sim_tgt_seq_product_None. iIntros (p) "!>". iIntros (????).
     inv_all @link_filter.
     iApply (bi_mono1_intro with "[HΠ]"); [by iApply "HΠ"|] => /=.
-    iIntros (?) "?". iIntros ([[[??]?]?] ?); simplify_eq/=. by repeat case_match; simplify_eq/=.
+    iIntros (?) "?". iIntros ([[[??]?]?] ?); simplify_eq/=. by repeat (case_match; simplify_eq/=).
   Qed.
 
   Definition link_tgt_left_handler R {m1 m2 : mod_trans (io_event EV)}
@@ -47,9 +47,9 @@ Section link.
     : option (io_event EV) → ((m_state m1 → iProp Σ) → iProp Σ) → iProp Σ :=
     λ κ Pσ,
       match κ with
-            | None => Π None (λ P, Pσ (λ σ1', P (MLFLeft, s, σ1', σ2)))
-            | Some e => ∀ p' s' e' ok, ⌜R SPLeft s e.2 p' s' e' ok⌝ -∗ ⌜e.1 = Outgoing⌝ -∗
-                 if p' is SPNone then
+            | None => Π None (λ P, Pσ (λ σ1', P (MLFRun (Some SPLeft), s, σ1', σ2)))
+            | Some e => ∀ p' s' e' ok, ⌜R (Some SPLeft) s e.2 p' s' e' ok⌝ -∗ ⌜e.1 = Outgoing⌝ -∗
+                 if p' is None then
                    Π (Some (Outgoing, e')) (λ P, Pσ (λ σ1', P (link_to_case ok p' e', s', σ1', σ2)))
                  else
                    (* It is ok to use Pσ here directly since there
@@ -61,7 +61,7 @@ Section link.
 
   Lemma sim_tgt_link_left R m1 m2 s σ1 σ2 Π :
     σ1 ≈{m1}≈>ₜ link_tgt_left_handler R Π s σ2 -∗
-    (MLFLeft, s, σ1, σ2) ≈{link_trans R m1 m2}≈>ₜ Π.
+    (MLFRun (Some SPLeft), s, σ1, σ2) ≈{link_trans R m1 m2}≈>ₜ Π.
   Proof.
     iIntros "Hsim".
     iApply (sim_tgt_bi_mono1 with "[-]").
@@ -77,10 +77,6 @@ Section link.
         iApply (bi_mono1_intro with "[Hsim]"); [by iApply "Hsim"|].
         iIntros (?) "HP". iIntros ([[[??]?]?] ?). simplify_eq/=. repeat case_match => //; simplify_eq/=.
         all: iApply (sim_tgt_wand with "HP []"); iIntros; by iApply bi_mono1_intro0.
-      + iRight. iSplit!.
-        iApply (bi_mono1_intro with "[Hsim]"); [by iApply "Hsim"|].
-        iIntros (?) "HP". iIntros ([[[??]?]?] ?). simplify_eq/=. repeat case_match => //; simplify_eq/=.
-        all: iApply (sim_tgt_wand with "HP []"); iIntros; by iApply bi_mono1_intro0.
       + iLeft. iApply (bi_mono1_intro with "[Hsim]"); [by iApply "Hsim"|].
         iIntros (?) "HP". iApply (bi_mono1_intro with "HP").
         iIntros (?) "?". iIntros ([[[??]?]?]?). simplify_eq/=. by repeat case_match; simplify_eq/=.
@@ -92,10 +88,10 @@ Section link.
   Lemma sim_tgt_link_left_recv R m1 m2 s σ1 σ2 Π e :
     (σ1 ≈{m1}≈>ₜ λ κ Pσ,
       match κ with
-      | None => Π None (λ P, Pσ (λ σ1', P (MLFRecvL e, s, σ1', σ2)))
-      | Some e' => ⌜e' = (Incoming, e)⌝ -∗ Pσ (λ σ1', (MLFLeft, s, σ1', σ2) ≈{link_trans R m1 m2}≈>ₜ Π)
+      | None => Π None (λ P, Pσ (λ σ1', P (MLFRecv SPLeft e, s, σ1', σ2)))
+      | Some e' => ⌜e' = (Incoming, e)⌝ -∗ Pσ (λ σ1', (MLFRun (Some SPLeft), s, σ1', σ2) ≈{link_trans R m1 m2}≈>ₜ Π)
       end%I) -∗
-    (MLFRecvL e, s, σ1, σ2) ≈{link_trans R m1 m2}≈>ₜ Π.
+    (MLFRecv SPLeft e, s, σ1, σ2) ≈{link_trans R m1 m2}≈>ₜ Π.
   Proof.
     iIntros "Hsim".
     iApply (sim_tgt_bi_mono1 with "[-]").
@@ -121,9 +117,9 @@ Section link.
     : option (io_event EV) → ((m_state m2 → iProp Σ) → iProp Σ) → iProp Σ :=
     λ κ Pσ,
       match κ with
-            | None => Π None (λ P, Pσ (λ σ2', P (MLFRight, s, σ1, σ2')))
-            | Some e => ∀ p' s' e' ok, ⌜R SPRight s e.2 p' s' e' ok⌝ -∗ ⌜e.1 = Outgoing⌝ -∗
-                 if p' is SPNone then
+            | None => Π None (λ P, Pσ (λ σ2', P (MLFRun (Some SPRight), s, σ1, σ2')))
+            | Some e => ∀ p' s' e' ok, ⌜R (Some SPRight) s e.2 p' s' e' ok⌝ -∗ ⌜e.1 = Outgoing⌝ -∗
+                 if p' is None then
                    Π (Some (Outgoing, e')) (λ P, Pσ (λ σ2', P (link_to_case ok p' e', s', σ1, σ2')))
                  else
                    (* It is ok to use Pσ here directly since there
@@ -135,7 +131,7 @@ Section link.
 
   Lemma sim_tgt_link_right R m1 m2 s σ1 σ2 Π :
     σ2 ≈{m2}≈>ₜ link_tgt_right_handler R Π s σ1 -∗
-    (MLFRight, s, σ1, σ2) ≈{link_trans R m1 m2}≈>ₜ Π.
+    (MLFRun (Some SPRight), s, σ1, σ2) ≈{link_trans R m1 m2}≈>ₜ Π.
   Proof.
     iIntros "Hsim".
     iApply (sim_tgt_bi_mono1 with "[-]").
@@ -151,10 +147,6 @@ Section link.
         iApply (bi_mono1_intro with "[Hsim]"); [by iApply "Hsim"|].
         iIntros (?) "HP". iIntros ([[[??]?]?] ?). simplify_eq/=. repeat case_match => //; simplify_eq/=.
         all: iApply (sim_tgt_wand with "HP []"); iIntros; by iApply bi_mono1_intro0.
-      + iRight. iSplit!.
-        iApply (bi_mono1_intro with "[Hsim]"); [by iApply "Hsim"|].
-        iIntros (?) "HP". iIntros ([[[??]?]?] ?). simplify_eq/=. repeat case_match => //; simplify_eq/=.
-        all: iApply (sim_tgt_wand with "HP []"); iIntros; by iApply bi_mono1_intro0.
       + iLeft. iApply (bi_mono1_intro with "[Hsim]"); [by iApply "Hsim"|].
         iIntros (?) "HP". iApply (bi_mono1_intro with "HP").
         iIntros (?) "?". iIntros ([[[??]?]?]?). simplify_eq/=. by repeat case_match; simplify_eq/=.
@@ -166,10 +158,10 @@ Section link.
   Lemma sim_tgt_link_right_recv R m1 m2 s σ1 σ2 Π e :
     (σ2 ≈{m2}≈>ₜ λ κ Pσ,
       match κ with
-      | None => Π None (λ P, Pσ (λ σ2', P (MLFRecvR e, s, σ1, σ2')))
-      | Some e' => ⌜e' = (Incoming, e)⌝ -∗ Pσ (λ σ2', (MLFRight, s, σ1, σ2') ≈{link_trans R m1 m2}≈>ₜ Π)
+      | None => Π None (λ P, Pσ (λ σ2', P (MLFRecv SPRight e, s, σ1, σ2')))
+      | Some e' => ⌜e' = (Incoming, e)⌝ -∗ Pσ (λ σ2', (MLFRun (Some SPRight), s, σ1, σ2') ≈{link_trans R m1 m2}≈>ₜ Π)
       end%I) -∗
-    (MLFRecvR e, s, σ1, σ2) ≈{link_trans R m1 m2}≈>ₜ Π.
+    (MLFRecv SPRight e, s, σ1, σ2) ≈{link_trans R m1 m2}≈>ₜ Π.
   Proof.
     iIntros "Hsim".
     iApply (sim_tgt_bi_mono1 with "[-]").
@@ -1025,7 +1017,7 @@ Section memmove.
 
   Lemma memmove_sim  :
     rec_state_interp (rec_init (main_prog ∪ memmove_prog ∪ memcpy_prog)) None -∗
-    (MLFNone, [], rec_init (main_prog ∪ memmove_prog ∪ memcpy_prog), (locle_spec, ())) ⪯{
+    (MLFRun None, [], rec_init (main_prog ∪ memmove_prog ∪ memcpy_prog), (locle_spec, ())) ⪯{
       rec_link_trans {["main"; "memmove"; "memcpy"]} {["locle"]} rec_trans (spec_trans rec_event ()),
       spec_trans rec_event ()} (main_spec, ()).
   Proof.

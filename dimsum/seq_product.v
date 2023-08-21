@@ -3,12 +3,14 @@ From dimsum.core Require Import product state_transform.
 From dimsum.core Require Import axioms.
 
 (** * [seq_product] *)
-Inductive seq_product_case :=
-| SPLeft | SPRight | SPNone.
+Inductive seq_product_side :=
+| SPLeft | SPRight.
 
-Global Instance seq_product_case_inhabited : Inhabited seq_product_case := populate SPNone.
-Global Instance seq_product_eq_dec : EqDecision seq_product_case.
+Global Instance seq_product_side_inhabited : Inhabited seq_product_side := populate SPLeft.
+Global Instance seq_product_side_eq_dec : EqDecision seq_product_side.
 Proof. solve_decision. Qed.
+
+Definition seq_product_case := option seq_product_side.
 
 Inductive seq_product_event EV1 EV2 :=
 | SPELeft (e : EV1) (s : seq_product_case)
@@ -22,19 +24,19 @@ Inductive seq_product_step {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2) :
   (seq_product_case * m1.(m_state) * m2.(m_state)) →
   option (seq_product_event EV1 EV2) → (seq_product_case * m1.(m_state) * m2.(m_state) → Prop) → Prop :=
 | SPNoneS σ1 σ2 s:
-    seq_product_step m1 m2 (SPNone, σ1, σ2)
+    seq_product_step m1 m2 (None, σ1, σ2)
                  (Some (SPENone s))
                  (λ σ, σ = (s, σ1, σ2))
 | SPLeftS e σ1 σ2 s Pσ:
   m1.(m_step) σ1 e Pσ →
-  (if e is None then s = SPLeft else True) →
-  seq_product_step m1 m2 (SPLeft, σ1, σ2)
+  (if e is None then s = Some SPLeft else True) →
+  seq_product_step m1 m2 (Some SPLeft, σ1, σ2)
     (if e is Some e' then Some (SPELeft e' s) else None)
     (λ '(s', σ1', σ2'), s = s' ∧ Pσ σ1' ∧ σ2 = σ2')
 | SPRightS e σ1 σ2 s Pσ:
   m2.(m_step) σ2 e Pσ →
-  (if e is None then s = SPRight else True) →
-  seq_product_step m1 m2 (SPRight, σ1, σ2)
+  (if e is None then s = Some SPRight else True) →
+  seq_product_step m1 m2 (Some SPRight, σ1, σ2)
     (if e is Some e' then Some (SPERight e' s) else None)
     (λ '(s', σ1', σ2'), s = s' ∧ σ1 = σ1' ∧ Pσ σ2')
 .
@@ -64,21 +66,21 @@ Inductive seq_product_rel {EV1 EV2} : seq_product_case → trace (seq_product_ev
 | SPR_None s' κs κs' κs1 κs2:
   seq_product_rel s' κs' κs1 κs2 →
   tcons (SPENone s') κs' ⊆ κs →
-  seq_product_rel SPNone κs κs1 κs2
+  seq_product_rel None κs κs1 κs2
 | SPR_cons_l κ κs κs' κs1' κs2 s':
   seq_product_rel s' κs' κs1' κs2 →
   tcons (SPELeft κ s') κs' ⊆ κs →
-  seq_product_rel SPLeft κs (tcons κ κs1') κs2
+  seq_product_rel (Some SPLeft) κs (tcons κ κs1') κs2
 | SPR_cons_r κ κs κs' κs1' κs2 s':
   seq_product_rel s' κs' κs1' κs2 →
   tcons (SPERight κ s') κs' ⊆ κs →
-  seq_product_rel SPRight κs κs1' (tcons κ κs2)
+  seq_product_rel (Some SPRight) κs κs1' (tcons κ κs2)
 | SPR_ex1 T f κs κs2:
-  (∀ x, seq_product_rel SPLeft κs (f x) κs2) →
-  seq_product_rel SPLeft κs (tex T f) κs2
+  (∀ x, seq_product_rel (Some SPLeft) κs (f x) κs2) →
+  seq_product_rel (Some SPLeft) κs (tex T f) κs2
 | SPR_ex2 T f κs κs2 :
-  (∀ x, seq_product_rel SPRight κs κs2 (f x)) →
-  seq_product_rel SPRight κs κs2 (tex T f)
+  (∀ x, seq_product_rel (Some SPRight) κs κs2 (f x)) →
+  seq_product_rel (Some SPRight) κs κs2 (tex T f)
 | SPR_all1 {T} x f κs κs2 s:
   seq_product_rel s κs (f x) κs2 →
   seq_product_rel s κs (tall T f) κs2
@@ -168,7 +170,7 @@ Qed.
 
 Lemma seq_product_nil_l {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 Pσ κs:
   σ1 ~{ m1, κs }~>ₜ Pσ → κs ⊆ tnil →
-  (SPLeft, σ1, σ2) ~{ seq_product_trans m1 m2, tnil }~>ₜ (λ σ', σ'.1.1 = SPLeft ∧ Pσ σ'.1.2 ∧ σ2 = σ'.2).
+  ((Some SPLeft), σ1, σ2) ~{ seq_product_trans m1 m2, tnil }~>ₜ (λ σ', σ'.1.1 = (Some SPLeft) ∧ Pσ σ'.1.2 ∧ σ2 = σ'.2).
 Proof.
   elim.
   - move => ??????. tend.
@@ -181,7 +183,7 @@ Qed.
 
 Lemma seq_product_nil_r {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 Pσ κs:
   σ2 ~{ m2, κs }~>ₜ Pσ → κs ⊆ tnil →
-  (SPRight, σ1, σ2) ~{ seq_product_trans m1 m2, tnil }~>ₜ (λ σ', σ'.1.1 = SPRight ∧ σ1 = σ'.1.2 ∧ Pσ σ'.2).
+  ((Some SPRight), σ1, σ2) ~{ seq_product_trans m1 m2, tnil }~>ₜ (λ σ', σ'.1.1 = (Some SPRight) ∧ σ1 = σ'.1.2 ∧ Pσ σ'.2).
 Proof.
   elim.
   - move => ??????. tend.
@@ -235,7 +237,7 @@ Qed.
 
 (** ** tstep *)
 Lemma seq_product_trans_step_None_i {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2:
-  TStepI (seq_product_trans m1 m2) (SPNone, σ1, σ2) (λ G, ∀ s, G true (Some (SPENone s)) (λ G', G' (s, σ1, σ2))).
+  TStepI (seq_product_trans m1 m2) (None, σ1, σ2) (λ G, ∀ s, G true (Some (SPENone s)) (λ G', G' (s, σ1, σ2))).
 Proof.
   constructor => G HG. apply: steps_impl_step_end => ???. inv_all @m_step.
   eexists _, _. split_and!; [done..|]. naive_solver.
@@ -243,12 +245,12 @@ Qed.
 Global Hint Resolve seq_product_trans_step_None_i : typeclass_instances.
 
 Lemma seq_product_trans_step_l_i {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 P `{!TStepI m1 σ1 P}:
-  TStepI (seq_product_trans m1 m2) (SPLeft, σ1, σ2) (λ G, P (λ b κ P',
-    ∀ s', (if κ is None then s' = SPLeft else True) →
+  TStepI (seq_product_trans m1 m2) ((Some SPLeft), σ1, σ2) (λ G, P (λ b κ P',
+    ∀ s', (if κ is None then s' = (Some SPLeft) else True) →
      G b ((λ e, SPELeft e s') <$> κ) (λ G', P' (λ x, G' (s', x, σ2))))).
 Proof.
   constructor => G /(@tstepi_proof _ _ _ _ ltac:(done)) HP.
-  apply: (steps_impl_submodule _ (seq_product_trans _ _) (λ x, (SPLeft, x, σ2))); [done| |].
+  apply: (steps_impl_submodule _ (seq_product_trans _ _) (λ x, ((Some SPLeft), x, σ2))); [done| |].
   - move => ?? /= [?[?[HG[? HG']]]]. eexists _, _. split_and!; [by apply HG|done|] => ? /= /HG'[?[??]]. naive_solver.
   - move => ????. inv_all/= @m_step; eexists _, _.
     split_and!; [done| |naive_solver].
@@ -257,12 +259,12 @@ Qed.
 Global Hint Resolve seq_product_trans_step_l_i : typeclass_instances.
 
 Lemma seq_product_trans_step_r_i {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 P `{!TStepI m2 σ2 P}:
-  TStepI (seq_product_trans m1 m2) (SPRight, σ1, σ2) (λ G, P (λ b κ P',
-    ∀ s', (if κ is None then s' = SPRight else True) →
+  TStepI (seq_product_trans m1 m2) ((Some SPRight), σ1, σ2) (λ G, P (λ b κ P',
+    ∀ s', (if κ is None then s' = (Some SPRight) else True) →
      G b ((λ e, SPERight e s') <$> κ) (λ G', P' (λ x, G' (s', σ1, x))))).
 Proof.
   constructor => G /(@tstepi_proof _ _ _ _ ltac:(done)) HP.
-  apply: (steps_impl_submodule _ (seq_product_trans _ _) (λ x, (SPRight, σ1, x))); [done| |].
+  apply: (steps_impl_submodule _ (seq_product_trans _ _) (λ x, ((Some SPRight), σ1, x))); [done| |].
   - move => ?? /= [?[?[HG [? HG']]]]. eexists _,_. split_and!; [by apply HG|done|] => ? /= /HG'[?[??]]. naive_solver.
   - move => ????. inv_all/= @m_step; eexists _, _.
     split_and!; [done| |naive_solver].
@@ -271,7 +273,7 @@ Qed.
 Global Hint Resolve seq_product_trans_step_r_i : typeclass_instances.
 
 Lemma seq_product_trans_step_None_s {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2:
-  TStepS (seq_product_trans m1 m2) (SPNone, σ1, σ2) (λ G, ∃ s, G (Some (SPENone s)) (λ G', G' (s, σ1, σ2))).
+  TStepS (seq_product_trans m1 m2) (None, σ1, σ2) (λ G, ∃ s, G (Some (SPENone s)) (λ G', G' (s, σ1, σ2))).
 Proof.
   constructor => G [s HG]. eexists _, _. split; [done|]. move => ??.
   apply: steps_spec_step_end. { econs. }
@@ -280,8 +282,8 @@ Qed.
 Global Hint Resolve seq_product_trans_step_None_s : typeclass_instances.
 
 Lemma seq_product_trans_step_l_s {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 P `{!TStepS m1 σ1 P}:
-  TStepS (seq_product_trans m1 m2) (SPLeft, σ1, σ2) (λ G, P (λ κ P',
-    ∃ s', (if κ is None then s' = SPLeft else True) ∧ G ((λ e, SPELeft e s') <$> κ) (λ G',
+  TStepS (seq_product_trans m1 m2) ((Some SPLeft), σ1, σ2) (λ G, P (λ κ P',
+    ∃ s', (if κ is None then s' = (Some SPLeft) else True) ∧ G ((λ e, SPELeft e s') <$> κ) (λ G',
        P' (λ σ, G' (s', σ, σ2))))).
 Proof.
   constructor => G /(@tsteps_proof _ _ _ _ ltac:(done))[?[?[? HG']]]. destruct!.
@@ -295,8 +297,8 @@ Qed.
 Global Hint Resolve seq_product_trans_step_l_s : typeclass_instances.
 
 Lemma seq_product_trans_step_r_s {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 P `{!TStepS m2 σ2 P}:
-  TStepS (seq_product_trans m1 m2) (SPRight, σ1, σ2) (λ G, P (λ κ P',
-    ∃ s', (if κ is None then s' = SPRight else True) ∧ G ((λ e, SPERight e s') <$> κ) (λ G',
+  TStepS (seq_product_trans m1 m2) ((Some SPRight), σ1, σ2) (λ G, P (λ κ P',
+    ∃ s', (if κ is None then s' = (Some SPRight) else True) ∧ G ((λ e, SPERight e s') <$> κ) (λ G',
        P' (λ σ, G' (s', σ1, σ))))).
 Proof.
   constructor => G /(@tsteps_proof _ _ _ _ ltac:(done))[?[?[? HG']]]. destruct!.
@@ -327,22 +329,22 @@ Arguments sm_event _ _ : clear implicits.
 Inductive seq_map_filter {EV1 EV2} :
   seq_map_case EV1 → (seq_product_event EV1 (sm_event EV1 EV2)) → option EV2 → seq_map_case EV1 → bool → Prop :=
 | SeqMapToFilter e:
-  seq_map_filter SMProg (SPELeft e SPRight) None (SMFilterRecv e) true
+  seq_map_filter SMProg (SPELeft e (Some SPRight)) None (SMFilterRecv e) true
 | SeqMapFilterRecv e:
-  seq_map_filter (SMFilterRecv e) (SPERight (SMERecv e) SPRight) None SMFilter true
+  seq_map_filter (SMFilterRecv e) (SPERight (SMERecv e) (Some SPRight)) None SMFilter true
 | SeqMapFilterOut e:
-  seq_map_filter SMFilter (SPERight (SMEEmit e) SPRight) (Some e) SMFilter true
+  seq_map_filter SMFilter (SPERight (SMEEmit e) (Some SPRight)) (Some e) SMFilter true
 | SeqMapFilterToProg e:
-  seq_map_filter SMFilter (SPERight (SMEReturn e) SPLeft) None
+  seq_map_filter SMFilter (SPERight (SMEReturn e) (Some SPLeft)) None
     (if e is Some e' then SMProgRecv e' else SMProg) true
 | SeqMapProgRecv e:
-  seq_map_filter (SMProgRecv e) (SPELeft e SPLeft) None SMProg true
+  seq_map_filter (SMProgRecv e) (SPELeft e (Some SPLeft)) None SMProg true
 .
 
 Definition seq_map_state_trans {EV1 EV2} (m : mod_trans EV1) (f : mod_trans (sm_event EV1 EV2)) (σ : seq_map_case EV1 * m.(m_state) * f.(m_state)) :=
   (match σ.1.1 with
-        | SMProg | SMProgRecv _ => SPLeft
-        | SMFilter | SMFilterRecv _ => SPRight
+        | SMProg | SMProgRecv _ => (Some SPLeft)
+        | SMFilter | SMFilterRecv _ => (Some SPRight)
         end, σ.1.2, σ.2, (σ.1.1, true)).
 Arguments seq_map_state_trans _ _ _ /.
 Global Instance seq_map_state_trans_inj {EV1 EV2} (m : mod_trans EV1) (f : mod_trans (sm_event EV1 EV2)) :
@@ -389,8 +391,8 @@ Qed.
 (*
 Lemma mod_seq_map_nil_l {EV1 EV2} m (f : module (sm_event EV1 EV2)) σ Pσ Pσf σf κs σm:
   σ ~{ m, tnil }~>ₜ Pσ →
-  (∀ σ', Pσ σ' → (SPLeft, σ', σf, σm) ~{ mod_seq_map m f, κs }~>ₜ Pσf) →
-  (SPLeft, σ, σf, σm) ~{ mod_seq_map m f, κs }~>ₜ Pσf.
+  (∀ σ', Pσ σ' → ((Some SPLeft), σ', σf, σm) ~{ mod_seq_map m f, κs }~>ₜ Pσf) →
+  ((Some SPLeft), σ, σf, σm) ~{ mod_seq_map m f, κs }~>ₜ Pσf.
 Proof.
   move => Hσ Hcont.
   apply: mod_map_nil.
@@ -400,8 +402,8 @@ Qed.
 
 Lemma mod_seq_map_nil_r {EV1 EV2} m (f : module (sm_event EV1 EV2)) σ Pσ Pσf σf κs σm:
   σf ~{ f, tnil }~>ₜ Pσ →
-  (∀ σ', Pσ σ' → (SPRight, σ, σ', σm) ~{ mod_seq_map m f, κs }~>ₜ Pσf) →
-  (SPRight, σ, σf, σm) ~{ mod_seq_map m f, κs }~>ₜ Pσf.
+  (∀ σ', Pσ σ' → ((Some SPRight), σ, σ', σm) ~{ mod_seq_map m f, κs }~>ₜ Pσf) →
+  ((Some SPRight), σ, σf, σm) ~{ mod_seq_map m f, κs }~>ₜ Pσf.
 Proof.
   move => Hσ Hcont.
   apply: mod_map_nil.

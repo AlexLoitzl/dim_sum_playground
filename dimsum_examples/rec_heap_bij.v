@@ -1107,9 +1107,9 @@ Proof.
       (λ ips s1 s2 s x1 x2 x ics1 ics2,
         ics1 = ics2 ∧
         match ips with
-        | SPNone => x ⊣⊢ x1 ∗ x2
-        | SPLeft => x1 = (x ∗ x2)%I
-        | SPRight => x2 = (x ∗ x1)%I
+        | None => x ⊣⊢ x1 ∗ x2
+        | Some SPLeft => x1 = (x ∗ x2)%I
+        | Some SPRight => x2 = (x ∗ x1)%I
         end
       ). }
   { move => ?? [] /=*; naive_solver. }

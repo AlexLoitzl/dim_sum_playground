@@ -445,60 +445,60 @@ Global Instance coro_link_filter_case_inhabited : Inhabited coro_link_filter_cas
 Definition coro_link_filter (fns1 fns2 : gset string) : seq_product_case → coro_link_filter_case * (option string) → rec_ev → seq_product_case → coro_link_filter_case * (option string) → rec_ev → bool → Prop :=
   λ p s e p' s' e' ok,
     match s.1, p with
-    | CPFInit, SPNone =>
+    | CPFInit, None =>
         ∃ f vs h,
         e = ERCall f vs h ∧
         e' = e ∧
-        p' = SPLeft ∧
+        p' = Some SPLeft ∧
         ok = bool_decide (f ∈ fns1) ∧
         s' = (CPFLeft, s.2)
     | CPFInit, _ => False
-    | CPFLeft, SPNone
-    | CPFRight, SPNone =>
+    | CPFLeft, None
+    | CPFRight, None =>
         e' = e ∧
-        p' = (if s.1 is CPFRight then SPRight else SPLeft) ∧
+        p' = (if s.1 is CPFRight then Some SPRight else Some SPLeft) ∧
         s' = s ∧
         ok = if e is ERCall _ _ _ then false else true
     | CPFLeft, _ =>
         (* p must be SPLeft *)
-        p = SPLeft ∧
+        p = Some SPLeft ∧
         match e with
         | ERCall f vs h =>
             if bool_decide (f = "yield") then
               e' = (if s.2 is Some f then ERCall f vs h else ERReturn (vs !!! 0%nat) h) ∧
-              p' = SPRight ∧
+              p' = Some SPRight ∧
               s' = (CPFRight, None) ∧
               ok = bool_decide (length vs = 1%nat)
             else
               e' = e ∧
-              p' = (if bool_decide (f ∈ fns2) then SPRight else SPNone) ∧
+              p' = (if bool_decide (f ∈ fns2) then Some SPRight else None) ∧
               s' = s ∧
               ok = bool_decide (f ∉ fns2)
         | ERReturn v h =>
             e' = e ∧
-            p' = SPNone ∧
+            p' = None ∧
             s' = (CPFInit, s.2) ∧
             ok = true
         end
     | CPFRight, _ =>
         (* p must be SPRight *)
-        p = SPRight ∧
+        p = Some SPRight ∧
         match e with
         | ERCall f vs h =>
             if bool_decide (f = "yield") then
               e' = ERReturn (vs !!! 0%nat) h ∧
-              p' = SPLeft ∧
+              p' = Some SPLeft ∧
               s' = (CPFLeft, None) ∧
               ok = bool_decide (length vs = 1%nat)
             else
               e' = e ∧
-              p' = (if bool_decide (f ∈ fns1) then SPLeft else SPNone) ∧
+              p' = (if bool_decide (f ∈ fns1) then Some SPLeft else None) ∧
               s' = s ∧
               ok = bool_decide (f ∉ fns1)
         | ERReturn v h =>
             ok = false ∧
             e' = e ∧
-            p' = SPRight ∧
+            p' = Some SPRight ∧
             s' = s
         end
     end.
@@ -509,7 +509,7 @@ Definition coro_link_trans (fns1 fns2 : gset string) (m1 m2 : mod_trans rec_even
 
 Definition coro_link (fns1 fns2 : gset string) (finit : string) (m1 m2 : module rec_event) : module rec_event :=
   Mod (coro_link_trans fns1 fns2 m1.(m_trans) m2.(m_trans))
-    (MLFNone, (CPFInit, (Some finit)), m1.(m_init), m2.(m_init)).
+    (MLFRun None, (CPFInit, (Some finit)), m1.(m_init), m2.(m_init)).
 
 Lemma coro_link_trefines m1 m1' m2 m2' fns1 fns2 finit `{!VisNoAng m1.(m_trans)} `{!VisNoAng m2.(m_trans)}:
   trefines m1 m1' →
@@ -600,7 +600,7 @@ Proof.
        yt ≡ yield_spec ∧
        σ1' = σ1 ∧
        σ2' = σ2 ∧
-       σpy1 = MLFRight ∧
+       σpy1 = MLFRun (Some SPRight) ∧
        σpy2 = None ∧
        σpc2 = None ∧
        σsm' = SMProg ∧
@@ -611,7 +611,7 @@ Proof.
        (* Left side, not yet changed to right side *)
        | CPFLeft =>
            ∃ ssz,
-           σpc1 = MLFLeft ∧
+           σpc1 = MLFRun (Some SPLeft) ∧
            σsm1 = SMProg ∧
            pp1 = PPInside ∧
            cs1 = csc ∧
@@ -624,13 +624,13 @@ Proof.
               ∃ regs1 ret2 regs2,
                 cs2 = [R2AI true (yregs !!! "PC") regs1; R2AI false ret2 regs2] ∧
                 map_preserved saved_registers regs1 yregs) ∧
-           σlc = MLFLeft ∧
+           σlc = MLFRun (Some SPLeft) ∧
            yregs !!! "PC" ∈ ins2 ∧
            (if σc.2 is Some f then f2i2 !! f = Some (yregs !!! "PC") ∧ f ∈ fns2 else True)
        (* Right side *)
        | CPFRight =>
            ∃ ssz regs1 ret2 regs2,
-           σpc1 = MLFRight ∧
+           σpc1 = MLFRun (Some SPRight) ∧
            σsm1 = SMFilter ∧
            pp1 = PPOutside ∧
            cs1 = [R2AI true (yregs !!! "PC") regs1; R2AI false cret cregs] ∧
@@ -640,7 +640,7 @@ Proof.
            σsm2 = SMProg ∧
            pp2 = PPInside ∧
            cs2 = [R2AI false ret2 regs2] ∧
-           σlc = MLFRight ∧
+           σlc = MLFRun (Some SPRight) ∧
            yregs !!! "PC" ∈ ins1
        | _ => False
        end). }

@@ -279,12 +279,12 @@ Lemma memcpy_spec n0 d s d' s' n o K e h m σ1 σ2 b cs hvs `{!RecExprFill e K
   (if bool_decide (o = 1) then d.1 = s.1 → d.2 ≤ s.2 else d.1 = s.1 → s.2 ≤ d.2) →
   (∀ i v, hvs !! i = Some v → h_heap h !! (s' +ₗ Z.of_nat i) = Some v) →
   (∀ i v, hvs !! i = Some v → heap_alive h (d' +ₗ Z.of_nat i)) →
-  ((MLFLeft, cs, Rec (expr_fill K (Val (ValNum 0)))
+  ((MLFRun (Some SPLeft), cs, Rec (expr_fill K (Val (ValNum 0)))
                    (heap_update_big h (kmap (λ i, d' +ₗ i) (map_seqZ 0 hvs)))
                    (memmove_prog ∪ memcpy_prog), σ1)
     ⪯{rec_link_trans {["memmove"; "memcpy"]} {["locle"]} rec_trans (spec_trans rec_event ()), m, n0, true}
   σ2) →
-  (MLFLeft, cs, Rec e h (memmove_prog ∪ memcpy_prog), σ1)
+  (MLFRun (Some SPLeft), cs, Rec e h (memmove_prog ∪ memcpy_prog), σ1)
     ⪯{rec_link_trans {["memmove"; "memcpy"]} {["locle"]} rec_trans (spec_trans rec_event ()), m, n0, b}
   σ2.
 Proof.
@@ -390,7 +390,7 @@ Proof.
     ti ≡ locle_spec ∧
     t ≡ memmove_spec ∧
     cs = [] ∧
-    σi = MLFNone ∧
+    σi = MLFRun None ∧
     e = Waiting false ∧
     fns = (memmove_prog ∪ memcpy_prog)). }
   { split!. } { done. }

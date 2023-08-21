@@ -364,10 +364,10 @@ Section prepost.
         :
 
        (∀ p s e p' s' e' ok1, R1 p s e p' s' e' ok1 → p ≠ p') →
-       INV SPNone s1 s2 s x1 x2 x sr1 sr2 →
+       INV None s1 s2 s x1 x2 x sr1 sr2 →
        (∀ s1 s2 s x1 x2 x sr1 sr2 e sr1' e' ok1,
-          INV SPNone s1 s2 s x1 x2 x sr1 sr2 →
-          R1 SPNone sr1 e SPLeft sr1' e' ok1 →
+          INV None s1 s2 s x1 x2 x sr1 sr2 →
+          R1 None sr1 e (Some SPLeft) sr1' e' ok1 →
           pp_to_all (i (Incoming, e') s) (λ r1 y1,
           ∀ x', satisfiable (x ∗ y1 ∗ x') →
           ok1 ∧
@@ -376,11 +376,11 @@ Section prepost.
             r1.1.1 = Incoming ∧
             r2.1.1 = Incoming ∧
             r1.1.2 = r2.1.2 ∧
-            R2 SPNone sr2 e SPLeft sr2' r1.1.2 ok2 ∧
-            (ok2 → INV SPLeft r2.2 s2 r1.2 x'2 x2 x' sr1' sr2')))) →
+            R2 None sr2 e (Some SPLeft) sr2' r1.1.2 ok2 ∧
+            (ok2 → INV (Some SPLeft) r2.2 s2 r1.2 x'2 x2 x' sr1' sr2')))) →
        (∀ s1 s2 s x1 x2 x sr1 sr2 e sr1' e' ok1,
-          INV SPNone s1 s2 s x1 x2 x sr1 sr2 →
-          R1 SPNone sr1 e SPRight sr1' e' ok1 →
+          INV None s1 s2 s x1 x2 x sr1 sr2 →
+          R1 None sr1 e (Some SPRight) sr1' e' ok1 →
           pp_to_all (i (Incoming, e') s) (λ r1 y1,
           ∀ x', satisfiable (x ∗ y1 ∗ x') →
           ok1 ∧
@@ -389,30 +389,30 @@ Section prepost.
             r1.1.1 = Incoming ∧
             r2.1.1 = Incoming ∧
             r1.1.2 = r2.1.2 ∧
-            R2 SPNone sr2 e SPRight sr2' r1.1.2 ok2 ∧
-            (ok2 → INV SPRight s1 r2.2 r1.2 x1 x'2 x' sr1' sr2')))) →
+            R2 None sr2 e (Some SPRight) sr2' r1.1.2 ok2 ∧
+            (ok2 → INV (Some SPRight) s1 r2.2 r1.2 x1 x'2 x' sr1' sr2')))) →
        (∀ s1 s2 s x1 x2 x sr1 sr2 e ok1,
-           INV SPLeft s1 s2 s x1 x2 x sr1 sr2 →
+           INV (Some SPLeft) s1 s2 s x1 x2 x sr1 sr2 →
            pp_to_all (o1 e s1) (λ r1 y1, ∀ sr1' e' x',
              satisfiable (x' ∗ y1 ∗ x1) →
              r1.1.1 = Outgoing →
-             R1 SPLeft sr1 r1.1.2 SPRight sr1' e' ok1 →
+             R1 (Some SPLeft) sr1 r1.1.2 (Some SPRight) sr1' e' ok1 →
              ok1 ∧
              pp_to_ex (i2 (Incoming, e') s2) (λ r2 y2, ∃ sr2' x'2 ok2,
                satisfiable (x2 ∗ y2 ∗ x'2) ∧
                e.1 = Outgoing ∧
                r2.1.1 = Incoming ∧
-               R2 SPLeft sr2 e.2 SPRight sr2' r2.1.2 ok2 ∧
-               (ok2 → INV SPRight r1.2 r2.2 s x' x'2 x sr1' sr2')))) →
+               R2 (Some SPLeft) sr2 e.2 (Some SPRight) sr2' r2.1.2 ok2 ∧
+               (ok2 → INV (Some SPRight) r1.2 r2.2 s x' x'2 x sr1' sr2')))) →
        (∀ s1 s2 s x1 x2 x sr1 sr2 e ok1,
-           INV SPLeft s1 s2 s x1 x2 x sr1 sr2 →
+           INV (Some SPLeft) s1 s2 s x1 x2 x sr1 sr2 →
            pp_to_all (o1 e s1) (λ r1 y1, ∀ sr1' e' x',
              satisfiable (x' ∗ y1 ∗ x1) →
              r1.1.1 = Outgoing →
-             R1 SPLeft sr1 r1.1.2 SPNone sr1' e' ok1 →
+             R1 (Some SPLeft) sr1 r1.1.2 None sr1' e' ok1 →
              ∃ e'' sr2' ok2,
                e.1 = Outgoing ∧
-               R2 SPLeft sr2 e.2 SPNone sr2' e'' ok2 ∧
+               R2 (Some SPLeft) sr2 e.2 None sr2' e'' ok2 ∧
                ok1 ∧
                (* There should not be ub when going out *)
                ok2 ∧
@@ -420,29 +420,29 @@ Section prepost.
                  satisfiable (x'2 ∗ y2 ∗ x) ∧
                  r2.1.1 = Outgoing ∧
                  r2.1.2 = e' ∧
-                 INV SPNone r1.2 s2 r2.2 x' x2 x'2 sr1' sr2'))) →
+                 INV None r1.2 s2 r2.2 x' x2 x'2 sr1' sr2'))) →
        (∀ s1 s2 s x1 x2 x sr1 sr2 e ok1,
-           INV SPRight s1 s2 s x1 x2 x sr1 sr2 →
+           INV (Some SPRight) s1 s2 s x1 x2 x sr1 sr2 →
            pp_to_all (o2 e s2) (λ r1 y1, ∀ sr1' e' x',
              satisfiable (x' ∗ y1 ∗ x2) →
              r1.1.1 = Outgoing →
-             R1 SPRight sr1 r1.1.2 SPLeft sr1' e' ok1 →
+             R1 (Some SPRight) sr1 r1.1.2 (Some SPLeft) sr1' e' ok1 →
              ok1 ∧
              pp_to_ex (i1 (Incoming, e') s1) (λ r2 y2, ∃ sr2' x'2 ok2,
                satisfiable (x1 ∗ y2 ∗ x'2) ∧
                e.1 = Outgoing ∧
                r2.1.1 = Incoming ∧
-               R2 SPRight sr2 e.2 SPLeft sr2' r2.1.2 ok2 ∧
-               (ok2 → INV SPLeft r2.2 r1.2 s x'2 x' x sr1' sr2')))) →
+               R2 (Some SPRight) sr2 e.2 (Some SPLeft) sr2' r2.1.2 ok2 ∧
+               (ok2 → INV (Some SPLeft) r2.2 r1.2 s x'2 x' x sr1' sr2')))) →
        (∀ s1 s2 s x1 x2 x sr1 sr2 e ok1,
-           INV SPRight s1 s2 s x1 x2 x sr1 sr2 →
+           INV (Some SPRight) s1 s2 s x1 x2 x sr1 sr2 →
            pp_to_all (o2 e s2) (λ r1 y1, ∀ sr1' e' x',
              satisfiable (x' ∗ y1 ∗ x2) →
              r1.1.1 = Outgoing →
-             R1 SPRight sr1 r1.1.2 SPNone sr1' e' ok1 →
+             R1 (Some SPRight) sr1 r1.1.2 None sr1' e' ok1 →
              ∃ e'' sr2' ok2,
                e.1 = Outgoing ∧
-               R2 SPRight sr2 e.2 SPNone sr2' e'' ok2 ∧
+               R2 (Some SPRight) sr2 e.2 None sr2' e'' ok2 ∧
                ok1 ∧
                (* There should not be ub when going out *)
                ok2 ∧
@@ -450,7 +450,7 @@ Section prepost.
                  satisfiable (x'2 ∗ y2 ∗ x) ∧
                  r2.1.1 = Outgoing ∧
                  r2.1.2 = e' ∧
-                 INV SPNone s1 r1.2 r2.2 x1 x' x'2 sr1' sr2'))) →
+                 INV None s1 r1.2 r2.2 x1 x' x'2 sr1' sr2'))) →
     trefines (link_mod R1 (prepost_mod i1 o1 m1 s1 x1) (prepost_mod i2 o2 m2 s2 x2) sr1)
              (prepost_mod i o (link_mod R2 m1 m2 sr2) s x).
     Proof.
@@ -462,23 +462,23 @@ Section prepost.
            ∃ sp rx1 rx2 rx,
            x1 = uPred_shrink rx1 ∧ x2 = uPred_shrink rx2 ∧ x = uPred_shrink rx ∧
            σ1 = σ1' ∧ σ2 = σ2' ∧ INV sp s1 s2 s rx1 rx2 rx sr1 sr2 ∧
-          (( sp = SPNone ∧
-              σl1 = MLFNone ∧ σf = SMFilter
+          (( sp = None ∧
+              σl1 = MLFRun None ∧ σf = SMFilter
             ∧ σpp1 = PPOutside ∧ σpp2 = PPOutside ∧ σpp = PPOutside
             ∧ σf1 = SMFilter ∧ σf2 = SMFilter
-            ∧ σl2 = MLFNone)
-           ∨ (sp = SPLeft ∧
-              ((∃ e, σl2 = MLFRecvL e ∧ σf1 = SMProgRecv (Incoming, e))
-               ∨ (σl2 = MLFLeft ∧ σf1 = SMProg))
+            ∧ σl2 = MLFRun None)
+           ∨ (sp = (Some SPLeft) ∧
+              ((∃ e, σl2 = MLFRecv SPLeft e ∧ σf1 = SMProgRecv (Incoming, e))
+               ∨ (σl2 = MLFRun (Some SPLeft) ∧ σf1 = SMProg))
             ∧ σpp1 = PPInside ∧ σpp2 = PPOutside ∧ σpp = PPInside
             ∧ σf = SMProg ∧ σf2 = SMFilter
-            ∧ σl1 = MLFLeft)
-           ∨ (sp = SPRight ∧
-              ((∃ e, σl2 = MLFRecvR e ∧ σf2 = SMProgRecv (Incoming, e))
-               ∨ (σl2 = MLFRight ∧ σf2 = SMProg))
+            ∧ σl1 = MLFRun (Some SPLeft))
+           ∨ (sp = (Some SPRight) ∧
+              ((∃ e, σl2 = MLFRecv SPRight e ∧ σf2 = SMProgRecv (Incoming, e))
+               ∨ (σl2 = MLFRun (Some SPRight) ∧ σf2 = SMProg))
             ∧ σpp1 = PPOutside ∧ σpp2 = PPInside ∧ σpp = PPInside
             ∧ σf = SMProg ∧ σf1 = SMFilter
-            ∧ σl1 = MLFRight) )). }
+            ∧ σl1 = MLFRun (Some SPRight)) )). }
       { split!. } { done. }
       move => {}n _ /= Hloop {Hinv}.
       move => [[[σl1 {}sr1] [[σf1 {}σ1] [[σpp1 {}s1] {}x1]]] [[σf2 {}σ2] [[σpp2 {}s2] {}x2]]].
@@ -486,7 +486,7 @@ Section prepost.
       - tstep_i => ? p' ?? ok1 ?.
         tstep_s. split!.
         tstep_s. apply pp_to_all_forall => ri xi Hi x' Hsat.
-        destruct p' => /=. 3: clear HN2L HN2R HL2R HL2N HR2L HR2N; naive_solver.
+        destruct p' as [[]|] => /=. 3: clear HN2L HN2R HL2R HL2N HR2L HR2N; naive_solver.
         + move: ri xi Hi x' Hsat. apply: pp_to_all_forall_2.
           apply: pp_to_all_mono; [by apply: HN2L|].
           move => [[??]?] ? /= Hcont ??.
@@ -527,7 +527,7 @@ Section prepost.
         tend. have [σ' Hσ'] := vis_no_all _ _ _ ltac:(done).
         eexists σ'. split; [clear HN2L HN2R HL2R HL2N HR2L HR2N; naive_solver|].
         tstep_i. apply pp_to_all_forall => ri xi Hi x' Hsat p' sr1' e' ok1 HR1 Hri.
-        destruct p' => /=. 1: clear HN2L HN2R HL2R HL2N HR2L HR2N; naive_solver.
+        destruct p' as [[]|] => /=. 1: clear HN2L HN2R HL2R HL2N HR2L HR2N; naive_solver.
         + move: ri xi Hi x' Hsat sr1' e' Hri HR1. apply: pp_to_all_forall_2.
           apply: pp_to_all_mono; [by apply: HL2R|].
           move => [[??]?] ? /= Hcont ??????.
@@ -570,7 +570,7 @@ Section prepost.
         tend. have [σ' Hσ'] := vis_no_all _ _ _ ltac:(done).
         eexists σ'. split; [clear HN2L HN2R HL2R HL2N HR2L HR2N; naive_solver|].
         tstep_i. apply pp_to_all_forall => ri xi Hi x' Hsat p' sr1' e' ok1 HR1 Hri.
-        destruct p' => /=. 2: clear HN2L HN2R HL2R HL2N HR2L HR2N; naive_solver.
+        destruct p' as [[]|] => /=. 2: clear HN2L HN2R HL2R HL2N HR2L HR2N; naive_solver.
         + move: ri xi Hi x' Hsat sr1' e' Hri HR1. apply: pp_to_all_forall_2.
           apply: pp_to_all_mono; [by apply: HR2L|].
           move => [[??]?] ? /= Hcont ??????.
