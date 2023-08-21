@@ -334,3 +334,75 @@ Global Hint Resolve
 Global Hint Resolve
   link_trans_step_link_to_case_s
 | 3 : typeclass_instances.
+
+
+Lemma link_comm {EV S1 S2 : Type}
+  (INV : seq_product_case → S1 → S2 → Prop)
+  (R1 : seq_product_case → S1 → EV → seq_product_case → S1 → EV → bool → Prop)
+  (R2 : seq_product_case → S2 → EV → seq_product_case → S2 → EV → bool → Prop)
+  (m1 m2 : module (io_event EV))
+  s1 s2:
+  (∀ p s e p' s' e' ok s2,
+      R1 p s e p' s' e' ok →
+      INV p s s2 →
+      ∃ s2', R2 (sp_opp <$> p) s2 e (sp_opp <$> p') s2' e' ok ∧ INV p' s' s2') →
+  INV None s1 s2 →
+  trefines (link_mod R1 m1 m2 s1) (link_mod R2 m2 m1 s2).
+Proof.
+  move => Hcomm Hinv. apply tsim_implies_trefines => /= n.
+  unshelve apply: tsim_remember. { simpl. exact (λ _
+    '(σl1, s1, σ1, σ2)
+    '(σl2, s2, σ1', σ2'),
+    ∃ sp, match σl1 with
+          | MLFRun sp' => sp = sp' ∧ σl2 = MLFRun (sp_opp <$> sp)
+          | MLFRecv sp' e => sp = Some sp' ∧ σl2 = MLFRecv (sp_opp sp') e
+          | _ => False
+          end ∧ σ2' = σ1 ∧ σ1' = σ2 ∧ INV sp s1 s2). }
+  { split!. } { done. }
+  move => {}n _ /= Hloop {Hinv}.
+  move => [[[σl1 {}s1] σ1] σ2] [[[σl2 {}s2] σ1'] σ2'] [sp ?].
+  destruct sp as [[]|] => //=; case_match; destruct!.
+  - tsim_mirror (m1.(m_trans)) σ1. move => ??? Hcont.
+    tstep_both. apply: Hcont => κ Pσ ? Hs. destruct κ as [[??]|].
+    2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto.  }
+    move => p' ?? ok HR1 ?. simplify_eq/=.
+    efeed generalize Hcomm; [done|done|] => /= -[?[??]].
+    tstep_s. eexists (Some (Outgoing, _)). split!; [done|].
+    destruct p' => /=.
+    + apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+      destruct ok; [|by tstep_s] => /=.
+      apply Hloop; [done|]. split!.
+    + split!; [done|]. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+      destruct ok; [|by tstep_s] => /=.
+      apply Hloop; [done|]. split!.
+  - tsim_mirror (m1.(m_trans)) σ1. move => ??? Hcont.
+    tstep_both. apply: Hcont => κ Pσ ? Hs. destruct κ as [[??]|].
+    2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto.  }
+    move => ?. simplify_eq/=. tstep_s. eexists (Some (Incoming, _)). split!.
+    apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+    apply Hloop; [done|]. split!.
+  - tsim_mirror (m2.(m_trans)) σ2. move => ??? Hcont.
+    tstep_both. apply: Hcont => κ Pσ ? Hs. destruct κ as [[??]|].
+    2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto.  }
+    move => p' ?? ok HR1 ?. simplify_eq/=.
+    efeed generalize Hcomm; [done|done|] => /= -[?[??]].
+    tstep_s. eexists (Some (Outgoing, _)). split!; [done|].
+    destruct p' => /=.
+    + apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+      destruct ok; [|by tstep_s] => /=.
+      apply Hloop; [done|]. split!.
+    + split!; [done|]. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+      destruct ok; [|by tstep_s] => /=.
+      apply Hloop; [done|]. split!.
+  - tsim_mirror (m2.(m_trans)) σ2. move => ??? Hcont.
+    tstep_both. apply: Hcont => κ Pσ ? Hs. destruct κ as [[??]|].
+    2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto.  }
+    move => ?. simplify_eq/=. tstep_s. eexists (Some (Incoming, _)). split!.
+    apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+    apply Hloop; [done|]. split!.
+  - tstep_i. move => ? p' ?? ok HR1.
+    efeed generalize Hcomm; [done|done|] => /= -[?[??]].
+    tstep_s. split!; [done|]. destruct ok; [|by tstep_s] => /=.
+    apply Hloop; [done|].
+    repeat case_match => //; destruct!; split!; destruct sp; by simplify_eq/=.
+Qed.

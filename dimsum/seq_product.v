@@ -10,6 +10,9 @@ Global Instance seq_product_side_inhabited : Inhabited seq_product_side := popul
 Global Instance seq_product_side_eq_dec : EqDecision seq_product_side.
 Proof. solve_decision. Qed.
 
+Definition sp_opp (sp : seq_product_side) : seq_product_side :=
+  if sp is SPLeft then SPRight else SPLeft.
+
 Definition seq_product_case := option seq_product_side.
 
 Inductive seq_product_event EV1 EV2 :=

@@ -514,6 +514,20 @@ Proof.
   - erewrite map_difference_eq_dom_L => //. apply _.
 Qed.
 
+(** ** Properties of asm_link *)
+Lemma asm_link_comm ins1 ins2 m1 m2 :
+  ins1 ## ins2 →
+  trefines (asm_link ins1 ins2 m1 m2)
+           (asm_link ins2 ins1 m2 m1).
+Proof.
+  move => ?. unshelve apply: link_comm. { exact (λ _ s1 s2, s2 = sp_opp <$> s1). }
+  - move => /= p s e p' s' e' ok s2 HR1 ?. destruct!/=. split!.
+    case_match; destruct!/=; split!; repeat case_bool_decide => //=.
+    1: set_solver.
+    all: try destruct p as [[]|]; try destruct p' as [[]|]; naive_solver.
+  - done.
+Qed.
+
 (** * Deeply embedded assembly language *)
 Inductive asm_operand :=
 | RegisterOp (r : string) | ImmediateOp (z : Z).
