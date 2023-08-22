@@ -25,23 +25,12 @@ Definition spec_mod_lang_unit {Σ} (EV : Type) : mod_lang EV Σ :=
 Section spec.
   Context `{!dimsumGS Σ} {EV S : Type} {state_interp : S → iProp Σ}.
 
-  Global Instance sim_tgt_expr_spec_proper :
-    Proper ((≡) ==> (=) ==> (=) ==> (=) ==> (⊣⊢)) (sim_tgt_expr (Λ:=spec_mod_lang EV S state_interp)).
+  Global Instance sim_gen_expr_spec_proper ts :
+    Proper ((≡) ==> (=) ==> (=) ==> (=) ==> (⊣⊢)) (sim_gen_expr (Λ:=spec_mod_lang EV S state_interp) ts).
   Proof.
     move => ?? ? ?? -> ?? -> ?? ->.
-    Local Transparent sim_tgt_expr.
-    Local Typeclasses Transparent sim_tgt_expr.
-    iSplit; iIntros "HP" (?) "?"; iIntros (??); destruct!/=; iApply ("HP" with "[$]"); iPureIntro; split!.
-    all: by etrans; [done|].
-    Unshelve. all: exact tt.
-  Qed.
-
-  Global Instance sim_src_expr_spec_proper :
-    Proper ((≡) ==> (=) ==> (=) ==> (=) ==> (⊣⊢)) (sim_src_expr (Λ:=spec_mod_lang EV S state_interp)).
-  Proof.
-    move => ?? ? ?? -> ?? -> ?? ->.
-    Local Transparent sim_src_expr.
-    Local Typeclasses Transparent sim_src_expr.
+    Local Transparent sim_gen_expr.
+    Local Typeclasses Transparent sim_gen_expr.
     iSplit; iIntros "HP" (?) "?"; iIntros (??); destruct!/=; iApply ("HP" with "[$]"); iPureIntro; split!.
     all: by etrans; [done|].
     Unshelve. all: exact tt.
@@ -51,17 +40,15 @@ Section spec.
   Local Canonical Structure X.
 
   Lemma sim_tgt_TVis k Π Φ e os :
-    (▷ₒ Π (Some e) (λ P, (∀ σ, σ ⤇ₜ (λ Π, TGT k tt @ ? os [{ Π }] {{ Φ }}) -∗ P σ))) -∗
+    (∀ σ, σ ⤇ₜ (λ Π, TGT k tt @ ? os [{ Π }] {{ Φ }}) -∗ ▷ₒ Π (Some e) σ) -∗
     TGT (Spec.bind (TVis e) k) @ ? os [{ Π }] {{ Φ }}.
   Proof.
     iIntros "Hsim". rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
-    iApply sim_tgt_expr_bi_mono.
     iApply sim_tgt_expr_step. iIntros (?[??]?? Heq Hstep) "Hs". simplify_eq/=. iModIntro.
     inv/= Hstep.
     all: revert select (_ ≡ _); rewrite {1}Heq; try by move => /spec_equiv_inv.
     move => /spec_equiv_inv //= [? Heq2]. simplify_eq/=.
-    iModIntro. iApply (bi_mono1_intro with "Hsim"). iIntros (?) "Hσ".
-    iSplit!. iIntros "Htgt". iApply "Hσ". by iApply "Htgt".
+    iSplit!. iIntros "Htgt". iApply "Hsim". by iApply "Htgt".
   Qed.
 
   Lemma sim_src_TVis k Π Φ e os :
@@ -85,7 +72,7 @@ Section spec.
     inv/= Hstep.
     all: revert select (_ ≡ _); rewrite {1}Heq; try by move => /spec_equiv_inv.
     move => /spec_equiv_inv //= Heq2. simplify_eq/=.
-    iModIntro. rewrite Heq2. iSplit!. by iFrame.
+    iSplit!. iModIntro. rewrite Heq2. iSplit!. by iFrame.
   Qed.
 
   Lemma sim_src_TGet k Π Φ s :
@@ -107,7 +94,7 @@ Section spec.
     inv/= Hstep.
     all: revert select (_ ≡ _); rewrite {1}Heq; try by move => /spec_equiv_inv.
     move => /spec_equiv_inv //= [? Heq2]. simplify_eq/=.
-    iModIntro. rewrite Heq2. iSplit!. by iFrame.
+    iSplit!. iModIntro. rewrite Heq2. iSplit!. by iFrame.
   Qed.
 
   Lemma sim_src_TPut k Π Φ s s' :
@@ -129,7 +116,7 @@ Section spec.
     inv/= Hstep.
     all: revert select (_ ≡ _); rewrite {1}Heq; try by move => /spec_equiv_inv.
     move => /spec_equiv_inv //= [? Heq2]. simplify_eq/=.
-    iModIntro. rewrite Heq2. iSplit!. iFrame.
+    iSplit!. iModIntro. rewrite Heq2. iSplit!. iFrame.
   Qed.
 
   Lemma sim_src_TAll {T} k Π Φ os :
@@ -151,7 +138,7 @@ Section spec.
     inv/= Hstep.
     all: revert select (_ ≡ _); rewrite {1}Heq; try by move => /spec_equiv_inv.
     move => /spec_equiv_inv //= [? Heq2]. simplify_eq/=. iSpecialize ("Hsim" $! _).
-    iModIntro. rewrite Heq2. iSplit!. iFrame.
+    iSplit!. iModIntro. rewrite Heq2. iSplit!. iFrame.
   Qed.
 
   Lemma sim_src_TExist {T} x k Π Φ os :
@@ -211,7 +198,7 @@ Section spec.
     inv/= Hstep.
     all: revert select (_ ≡ _); rewrite {1}Heq; try by move => /spec_equiv_inv.
     move => /spec_equiv_inv //= [? Heq2]. simplify_eq/=.
-    iModIntro. rewrite Heq2. iSplit!. iFrame.
+    iSplit!. iModIntro. rewrite Heq2. iSplit!. iFrame.
     Unshelve. done.
   Qed.
 
@@ -234,7 +221,7 @@ Section spec.
     inv/= Hstep.
     all: revert select (_ ≡ _); rewrite {1}Heq; try by move => /spec_equiv_inv.
     move => /spec_equiv_inv //= [? Heq2]. simplify_eq/=. iSpecialize ("Hsim" with "[//]").
-    iModIntro. rewrite Heq2. iSplit!. iFrame.
+    iSplit!. iModIntro. rewrite Heq2. iSplit!. iFrame.
   Qed.
 
   Lemma sim_src_TAssert k Π Φ (P : Prop) os :

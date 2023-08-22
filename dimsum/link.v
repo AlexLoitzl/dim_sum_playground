@@ -406,3 +406,43 @@ Proof.
     apply Hloop; [done|].
     repeat case_match => //; destruct!; split!; destruct sp; by simplify_eq/=.
 Qed.
+
+(*
+Inductive link_assoc_side :=
+| LALeft | LAMiddle | LARight.
+
+Lemma link_assoc {EV So1 Si1 So2 Si2 : Type}
+  (INV : option link_assoc_side → So1 → Si1 → So2 → Si2 → Prop)
+  (Ro1 : seq_product_case → So1 → EV → seq_product_case → So1 → EV → bool → Prop)
+  (Ri1 : seq_product_case → Si1 → EV → seq_product_case → Si1 → EV → bool → Prop)
+  (Ro2 : seq_product_case → So2 → EV → seq_product_case → So2 → EV → bool → Prop)
+  (Ri2 : seq_product_case → Si2 → EV → seq_product_case → Si2 → EV → bool → Prop)
+  (m1 m2 m3 : module (io_event EV))
+  so1 si1 so2 si2:
+  (* (∀ p s e p' s' e' ok s2, *)
+  (*     R1 p s e p' s' e' ok → *)
+  (*     INV p s s2 → *)
+  (*     ∃ s2', R2 (sp_opp <$> p) s2 e (sp_opp <$> p') s2' e' ok ∧ INV p' s' s2') → *)
+  INV None so1 si1 so2 si2 →
+  trefines (link_mod Ro1 m1 (link_mod Ri1 m2 m3 si1) so1) (link_mod Ro2 (link_mod Ri2 m1 m2 si2) m3 so2).
+Proof.
+  move => Hinv. apply tsim_implies_trefines => /= n.
+  unshelve apply: tsim_remember. { simpl. exact (λ _
+    '(σo1, so1, σ1, (σi1, si1, σ2, σ3))
+    '(σo2, so2, (σi2, si2, σ1', σ2'), σ3'),
+    ∃ la, match la with
+          | None => σo1 = MLFRun None ∧ σi1 = MLFRun None ∧ σo2 = MLFRun None ∧ σi2 = MLFRun None
+          | Some LALeft => True
+          | Some LAMiddle => True
+          | Some LARight => True
+          end ∧ σ1' = σ1 ∧ σ2' = σ2 ∧ σ3' = σ3 ∧ INV la so1 si1 so2 si2). }
+  { split!. 2: done. done. } { done. }
+  move => {}n _ /= Hloop {Hinv}.
+  move => [[[σo1 {}so1] σ1] [[[σi1 {}si1] σ2] σ3]] [[[σo2 {}so2] [[[σi2 {}si2] σ1'] σ2']] σ3'] Hinv.
+  destruct!. repeat case_match; destruct!.
+  - admit.
+  - admit.
+  - admit.
+  - tstep_i.
+Abort.
+*)

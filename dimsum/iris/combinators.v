@@ -10,44 +10,31 @@ Section map.
   Implicit Types (f : map_mod_fn EV1 EV2 S).
 
   Lemma sim_tgt_map m f σ σf Π :
-    (σ ≈{m}≈>ₜ λ κ Pσ,
+    (σ ≈{m}≈>ₜ λ κ σ',
       ∀ κ' σf' ok, ⌜if κ is Some e then f σf e κ' σf' ok else κ' = None ∧ σf' = σf ∧ ok = true⌝ -∗
-         Π κ' (λ P, Pσ (λ σ', P (σ', (σf', ok))))) -∗
+         Π κ' (σ', (σf', ok))) -∗
     (σ, (σf, true)) ≈{map_trans m f}≈>ₜ Π.
   Proof.
     iIntros "Hsim".
-    pose (F := (λ σ Π', (∀ κ Pσ, Π' κ Pσ -∗
+    pose (F := (λ σ Π', (∀ κ σ', Π' κ σ' -∗
          ∀ κ' σf' ok, ⌜if κ is Some e then f σf e κ' σf' ok else κ' = None ∧ σf' = σf ∧ ok = true⌝ -∗
-          Π κ' (λ P, Pσ (λ σ', P (σ', (σf', ok))))) -∗ (σ, (σf, true)) ≈{map_trans m f}≈>ₜ Π)%I).
+          Π κ' (σ', (σf', ok))) -∗ (σ, (σf, true)) ≈{map_trans m f}≈>ₜ Π)%I).
     iAssert (∀ Π, σ ≈{ m }≈>ₜ Π -∗ F σ Π)%I as "Hgen"; last first.
     { iApply ("Hgen" with "Hsim"). iIntros (??) "?". done. }
     iIntros (?) "Hsim".
-    iApply (sim_tgt_ind with "[] Hsim"). { solve_proper. }
+    iApply (sim_gen_ind with "[] Hsim"). { solve_proper. }
     iIntros "!>" (??) "Hsim". iIntros "Hc".
-    iApply (sim_tgt_ctx with "[-]"). iIntros "?".
-    iApply (sim_tgt_bi_mono1 with "[-]").
-    iApply (fupd_sim_tgt with "[-]").
-    iMod ("Hsim" with "[$]") as "[[% [? HP]]| Hs ]". {
+    iApply (sim_gen_ctx with "[-]"). iIntros "?".
+    iApply (fupd_sim_gen with "[-]").
+    iMod ("Hsim" with "[$]") as "[HP| Hs]". {
       iModIntro. iDestruct ("Hc" with "[$] [//]") as "Hc".
-      iApply (sim_tgt_stop with "[-]").
-      iApply (bi_mono1_intro with "Hc"). iIntros (?) "?".
-      iDestruct ("HP" with "[$]") as "$".
+      by iApply (sim_gen_stop with "[-]").
     }
-    iModIntro. iApply (sim_tgt_step with "[-]"). iIntros (?? Hstep). inv_all/= @m_step.
-    all: iMod ("Hs" with "[//]") as "Hs"; do 2 iModIntro.
-    - do 2 case_match; simplify_eq. iDestruct "Hs" as "[[% [? HP]]|[%[%[% HF]]]]".
-      + iDestruct ("Hc" with "[$] [//]") as "Hc".
-        iLeft. iApply (bi_mono1_intro with "Hc"). iIntros (?) "?".
-        iDestruct ("HP" with "[$]") as (??) "?".
-        iExists (_, _). iFrame. iSplit!.
-      + iRight. iExists (_, _). iSplit!; [done|].
-        iApply (sim_tgt_wand with "[-] []"); [by iApply "HF"|].
-        iIntros (??) "HΠ". by iApply bi_mono1_intro0.
-    - iDestruct "Hs" as "[[% [? HP]]|[%[%[% HF]]]]"; simplify_eq.
-      iDestruct ("Hc" with "[$] [//]") as "Hc".
-      iLeft. iExists _. iFrame. iIntros (?) "?".
-      iDestruct ("HP" with "[$]") as (??) "?".
-      iExists (_, _). iFrame. iSplit!.
+    iModIntro. iApply (sim_gen_step with "[-]"). iIntros ([??] Hstep). inv_all/= @m_step.
+    all: iMod ("Hs" $! (_, _) with "[//]") as (??) "Hs"; iModIntro; iExists (_, _); iSplit!; [done|].
+    all: iModIntro; iMod "Hs"; iModIntro.
+    - do 2 case_match; simplify_eq/=. iRight. iSplit!. by iApply "Hs".
+    - iLeft. by iApply ("Hc" with "[$]").
   Qed.
 
   Lemma sim_src_map m f σ σf Π `{!VisNoAng m} :
@@ -63,30 +50,33 @@ Section map.
     iAssert (∀ Π, σ ≈{ m }≈>ₛ Π -∗ F σ Π)%I as "Hgen"; last first.
     { iApply ("Hgen" with "Hsim"). iIntros (??) "?". done. }
     iIntros (?) "Hsim".
-    iApply (sim_src_ind with "[] Hsim"). { solve_proper. }
+    iApply (sim_gen_ind with "[] Hsim"). { solve_proper. }
     iIntros "!>" (??) "Hsim". iIntros "Hc".
-    iApply (sim_src_ctx with "[-]"). iIntros "?".
-    iApply (fupd_sim_src with "[-]").
-    iMod ("Hsim" with "[$]") as "[?| [%κ [% [% Hs]]] ]". {
-      iModIntro. iApply (sim_src_stop with "[-]").
+    iApply (sim_gen_ctx with "[-]"). iIntros "?".
+    iApply (fupd_sim_gen with "[-]").
+    iMod ("Hsim" with "[$]") as "[?| [%x [% Hs]] ]". {
+      iModIntro. iApply (sim_gen_stop with "[-]").
       iDestruct ("Hc" with "[$]") as (???[?[??]]) "Hc". by simplify_eq.
     }
-    destruct κ.
+    destruct x as [[?|] ?].
     - exploit vis_no_all; [done|] => -[σ'' ?].
-      iMod ("Hs" with "[%]") as "Hs"; [naive_solver|]. iModIntro.
-      iDestruct ("Hc" with "[$]") as (????) "Hs".
-      iApply (sim_src_step_end with "[-]"). { econs. { apply: ProductStepBoth; [done|]. by econs. } done. }
-      iIntros ([σ' ?] [??]) "!>". have ? : σ' = σ'' by naive_solver. by simplify_eq.
-    - iModIntro. iApply (sim_src_step with "[-]"). { econs; [by econs|done]. }
-      iIntros ([??][??]). simplify_eq. iMod ("Hs" with "[//]") as "HF". iModIntro.
-      by iApply "HF".
+      iMod ("Hs" with "[%]") as ">Hs"; [naive_solver|]. iModIntro.
+      iDestruct ("Hc" with "[$]") as (????) "Hs". simplify_eq/=.
+      iApply (sim_gen_step_end with "[-]"). iExists (_, _) => /=. iSplit; [iPureIntro|].
+      { econs. { apply: ProductStepBoth; [done|]. by econs. } done. }
+      iModIntro. iIntros ([σ' ?] [??]) "!>". have ? : σ' = σ'' by naive_solver. by simplify_eq.
+    - iModIntro. iApply (sim_gen_step with "[-]"). iExists (_, _) => /=. iSplit; [iPureIntro|].
+      { econs; [by econs|done]. }
+      iModIntro. iIntros ([??][??]). simplify_eq. iMod ("Hs" with "[//]") as ">HF". iModIntro.
+      iRight. iSplit!. by iApply "HF".
   Qed.
 
   Lemma sim_src_map_ub m f σ σf Π `{!VisNoAng m} :
     ⊢ (σ, (σf, false)) ≈{map_trans m f}≈>ₛ Π.
   Proof.
-    iStartProof. iApply sim_src_step. { econs. { by apply: ProductStepR; econs. } done. }
-    iIntros ([??] [??]). done.
+    iStartProof. iApply sim_gen_step. iExists (_, _). iSplit; [iPureIntro|].
+    { econs. { by apply: ProductStepR; econs. } done. }
+    iIntros "!>" ([??] [??]). done.
   Qed.
 End map.
 
@@ -96,97 +86,81 @@ Section seq_product.
   Context {Σ : gFunctors} {EV1 EV2 : Type} `{!dimsumGS Σ}.
 
   Lemma sim_tgt_seq_product_None (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 Π :
-    (∀ p, ▷ₒ Π (Some (SPENone p)) (λ P, P (p, σ1, σ2))) -∗
+    (∀ p, ▷ₒ Π (Some (SPENone p)) (p, σ1, σ2)) -∗
     (None, σ1, σ2) ≈{seq_product_trans m1 m2}≈>ₜ Π.
   Proof.
-    iIntros "HΠ". iApply (sim_tgt_bi_mono with "[-]").
-    iApply (sim_tgt_step_end with "[-]"). iIntros (???). inv_all @m_step. iSpecialize ("HΠ" $! _).
-    do 2 iModIntro. iApply (bi_mono1_intro with "HΠ"). iIntros (?) "?".
-    iApply bi_mono1_intro0. iSplit!.
+    iIntros "HΠ".
+    iApply (sim_gen_step_end with "[-]"). iIntros ([??]?). inv_all/= @m_step. iSpecialize ("HΠ" $! _).
+    iModIntro. iSplit!. do 2 iModIntro. done.
   Qed.
 
   Lemma sim_tgt_seq_product_left (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 Π :
-    (σ1 ≈{m1}≈>ₜ λ κ Pσ,
+    (σ1 ≈{m1}≈>ₜ λ κ σ',
       ∀ s', ⌜if κ is None then s' = Some SPLeft else True⌝ -∗
-         Π ((λ e, SPELeft e s') <$> κ) (λ P, Pσ (λ σ', P (s', σ', σ2)))) -∗
+         Π ((λ e, SPELeft e s') <$> κ) (s', σ', σ2)) -∗
     (Some SPLeft, σ1, σ2) ≈{seq_product_trans m1 m2}≈>ₜ Π.
   Proof.
     iIntros "Hsim".
-    pose (F := (λ σ Π', (∀ κ Pσ, Π' κ Pσ -∗
+    pose (F := (λ σ Π', (∀ κ σ', Π' κ σ' -∗
          ∀ s', ⌜if κ is None then s' = Some SPLeft else True⌝ -∗
-         Π ((λ e, SPELeft e s') <$> κ) (λ P, Pσ (λ σ', P (s', σ', σ2)))) -∗
+         Π ((λ e, SPELeft e s') <$> κ) (s', σ', σ2)) -∗
          (Some SPLeft, σ, σ2) ≈{seq_product_trans m1 m2}≈>ₜ Π)%I).
     iAssert (∀ Π, σ1 ≈{ m1 }≈>ₜ Π -∗ F σ1 Π)%I as "Hgen"; last first.
     { iApply ("Hgen" with "Hsim"). iIntros (??) "?". done. }
     iIntros (?) "Hsim".
-    iApply (sim_tgt_ind with "[] Hsim"). { solve_proper. }
+    iApply (sim_gen_ind with "[] Hsim"). { solve_proper. }
     iIntros "!>" (??) "Hsim". iIntros "Hc".
-    iApply (sim_tgt_ctx with "[-]"). iIntros "?".
-    iApply (sim_tgt_bi_mono1 with "[-]").
-    iApply (fupd_sim_tgt with "[-]").
-    iMod ("Hsim" with "[$]") as "[[% [? HP]]| Hs ]". {
+    iApply (sim_gen_ctx with "[-]"). iIntros "?".
+    iApply (fupd_sim_gen with "[-]").
+    iMod ("Hsim" with "[$]") as "[HP| Hs ]". {
       iModIntro. iDestruct ("Hc" with "[$] [//]") as "Hc".
-      iApply sim_tgt_stop.
-      iApply (bi_mono1_intro with "[Hc] [-]"); [done|].
-      iIntros (?) "?". by iDestruct ("HP" with "[$]") as "HP".
+      by iApply (sim_gen_stop with "[-]").
     }
-    iModIntro. iApply (sim_tgt_step with "[-]"). iIntros (?? Hstep). inv_all/= @m_step.
-    iMod ("Hs" with "[//]") as "Hs"; do 2 iModIntro.
-    iDestruct "Hs" as "[[% [? HP]]|[%[%[% HF]]]]"; simplify_eq/=.
-    - iDestruct ("Hc" with "[$] [//]") as "Hc".
-      iLeft. iApply (bi_mono1_intro with "Hc").
-      iIntros (?) "?".
-      iDestruct ("HP" with "[$]") as (??) "?".
-      iExists (_, _, _). iSplit!; [done|]. by iFrame.
-    - iRight. iExists (_, _, _). iSplit!; [done|].
-      iApply (sim_tgt_wand with "[-] []"); [by iApply "HF"|].
-      iIntros (??) "HΠ". by iApply bi_mono1_intro0.
+    iModIntro. iApply (sim_gen_step with "[-]"). iIntros ([??] Hstep). inv_all/= @m_step.
+    iMod ("Hs" $! (_, _) with "[//]") as (??) "Hs"; iModIntro.
+    iExists (_, _, _). iSplit!; [done|]. iModIntro.
+    iMod "Hs". iModIntro. case_match; simplify_eq/=.
+    - iLeft. by iApply ("Hc" with "Hs").
+    - iRight. iSplit!. iApply ("Hs" with "Hc").
   Qed.
 
   Lemma sim_tgt_seq_product_right (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 Π :
-    (σ2 ≈{m2}≈>ₜ λ κ Pσ,
+    (σ2 ≈{m2}≈>ₜ λ κ σ',
       ∀ s', ⌜if κ is None then s' = Some SPRight else True⌝ -∗
-         Π ((λ e, SPERight e s') <$> κ) (λ P, Pσ (λ σ', P (s', σ1, σ')))) -∗
+         Π ((λ e, SPERight e s') <$> κ) (s', σ1, σ')) -∗
     (Some SPRight, σ1, σ2) ≈{seq_product_trans m1 m2}≈>ₜ Π.
   Proof.
     iIntros "Hsim".
-    pose (F := (λ σ Π', (∀ κ Pσ, Π' κ Pσ -∗
+    pose (F := (λ σ Π', (∀ κ σ', Π' κ σ' -∗
          ∀ s', ⌜if κ is None then s' = Some SPRight else True⌝ -∗
-         Π ((λ e, SPERight e s') <$> κ) (λ P, Pσ (λ σ', P (s', σ1, σ')))) -∗
+         Π ((λ e, SPERight e s') <$> κ) (s', σ1, σ')) -∗
          (Some SPRight, σ1, σ) ≈{seq_product_trans m1 m2}≈>ₜ Π)%I).
     iAssert (∀ Π, σ2 ≈{ m2 }≈>ₜ Π -∗ F σ2 Π)%I as "Hgen"; last first.
     { iApply ("Hgen" with "Hsim"). iIntros (??) "?". done. }
     iIntros (?) "Hsim".
-    iApply (sim_tgt_ind with "[] Hsim"). { solve_proper. }
+    iApply (sim_gen_ind with "[] Hsim"). { solve_proper. }
     iIntros "!>" (??) "Hsim". iIntros "Hc".
-    iApply (sim_tgt_ctx with "[-]"). iIntros "?".
-    iApply (sim_tgt_bi_mono1 with "[-]").
-    iApply (fupd_sim_tgt with "[-]").
-    iMod ("Hsim" with "[$]") as "[[% [? HP]]| Hs ]". {
+    iApply (sim_gen_ctx with "[-]"). iIntros "?".
+    iApply (fupd_sim_gen with "[-]").
+    iMod ("Hsim" with "[$]") as "[HP| Hs ]". {
       iModIntro. iDestruct ("Hc" with "[$] [//]") as "Hc".
-      iApply sim_tgt_stop.
-      iApply (bi_mono1_intro with "[Hc] [-]"); [done|].
-      iIntros (?) "?". by iDestruct ("HP" with "[$]") as "HP".
+      by iApply (sim_gen_stop with "[-]").
     }
-    iModIntro. iApply (sim_tgt_step with "[-]"). iIntros (?? Hstep). inv_all/= @m_step.
-    iMod ("Hs" with "[//]") as "Hs"; do 2 iModIntro.
-    iDestruct "Hs" as "[[% [? HP]]|[%[%[% HF]]]]"; simplify_eq/=.
-    - iDestruct ("Hc" with "[$] [//]") as "Hc".
-      iLeft. iApply (bi_mono1_intro with "Hc").
-      iIntros (?) "?".
-      iDestruct ("HP" with "[$]") as (??) "?".
-      iExists (_, _, _). iSplit!; [done|]. by iFrame.
-    - iRight. iExists (_, _, _). iSplit!; [done|].
-      iApply (sim_tgt_wand with "[-] []"); [by iApply "HF"|].
-      iIntros (??) "HΠ". by iApply bi_mono1_intro0.
+    iModIntro. iApply (sim_gen_step with "[-]"). iIntros ([??] Hstep). inv_all/= @m_step.
+    iMod ("Hs" $! (_, _) with "[//]") as (??) "Hs"; iModIntro.
+    iExists (_, _, _). iSplit!; [done|]. iModIntro.
+    iMod "Hs". iModIntro. case_match; simplify_eq/=.
+    - iLeft. by iApply ("Hc" with "Hs").
+    - iRight. iSplit!. iApply ("Hs" with "Hc").
   Qed.
 
   Lemma sim_src_seq_product_None p (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 Π :
     Π (Some (SPENone p)) (p, σ1, σ2) -∗
     (None, σ1, σ2) ≈{seq_product_trans m1 m2}≈>ₛ Π.
   Proof.
-    iIntros "HΠ". iApply (sim_src_step_end with "[-]"); [by econs|].
-    iIntros (??). by simplify_eq.
+    iIntros "HΠ". iApply (sim_gen_step_end with "[-]"). iExists (_,_).
+    iSplit; [iPureIntro; by econs|].
+    iIntros "!>" (??) "!>". by simplify_eq/=.
   Qed.
 
   Lemma sim_src_seq_product_left (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 Π `{!VisNoAng m1} :
@@ -202,23 +176,25 @@ Section seq_product.
     iAssert (∀ Π, σ1 ≈{ m1 }≈>ₛ Π -∗ F σ1 Π)%I as "Hgen"; last first.
     { iApply ("Hgen" with "Hsim"). iIntros (??) "?". done. }
     iIntros (?) "Hsim".
-    iApply (sim_src_ind with "[] Hsim"). { solve_proper. }
+    iApply (sim_gen_ind with "[] Hsim"). { solve_proper. }
     iIntros "!>" (??) "Hsim". iIntros "Hc".
-    iApply (sim_src_ctx with "[-]"). iIntros "?".
-    iApply (fupd_sim_src with "[-]").
-    iMod ("Hsim" with "[$]") as "[?| [%κ [% [% Hsim]]] ]". {
+    iApply (sim_gen_ctx with "[-]"). iIntros "?".
+    iApply (fupd_sim_gen with "[-]").
+    iMod ("Hsim" with "[$]") as "[?| [%x [% Hsim]] ]". {
       iModIntro. iDestruct ("Hc" with "[$]") as (??) "Hc".
-      iApply (sim_src_stop with "[-]"). by simplify_eq/=.
+      iApply (sim_gen_stop with "[-]"). by simplify_eq/=.
     }
-    destruct κ.
+    destruct x as [[?|] ?].
     - exploit vis_no_all; [done|] => -[σs1 ?].
-      iMod ("Hsim" with "[%]") as "?"; [naive_solver|].
+      iMod ("Hsim" with "[%]") as ">Hsim"; [naive_solver|]. iModIntro => /=.
       iDestruct ("Hc" with "[$]") as (s ?) "?".
-      iApply (sim_src_step with "[-]"). { by apply: (SPLeftS _ _ _ _ _ s). }
-      iIntros ([[? σs2]?] [?[??]]). have ? : σs1 = σs2 by naive_solver. by simplify_eq/=.
-    - iModIntro. iApply (sim_src_step with "[-]"). { by econs. }
-      iIntros ([[??] ?] [?[??]]). simplify_eq.
-      iMod ("Hsim" with "[//]") as "Hsim". iModIntro. by iApply "Hsim".
+      iApply (sim_gen_step with "[-]"). iExists (_, _). iSplit.
+      { iPureIntro. by apply: (SPLeftS _ _ _ _ _ s). }
+      iIntros "!>" ([[? σs2]?] [?[??]]) "!>". iLeft. have ? : σs1 = σs2 by naive_solver. by simplify_eq/=.
+    - iModIntro. iApply (sim_gen_step with "[-]"). iExists (_, _). iSplit.
+      { iPureIntro. by econs. }
+      iIntros "!>" ([[??] ?] [?[??]]). simplify_eq. iRight.
+      iMod ("Hsim" with "[//]") as ">Hsim". iModIntro. simplify_eq/=. iSplit!. by iApply "Hsim".
   Qed.
 
   Lemma sim_src_seq_product_right (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 Π `{!VisNoAng m2} :
@@ -234,23 +210,25 @@ Section seq_product.
     iAssert (∀ Π, σ2 ≈{ m2 }≈>ₛ Π -∗ F σ2 Π)%I as "Hgen"; last first.
     { iApply ("Hgen" with "Hsim"). iIntros (??) "?". done. }
     iIntros (?) "Hsim".
-    iApply (sim_src_ind with "[] Hsim"). { solve_proper. }
+    iApply (sim_gen_ind with "[] Hsim"). { solve_proper. }
     iIntros "!>" (??) "Hsim". iIntros "Hc".
-    iApply (sim_src_ctx with "[-]"). iIntros "?".
-    iApply (fupd_sim_src with "[-]").
-    iMod ("Hsim" with "[$]") as "[?| [%κ [% [% Hsim]]] ]". {
+    iApply (sim_gen_ctx with "[-]"). iIntros "?".
+    iApply (fupd_sim_gen with "[-]").
+    iMod ("Hsim" with "[$]") as "[?| [%x [% Hsim]] ]". {
       iModIntro. iDestruct ("Hc" with "[$]") as (??) "Hc".
-      iApply (sim_src_stop with "[-]"). by simplify_eq/=.
+      iApply (sim_gen_stop with "[-]"). by simplify_eq/=.
     }
-    destruct κ.
+    destruct x as [[?|] ?].
     - exploit vis_no_all; [done|] => -[σs1 ?].
-      iMod ("Hsim" with "[%]") as "?"; [naive_solver|].
+      iMod ("Hsim" with "[%]") as ">Hsim"; [naive_solver|]. iModIntro => /=.
       iDestruct ("Hc" with "[$]") as (s ?) "?".
-      iApply (sim_src_step with "[-]"). { by apply: (SPRightS _ _ _ _ _ s). }
-      iIntros ([[? ?]σs2] [?[??]]). have ? : σs1 = σs2 by naive_solver. by simplify_eq/=.
-    - iModIntro. iApply (sim_src_step with "[-]"). { by econs. }
-      iIntros ([[??] ?] [?[??]]). simplify_eq.
-      iMod ("Hsim" with "[//]") as "Hsim". iModIntro. by iApply "Hsim".
+      iApply (sim_gen_step with "[-]"). iExists (_, _). iSplit.
+      { iPureIntro. by apply: (SPRightS _ _ _ _ _ s). }
+      iIntros "!>" ([[? ?]σs2] [?[??]]) "!>". iLeft. have ? : σs1 = σs2 by naive_solver. by simplify_eq/=.
+    - iModIntro. iApply (sim_gen_step with "[-]"). iExists (_, _). iSplit.
+      { iPureIntro. by econs. }
+      iIntros "!>" ([[??] ?] [?[??]]). simplify_eq. iRight.
+      iMod ("Hsim" with "[//]") as ">Hsim". iModIntro. simplify_eq/=. iSplit!. by iApply "Hsim".
   Qed.
 End seq_product.
 
@@ -261,40 +239,34 @@ Section state_transform.
 
   Lemma sim_tgt_state_transform (m : mod_trans EV) σ' (R : S → m.(m_state) → Prop) σ Π `{!StateTransformWf m R} :
    R σ σ' →
-   (σ' ≈{m}≈>ₜ λ κ Pσ, Π κ (λ P, Pσ (λ σ'', ∀ σ''', ⌜R σ''' σ''⌝ -∗ P σ'''))) -∗
+   (σ' ≈{m}≈>ₜ λ κ σ'', ∀ σ''', ⌜R σ''' σ''⌝ -∗ Π κ σ''') -∗
     σ ≈{state_transform_trans m R}≈>ₜ Π.
   Proof.
     destruct StateTransformWf0 as [Heq HRstep].
     iIntros (HR) "Hsim".
     pose (F := (λ σ' Π', ∀ σ,
                    ⌜R σ σ'⌝ -∗
-                   (∀ κ Pσ, Π' κ Pσ -∗ Π κ (λ P, Pσ (λ σ'', ∀ σ''', ⌜R σ''' σ''⌝ -∗ P σ'''))) -∗
+                   (∀ κ σ'', Π' κ σ'' -∗ ∀ σ''', ⌜R σ''' σ''⌝ -∗ Π κ σ''') -∗
                    σ ≈{state_transform_trans m R}≈>ₜ Π)%I).
     iAssert (∀ Π, σ' ≈{ m }≈>ₜ Π -∗ F σ' Π)%I as "Hgen"; last first.
     { iApply ("Hgen" with "Hsim"); [done|]. iIntros (??) "?". done. }
     iIntros (?) "Hsim".
-    iApply (sim_tgt_ind with "[] Hsim"). { solve_proper. }
+    iApply (sim_gen_ind with "[] Hsim"). { solve_proper. }
     clear σ' σ HR. iIntros "!>" (σ'?) "Hsim". iIntros (σ HR) "Hc".
-    iApply (sim_tgt_ctx with "[-]"). iIntros "?".
-    iApply (sim_tgt_bi_mono1 with "[-]").
-    iApply (fupd_sim_tgt with "[-]").
-    iMod ("Hsim" with "[$]") as "[[% [HΠ HP]]| Hs ]". {
-      iModIntro. iApply (sim_tgt_stop with "[-]").
-      iApply (bi_mono1_intro with "[Hc HΠ]"); [by iApply "Hc"|] => /=.
-      iIntros (?) "?". iDestruct ("HP" with "[$]") as "HP". by iApply "HP".
+    iApply (sim_gen_ctx with "[-]"). iIntros "?".
+    iApply (fupd_sim_gen with "[-]").
+    iMod ("Hsim" with "[$]") as "[HP| Hs]". {
+      iModIntro. iApply (sim_gen_stop with "[-]"). by iApply ("Hc" with "HP").
     }
-    iModIntro. iApply (sim_tgt_step with "[-]"). iIntros (?? Hstep). inv_all/= @m_step.
+    iModIntro. iApply (sim_gen_step with "[-]"). iIntros ([??] Hstep). inv_all/= @m_step.
     have ?: σ' = σ'0 by naive_solver. subst.
-    iMod ("Hs" with "[//]") as "Hs"; do 2 iModIntro.
-    iDestruct "Hs" as "[[% [? HP]]|[%[%[% HF]]]]".
-    - iDestruct ("Hc" with "[$]") as "Hc".
-      iLeft. iApply (bi_mono1_intro with "Hc"). iIntros (?) "?".
-      iDestruct ("HP" with "[$]") as (??) "HP".
-      exploit HRstep; [done..|] => -[??].
-      iSplit!; [done..|]. by iApply "HP".
-    - iRight. simplify_eq. exploit HRstep; [done..|] => -[??].
-      iSplit!; [done..|]. iApply (sim_tgt_wand with "[-] []"); [by iApply "HF"|].
-      iIntros (??) "HΠ". by iApply bi_mono1_intro0.
+    iMod ("Hs" $! (_, _) with "[//]") as (??) "Hs"; iModIntro; simplify_eq/=.
+    exploit HRstep; [done..|] => -[??].
+    iExists _. iSplit!; [|done|]; [done|].
+    iMod "Hs". iMod "Hs". iModIntro.
+    case_match.
+    - iLeft. by iApply ("Hc" with "Hs").
+    - iRight. iSplit!. by iApply ("Hs" with "[]").
   Qed.
 
   Lemma sim_src_state_transform (m : mod_trans EV) σ' (R : S → m.(m_state) → Prop) σ Π :
@@ -310,18 +282,19 @@ Section state_transform.
     iAssert (∀ Π, σ' ≈{ m }≈>ₛ Π -∗ F σ' Π)%I as "Hgen"; last first.
     { iApply ("Hgen" with "Hsim"); [done|]. iIntros (??) "?". done. }
     iIntros (?) "Hsim".
-    iApply (sim_src_ind with "[] Hsim"). { solve_proper. }
+    iApply (sim_gen_ind with "[] Hsim"). { solve_proper. }
     clear σ' σ HR. iIntros "!>" (σ'?) "Hsim". iIntros (σ HR) "Hc".
-    iApply (sim_src_ctx with "[-]"). iIntros "?".
-    iApply (fupd_sim_src with "[-]").
-    iMod ("Hsim" with "[$]") as "[?| [%κ [% [% Hs]]] ]". {
-      iModIntro. iApply (sim_src_stop with "[-]"). by iApply ("Hc" with "[$]").
+    iApply (sim_gen_ctx with "[-]"). iIntros "?".
+    iApply (fupd_sim_gen with "[-]").
+    iMod ("Hsim" with "[$]") as "[?| [% [% Hs]] ]". {
+      iModIntro. iApply (sim_gen_stop with "[-]"). by iApply ("Hc" with "[$]").
     }
-    iModIntro. iApply (sim_src_step with "[-]"); [by econs|].
-    iIntros (? [?[??]]). iMod ("Hs" with "[//]") as "Hs". iModIntro.
+    iModIntro. iApply (sim_gen_step with "[-]").
+    iExists (_, _). iSplit; [iPureIntro; by econs|].
+    iIntros "!>" (? [?[??]]). iMod ("Hs" with "[//]") as ">Hs". iModIntro.
     case_match.
-    - by iApply ("Hc" with "Hs").
-    - by iApply ("Hs" with "[//]").
+    - iLeft. by iApply ("Hc" with "Hs").
+    - iRight. iSplit!. by iApply ("Hs" with "[//]").
   Qed.
 End state_transform.
 
@@ -332,84 +305,76 @@ Section seq_map.
   Implicit Types (f : mod_trans (sm_event EV1 EV2)).
 
   Lemma sim_tgt_seq_map_filter m f σ σf Π :
-    (σf ≈{f}≈>ₜ λ κ Pσ,
+    (σf ≈{f}≈>ₜ λ κ x,
       match κ with
-      | None => Π None (λ P, Pσ (λ x, P (SMFilter, σ, x)))
-      | Some (SMEEmit e) => Π (Some e) (λ P, Pσ (λ x, P (SMFilter, σ, x)))
-      | Some (SMEReturn e) => Π None (λ P, Pσ (λ x, P (if e is Some e' then SMProgRecv e' else SMProg, σ, x)))
+      | None => Π None (SMFilter, σ, x)
+      | Some (SMEEmit e) => Π (Some e) (SMFilter, σ, x)
+      | Some (SMEReturn e) => Π None (if e is Some e' then SMProgRecv e' else SMProg, σ, x)
       | _ => True
       end) -∗
     (SMFilter, σ, σf) ≈{seq_map_trans m f}≈>ₜ Π.
   Proof.
-    iIntros "HΠ". iApply (sim_tgt_bi_mono1 with "[-]").
+    iIntros "HΠ".
     iApply sim_tgt_state_transform; [done|] => /=.
     iApply (sim_tgt_map with "[-]").
     iApply (sim_tgt_seq_product_right with "[-]").
-    iApply (sim_tgt_bi_mono2 with "[-]").
-    iApply (sim_tgt_wand with "HΠ").
+    iApply (sim_gen_wand with "HΠ").
     iIntros (κ Pσ) "Hκ". iIntros (s' ? κ' ???).
     destruct κ; destruct!/=; [inv_all @seq_map_filter|].
-    all: iApply (bi_mono1_intro with "Hκ"); iIntros (?) "HP".
-    all: iApply (bi_mono1_intro with "HP"); iIntros (?) "?"; iIntros ([[??]?] ?); by simplify_eq/=.
+    all: by iIntros ([[??]?]?); simplify_eq.
   Qed.
 
   Lemma sim_tgt_seq_map_filter_recv m f σ σf e Π :
-    (σf ≈{f}≈>ₜ λ κ Pσ,
-      if κ is Some e' then ⌜SMERecv e = e'⌝ -∗ Π None (λ P, Pσ (λ x, P (SMFilter, σ, x)))
-      else Π None (λ P, Pσ (λ x, P (SMFilterRecv e, σ, x)))
+    (σf ≈{f}≈>ₜ λ κ x,
+      if κ is Some e' then ⌜SMERecv e = e'⌝ -∗ Π None (SMFilter, σ, x)
+      else Π None (SMFilterRecv e, σ, x)
       ) -∗
     (SMFilterRecv e, σ, σf) ≈{seq_map_trans m f}≈>ₜ Π.
   Proof.
-    iIntros "HΠ". iApply (sim_tgt_bi_mono1 with "[-]").
+    iIntros "HΠ".
     iApply sim_tgt_state_transform; [done|] => /=.
     iApply (sim_tgt_map with "[-]").
     iApply (sim_tgt_seq_product_right with "[-]").
-    iApply (sim_tgt_bi_mono2 with "[-]").
-    iApply (sim_tgt_wand with "HΠ").
+    iApply (sim_gen_wand with "HΠ").
     iIntros (κ Pσ) "Hκ". iIntros (s' ? κ' ???).
     destruct κ; destruct!/=; [inv_all @seq_map_filter|].
     1: iSpecialize ("Hκ" with "[//]").
-    all: iApply (bi_mono1_intro with "Hκ"); iIntros (?) "HP".
-    all: iApply (bi_mono1_intro with "HP"); iIntros (?) "?"; iIntros ([[??]?] ?); by simplify_eq/=.
+    all: iIntros ([[??]?] ?); by simplify_eq/=.
   Qed.
 
   Lemma sim_tgt_seq_map_prog m f σ σf Π :
-    (σ ≈{m}≈>ₜ λ κ Pσ,
-      if κ is Some e' then Π None (λ P, Pσ (λ x, P (SMFilterRecv e', x, σf)))
-      else Π None (λ P, Pσ (λ x, P (SMProg, x, σf)))
+    (σ ≈{m}≈>ₜ λ κ x,
+      if κ is Some e' then Π None (SMFilterRecv e', x, σf)
+      else Π None (SMProg, x, σf)
     ) -∗
     (SMProg, σ, σf) ≈{seq_map_trans m f}≈>ₜ Π.
   Proof.
-    iIntros "HΠ". iApply (sim_tgt_bi_mono1 with "[-]").
+    iIntros "HΠ".
     iApply sim_tgt_state_transform; [done|] => /=.
     iApply (sim_tgt_map with "[-]").
     iApply (sim_tgt_seq_product_left with "[-]").
-    iApply (sim_tgt_bi_mono2 with "[-]").
-    iApply (sim_tgt_wand with "HΠ").
+    iApply (sim_gen_wand with "HΠ").
     iIntros (κ Pσ) "Hκ". iIntros (s' ? κ' ???).
     destruct κ; destruct!/=; [inv_all @seq_map_filter|].
-    all: iApply (bi_mono1_intro with "Hκ"); iIntros (?) "HP".
-    all: iApply (bi_mono1_intro with "HP"); iIntros (?) "?"; iIntros ([[??]?] ?); by simplify_eq/=.
+    all: iIntros ([[??]?] ?); by simplify_eq/=.
   Qed.
 
   Lemma sim_tgt_seq_map_prog_recv m f σ σf e Π :
-    (σ ≈{m}≈>ₜ λ κ Pσ,
-      if κ is Some e' then ⌜e = e'⌝ -∗ Π None (λ P, Pσ (λ x, P (SMProg, x, σf)))
-      else Π None (λ P, Pσ (λ x, P (SMProgRecv e, x, σf)))
+    (σ ≈{m}≈>ₜ λ κ x,
+      if κ is Some e' then ⌜e = e'⌝ -∗ Π None (SMProg, x, σf)
+      else Π None (SMProgRecv e, x, σf)
       ) -∗
     (SMProgRecv e, σ, σf) ≈{seq_map_trans m f}≈>ₜ Π.
   Proof.
-    iIntros "HΠ". iApply (sim_tgt_bi_mono1 with "[-]").
+    iIntros "HΠ".
     iApply sim_tgt_state_transform; [done|] => /=.
     iApply (sim_tgt_map with "[-]").
     iApply (sim_tgt_seq_product_left with "[-]").
-    iApply (sim_tgt_bi_mono2 with "[-]").
-    iApply (sim_tgt_wand with "HΠ").
+    iApply (sim_gen_wand with "HΠ").
     iIntros (κ Pσ) "Hκ". iIntros (s' ? κ' ???).
     destruct κ; destruct!/=; [inv_all @seq_map_filter|].
     1: iSpecialize ("Hκ" with "[//]").
-    all: iApply (bi_mono1_intro with "Hκ"); iIntros (?) "HP".
-    all: iApply (bi_mono1_intro with "HP"); iIntros (?) "?"; iIntros ([[??]?] ?); by simplify_eq/=.
+    all: iIntros ([[??]?] ?); by simplify_eq/=.
   Qed.
 
   Lemma sim_src_seq_map_filter m f σ σf Π `{!VisNoAng m} `{!VisNoAng f} :
@@ -426,7 +391,7 @@ Section seq_map.
     iApply sim_src_state_transform; [done|] => /=.
     iApply (sim_src_map with "[-]").
     iApply (sim_src_seq_product_right with "[-]").
-    iApply (sim_src_wand with "HΠ").
+    iApply (sim_gen_wand with "HΠ").
     iIntros (κ σ') "Hκ".
     repeat case_match => //; simplify_eq.
     all: iSplit!; (once try econs).
@@ -444,7 +409,7 @@ Section seq_map.
     iApply sim_src_state_transform; [done|] => /=.
     iApply (sim_src_map with "[-]").
     iApply (sim_src_seq_product_right with "[-]").
-    iApply (sim_src_wand with "HΠ").
+    iApply (sim_gen_wand with "HΠ").
     iIntros (κ σ') "Hκ".
     repeat case_match => //; iDestruct!; simplify_eq.
     all: iSplit!; (once try econs).
@@ -461,7 +426,7 @@ Section seq_map.
     iApply sim_src_state_transform; [done|] => /=.
     iApply (sim_src_map with "[-]").
     iApply (sim_src_seq_product_left with "[-]").
-    iApply (sim_src_wand with "HΠ").
+    iApply (sim_gen_wand with "HΠ").
     iIntros (κ σ') "Hκ".
     repeat case_match => //; simplify_eq.
     all: iSplit!; (once try econs).
@@ -479,7 +444,7 @@ Section seq_map.
     iApply sim_src_state_transform; [done|] => /=.
     iApply (sim_src_map with "[-]").
     iApply (sim_src_seq_product_left with "[-]").
-    iApply (sim_src_wand with "HΠ").
+    iApply (sim_gen_wand with "HΠ").
     iIntros (κ σ') "Hκ".
     repeat case_match => //; iDestruct!; simplify_eq.
     all: iSplit!; (once try econs).
@@ -496,64 +461,56 @@ Section prepost.
   Implicit Types (i : EV2 → S → prepost (EV1 * S) M) (o : EV1 → S → prepost (EV2 * S) M).
 
   Lemma sim_tgt_prepost_Outside i o m s σ x Π :
-    (∀ e, ▷ₒ Π (Some e) (λ P, P (SMFilter, σ, (PPRecv1 e, s, x)))) -∗
+    (∀ e, ▷ₒ Π (Some e) (SMFilter, σ, (PPRecv1 e, s, x))) -∗
     (SMFilter, σ, (PPOutside, s, x)) ≈{prepost_trans i o m}≈>ₜ Π.
   Proof.
     iIntros "HΠ".
-    iApply (sim_tgt_bi_mono1 with "[-]").
     iApply (sim_tgt_seq_map_filter with "[-]").
-    iApply (sim_tgt_step_end with "[-]"). iIntros (???). inv_all @m_step. iSpecialize ("HΠ" $! _).
-    do 2 iModIntro. iApply (bi_mono1_intro with "HΠ"). iIntros (?) "?".
-    iSplit!.
+    iApply (sim_gen_step_end with "[-]"). iIntros ([??]?). inv_all/= @m_step. iSpecialize ("HΠ" $! _).
+    iModIntro. iSplit!. by do 2 iModIntro.
   Qed.
 
   Lemma sim_tgt_prepost_Recv1 i o m s σ x Π e γ :
     (∃ r y, ⌜pp_to_ex (i e s) (λ r' y', r = r' ∧ y = y')⌝ ∗
         |==> sat_open γ ∗ sat γ (x ∗ y) ∗
-           ∀ x', sat_closed γ false x' -∗ Π None (λ P, P (SMProgRecv r.1, σ, (PPInside, r.2, uPred_shrink x')))) -∗
+           ∀ x', sat_closed γ false x' -∗ Π None (SMProgRecv r.1, σ, (PPInside, r.2, uPred_shrink x'))) -∗
     (SMFilter, σ, (PPRecv1 e, s, uPred_shrink x)) ≈{prepost_trans i o m}≈>ₜ Π.
   Proof using Type*.
     iIntros "HΠ".
-    iApply (sim_tgt_bi_mono1 with "[-]").
     iApply (sim_tgt_seq_map_filter with "[-]").
-    iApply (sim_tgt_step with "[-]"). iIntros (???). inv_all @m_step.
+    iApply (sim_gen_step with "[-]"). iIntros ([??]?). inv_all/= @m_step.
     iDestruct "HΠ" as (???) ">[? [? HΠ]]".
     iDestruct (sat_close with "[$] [$]") as (??) "?".
-    do 2 iModIntro. iRight.
-    iSplit!. {
+    iModIntro. iSplit!. {
       apply: pp_to_ex_mono; [done|]. move => ?? [??]; simplify_eq. split!.
       by rewrite assoc uPred_expand_shrink.
     }
-    iApply (sim_tgt_step_end with "[-]"). iIntros (???). inv_all @m_step.
-    do 2 iModIntro.
-    iApply (bi_mono1_intro with "[-]"). { by iApply "HΠ". }
-    iIntros (?) "?". iSplit!.
+    do 2 iModIntro. iRight. iSplit!.
+    iApply (sim_gen_step_end with "[-]"). iIntros ([??]?). inv_all/= @m_step.
+    iModIntro. iSplit!. do 2 iModIntro. by iApply "HΠ".
   Qed.
 
   Lemma sim_tgt_prepost_Inside i o m s σ x Π e γ b :
     (sat_closed γ b x ∗ ∀ r y x', ⌜pp_to_ex (o e s) (λ r' y', r' = r ∧ y' = y)⌝ -∗
        sat_open γ -∗ sat γ (if b then x ∗ y else y) -∗ sat γ x' -∗
-        ▷ₒ Π (Some r.1) (λ P, P (SMFilter, σ, (PPOutside, r.2, uPred_shrink x')))) -∗
+        ▷ₒ Π (Some r.1) (SMFilter, σ, (PPOutside, r.2, uPred_shrink x'))) -∗
     (SMFilterRecv e, σ, (PPInside, s, uPred_shrink x)) ≈{prepost_trans i o m}≈>ₜ Π.
   Proof using Type*.
     iIntros "[Hclosed HΠ]".
-    iApply (sim_tgt_bi_mono1 with "[-]").
-    iApply sim_tgt_bind.
+    iApply (sim_gen_bind with "[-]").
     iApply (sim_tgt_seq_map_filter_recv with "[-]").
-    iApply (sim_tgt_step_end with "[-]"). iIntros (???). inv_all @m_step.
-    do 2 iModIntro. iIntros (?). iRight. iSplit!.
+    iApply (sim_gen_step_end with "[-]"). iIntros ([??]?). inv_all/= @m_step.
+    iModIntro. iSplit!. iIntros "!>!>" (?). iRight. iSplit!.
     iApply (sim_tgt_seq_map_filter with "[-]").
-    iApply (sim_tgt_step with "[-]"). iIntros (???). inv_all @m_step.
+    iApply (sim_gen_step with "[-]"). iIntros ([??]?). inv_all/= @m_step.
     revert select (satisfiable _). rewrite uPred_expand_shrink assoc => ?.
     iMod ("Hclosed" with "[//]") as "[Ha Hsat]".
     iAssert (sat γ (if b then x ∗ y else y) ∗ sat γ x')%I with "[Hsat]" as "[??]".
     { destruct b; rewrite !sat_sep; iDestruct!; iFrame. }
     iSpecialize ("HΠ" with "[//] [$] [$] [$]").
-    do 2 iModIntro. iRight. iSplit!.
-    iApply (sim_tgt_step with "[-]"). iIntros (???). inv_all @m_step.
-    do 2 iModIntro. iLeft.
-    iApply (bi_mono1_intro with "HΠ").
-    iIntros (?) "?". iSplit!.
+    iModIntro. iSplit!. do 2 iModIntro. iRight. iSplit!.
+    iApply (sim_gen_step with "[-]"). iIntros ([??]?). inv_all/= @m_step.
+    iModIntro. iSplit!. do 2 iModIntro. by iLeft.
   Qed.
 
   Lemma sim_src_prepost_Outside i o m s σ x Π `{!VisNoAng m}:
@@ -562,8 +519,9 @@ Section prepost.
   Proof.
     iIntros "[% HΠ]".
     iApply (sim_src_seq_map_filter with "[-]").
-    iApply (sim_src_step_end with "[-]"). { econs. } iIntros ([[??]?] ?). simplify_eq.
-    by iModIntro.
+    iApply (sim_gen_step_end with "[-]").
+    iExists (_, _). iSplit; [iPureIntro; by econs|].
+    iIntros "!>" ([[??]?] ?). simplify_eq/=. by iModIntro.
   Qed.
 
   Lemma sim_src_prepost_Recv1 i o m s σ x Π e γ b `{!VisNoAng m}:
@@ -574,14 +532,15 @@ Section prepost.
   Proof using Type*.
     iIntros "[Hclosed HΠ]".
     iApply (sim_src_seq_map_filter with "[-]").
-    iApply (sim_src_step with "[-]"). { econs. }
-    iIntros ([[??]?] [?[y[[x' [Hsat ?]]?]]]%pp_to_ex_exists). simplify_eq.
+    iApply (sim_gen_step with "[-]"). iExists (_, _). iSplit; [iPureIntro; econs|].
+    iIntros "!>" ([[??]?] [?[y[[x' [Hsat ?]]?]]]%pp_to_ex_exists). simplify_eq/=.
     rewrite uPred_expand_shrink in Hsat.
     iMod ("Hclosed" with "[%]") as "[Ha Hsat]". { by rewrite comm. }
     iAssert (sat γ (if b then x ∗ y else y) ∗ sat γ x')%I with "[Hsat]" as "[??]".
     { destruct b; rewrite !sat_sep; iDestruct!; iFrame. }
-    iModIntro. iApply (sim_src_step with "[-]"). { econs. }
-    iIntros ([[??]?] ?). iModIntro. simplify_eq.
+    iModIntro. iRight. iSplit!. iApply (sim_gen_step with "[-]").
+    iExists (_, _). iSplit; [iPureIntro; econs|]. simplify_eq/=.
+    iIntros "!>" ([[??]?] ?). iModIntro. iLeft. simplify_eq/=.
     iApply ("HΠ" with "[//] [$] [$] [$]").
   Qed.
 
@@ -592,19 +551,19 @@ Section prepost.
     (SMFilterRecv e, σ, (PPInside, s, uPred_shrink x)) ≈{prepost_trans i o m}≈>ₛ Π.
   Proof using Type*.
     iIntros "HΠ".
-    iApply (sim_src_bind with "[-]").
+    iApply (sim_gen_bind with "[-]").
     iApply (sim_src_seq_map_filter_recv with "[-]").
-    iApply (sim_src_step_end with "[-]"). { econs. }
-    iIntros ([[??]?]?). simplify_eq.
+    iApply (sim_gen_step_end with "[-]"). iExists (_, _). iSplit; [iPureIntro; econs|].
+    iIntros "!>" ([[??]?]?). simplify_eq/=.
     iDestruct "HΠ" as (???) ">[? [? HΠ]]".
     iDestruct (sat_close with "[$] [$]") as (? Hsat ) "?".
     iModIntro. iSplit!. iRight. iSplit!.
     iApply (sim_src_seq_map_filter with "[-]").
-    iApply (sim_src_step with "[-]").
-    { econs; [|done]. by rewrite uPred_expand_shrink comm (comm _ _ x). }
-    iIntros ([[??]?] ?). simplify_eq. iModIntro.
-    iApply (sim_src_step with "[-]"). { econs. }
-    iIntros ([[??]?] ?). simplify_eq. iModIntro.
+    iApply (sim_gen_step with "[-]"). iExists (_, _). iSplit.
+    { iPureIntro. econs; [|done]. by rewrite uPred_expand_shrink comm (comm _ _ x). }
+    iIntros "!>" ([[??]?] ?). simplify_eq/=. iModIntro. iRight. iSplit!.
+    iApply (sim_gen_step with "[-]"). iExists (_, _). iSplit. { iPureIntro. econs. }
+    iIntros "!>" ([[??]?] ?). simplify_eq/=. iModIntro. iLeft.
     iApply ("HΠ" with "[$]").
   Qed.
 End prepost.
