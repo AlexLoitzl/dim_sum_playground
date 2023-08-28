@@ -194,7 +194,7 @@ Lemma sim_tgt_expr_raw_step e Π os :
   TGT e @ ? os [{ Π }].
 Proof.
   iIntros "HΠ" (σ ?) "#??".
-  iApply sim_gen_step => /=. iIntros ([??]?). iMod ("HΠ" with "[//] [//] [$]") as (??) "Hsim".
+  iApply sim_gen_step => /=. iIntros (???). iMod ("HΠ" with "[//] [//] [$]") as (??) "Hsim".
   iModIntro. iExists _. iSplit; [done|]. do 2 iModIntro => /=.
   iDestruct "Hsim" as "[$|(%&%&%&%&?&Hsim)]". iRight. iSplit; [done|]. by iApply "Hsim".
 Qed.
@@ -222,7 +222,7 @@ Lemma sim_tgt_expr_step e Φ Π os :
   TGT e @ ? os [{ Π }] {{ Φ }}.
 Proof.
   iIntros "Hsim" (?). iIntros "HΦ" (??) "#? Hσ".
-  iApply sim_gen_step_end. iIntros (??). iMod ("Hsim" with "[//] [//] [$]") as (??) "Hsim".
+  iApply sim_gen_step_end. iIntros (???). iMod ("Hsim" with "[//] [//] [$]") as (??) "Hsim".
   iModIntro. iExists _. iSplit; [done|].
   iSpecialize ("Hsim" with "[-]"); [|by do 2 iModIntro].
   iIntros (???) "?". iIntros (?) "Hsim". iApply (sim_gen_expr_raw_elim with "[$]"); [done|].
@@ -245,7 +245,7 @@ Lemma sim_src_expr_raw_step e Π os :
 Proof.
   iIntros "HΠ" (σ ?) "#??". iApply fupd_sim_gen.
   iMod ("HΠ" with "[//] [$]") as (???) "HΠ". iModIntro.
-  iApply sim_gen_step. iExists (_, _). iSplit; [done|]. iIntros "!>" (??).
+  iApply sim_gen_step. iExists _, _. iSplit; [done|]. iIntros "!>" (??).
   iMod ("HΠ" with "[//]") as "HΠ". iModIntro. simpl. case_match; [iFrame|].
   iRight. iSplit; [done|]. iDestruct ("HΠ") as (???) "[? Hsim]".
   by iApply "Hsim".
@@ -277,7 +277,7 @@ Lemma sim_src_expr_step e Φ Π os :
 Proof.
   iIntros "He" (?). iIntros "HΦ" (??) "#? Hσ". iApply fupd_sim_gen.
   iMod ("He" with "[//] [$]") as (???) "Hsim". iModIntro.
-  iApply sim_gen_step_end. iExists (_, _). iSplit; [done|].
+  iApply sim_gen_step_end. iExists _, _. iSplit; [done|].
   iIntros "!>" (??). iMod ("Hsim" with "[//]") as "Hsim". iModIntro.
   iApply "Hsim". iIntros (???) "?". iIntros (?) "Hsim".
   iApply (sim_gen_expr_raw_elim with "[$]"); [done|].

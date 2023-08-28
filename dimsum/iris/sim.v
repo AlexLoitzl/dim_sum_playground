@@ -46,14 +46,14 @@ Definition ts_wand_star {Σ} (ts : tgt_src) (P1 P2 : iProp Σ) : iProp Σ :=
   match ts with | Tgt => P1 -∗ P2 | Src => P1 ∗ P2 end.
 
 (* Notation "'ts_ex_allx'" := (ts_ex_all ltac:(assumption)) (only parsing). *)
-(* Notation "'∃∀' x .. y , P" := (ts_ex_all (ltac:(assumption)) (λ x, .. (ts_ex_all (ltac:(assumption)) (λ y, P)) ..)) *)
-(*     (at level 100, x binder, y binder, P at level 100, right associativity, only parsing) : bi_scope. *)
-Notation "'∃∀{' ts '}' x .. y , P" := (ts_ex_all ts (λ x, .. (ts_ex_all ts (λ y, P)) ..))
+(* Notation "'∃∀' x , P" := (ts_ex_all ltac:(assumption) (λ x, P)) *)
+    (* (at level 100, x binder, P at level 100, right associativity, only parsing) : bi_scope. *)
+Notation "'∃/∀{' ts '}' x .. y , P" := (ts_ex_all ts (λ x, .. (ts_ex_all ts (λ y, P)) ..))
     (at level 100, x binder, y binder, P at level 100, right associativity,
-        format "'[' '∃∀{' ts '}'  x  ..  y , ']'  '/' P") : bi_scope.
-Notation "'∀∃{' ts '}' x .. y , P" := (ts_all_ex ts (λ x, .. (ts_all_ex ts (λ y, P)) ..))
+        format "'[' '∃/∀{' ts '}'  x  ..  y , ']'  '/' P") : bi_scope.
+Notation "'∀/∃{' ts '}' x .. y , P" := (ts_all_ex ts (λ x, .. (ts_all_ex ts (λ y, P)) ..))
     (at level 100, x binder, y binder, P at level 100, right associativity,
-        format "'[' '∀∃{' ts '}'  x  ..  y , ']'  '/' P") : bi_scope.
+        format "'[' '∀/∃{' ts '}'  x  ..  y , ']'  '/' P") : bi_scope.
 
 Notation "P '∗/-∗{' ts '}' Q" := (ts_star_wand ts P Q)
    (at level 80, right associativity, format "P  '∗/-∗{' ts '}'  '/' Q").
@@ -63,34 +63,35 @@ Notation "P '-∗/∗{' ts '}' Q" := (ts_wand_star ts P Q)
 
 Section tgt_src.
   Context {Σ : gFunctors} `{!dimsumGS Σ}.
-  Context {A B : Type}.
+  Context {EV : Type}.
 
-  Definition dualize (ts : tgt_src) (Pd : A → iProp Σ) (Pa : A → B → iProp Σ) (Φ : A → B → iProp Σ) : iProp Σ :=
-    ∀∃{ts} a, Pd a -∗/∗{ts} |={∅}=> ∃∀{ts} b, Pa a b ∗/-∗{ts} Φ a b.
+  Definition ts_step (ts : tgt_src) (m : mod_trans EV) (σ : m.(m_state))
+    (Φ : option EV → m.(m_state) → iProp Σ) : iProp Σ :=
+    ∀/∃{ts} κ Pσ, ⌜m.(m_step) σ κ Pσ⌝ -∗/∗{ts} |={∅}=> ∃/∀{ts} σ', ⌜Pσ σ'⌝ ∗/-∗{ts} Φ κ σ'.
 
-  Global Instance dualize_ne ts n:
-    Proper ((pointwise_relation _ (dist n)) ==> (pointwise_relation _ (pointwise_relation _ (dist n))) ==> (pointwise_relation _ (pointwise_relation _ (dist n))) ==> dist n) (dualize ts).
+  Global Instance ts_step_ne ts m σ n:
+    Proper ((pointwise_relation _ (pointwise_relation _ (dist n))) ==> dist n) (ts_step ts m σ).
   Proof. destruct ts; solve_proper. Qed.
 
-  Lemma dualize_wand_strong ts Pd Pa Φ Ψ :
-    dualize ts Pd Pa Φ -∗
+  Lemma ts_step_wand_strong ts m σ Φ Ψ :
+    ts_step ts m σ Φ -∗
     (* TODO: add ={∅}=∗ here? *)
-    (∀ a b, Φ a b -∗ Ψ a b) -∗
-    dualize ts Pd Pa Ψ.
+    (∀ κ σ', Φ κ σ' -∗ Ψ κ σ') -∗
+    ts_step ts m σ Ψ.
   Proof.
     iIntros "Hd HΦ". destruct ts => /=.
-    - iIntros (a) "Ha". iMod ("Hd" with "Ha") as (?) "[??]".
+    - iIntros (??) "Ha". iMod ("Hd" with "Ha") as (?) "[??]".
       iDestruct ("HΦ" with "[$]") as "HΦ". iModIntro. iExists _. iFrame.
-    - iDestruct "Hd" as (a) "[? Hb]". iExists _. iFrame.
+    - iDestruct "Hd" as (??) "[? Hb]". iExists _, _. iFrame.
       iMod "Hb". iModIntro. iIntros (b) "Ha". iDestruct ("Hb" with "Ha") as "Hb". by iApply "HΦ".
   Qed.
 
-  Lemma dualize_wand ts Pd Pa Φ Ψ :
-    dualize ts Pd Pa Φ -∗
-    (∀ a b, Φ a b -∗ Ψ a b) -∗
-    dualize ts Pd Pa Ψ.
+  Lemma ts_step_wand ts m σ Φ Ψ :
+    ts_step ts m σ Φ -∗
+    (∀ κ σ', Φ κ σ' -∗ Ψ κ σ') -∗
+    ts_step ts m σ Ψ.
   Proof.
-    iIntros "? Hwand". iApply (dualize_wand_strong with "[$]").
+    iIntros "? Hwand". iApply (ts_step_wand_strong with "[$]").
     iIntros (??) "?". by iApply "Hwand".
   Qed.
 End tgt_src.
@@ -114,8 +115,7 @@ Section sim_gen.
     leibnizO (m.(m_state)) -d>
       (leibnizO (option EV) -d> leibnizO (m.(m_state)) -d> iPropO Σ) -d> iPropO Σ := λ σ Π,
   (ord_later_ctx -∗ |={∅}=> (Π None σ) ∨
-        dualize ts (λ x, ⌜m.(m_step) σ x.1 x.2⌝) (λ x σ', ⌜x.2 σ'⌝) (λ x σ',
-          ▷ₒ?ts |={∅}=> if x.1 is Some _ then Π x.1 σ' else sim_gen σ' Π))%I.
+        ts_step ts m σ (λ κ σ', ▷ₒ?ts |={∅}=> if κ is Some _ then Π κ σ' else sim_gen σ' Π))%I.
 
   Global Instance sim_gen_pre_ne n:
     Proper ((dist n ==> dist n ==> dist n) ==> dist n ==> dist n ==> dist n) sim_gen_pre.
@@ -130,7 +130,7 @@ Section sim_gen.
   Proof.
     iIntros "#Hinner" (σ Π) "Hsim ?".
     iMod ("Hsim" with "[$]") as "[?|Hsim]"; [by iLeft; iFrame| iRight; iModIntro].
-    iApply (dualize_wand with "Hsim"). iIntros ([??] ?) "Hsim" => /=.
+    iApply (ts_step_wand with "Hsim"). iIntros (??) "Hsim" => /=.
     iMod "Hsim". case_match => //. by iApply "Hinner".
   Qed.
 
@@ -225,7 +225,7 @@ Section sim_gen.
     rewrite sim_gen_unfold. iIntros "?".
     iMod ("Hsim" with "[$]") as "[?|Hsim]"; [iLeft| iRight].
     - iMod ("Hc" with "[$]") as "$". done.
-    - iModIntro. iApply (dualize_wand with "Hsim").
+    - iModIntro. iApply (ts_step_wand with "Hsim").
       iIntros (??) "Hsim". iMod "Hsim" as "Hsim". iMod "Hsim" as "Hsim".
       case_match.
       + by iMod ("Hc" with "[$]").
@@ -256,7 +256,7 @@ Section sim_gen.
     iMod ("Hsim" with "[$]") as "[?|Hsim]".
     - iSpecialize ("Hc" with "[$]"). iDestruct "Hc" as "[$|[_ Hc]]"; [done|].
       rewrite sim_gen_unfold. by iApply "Hc".
-    - iModIntro. iRight. iApply (dualize_wand with "Hsim"). iIntros ([??] ?) "Hsim /=".
+    - iModIntro. iRight. iApply (ts_step_wand with "Hsim"). iIntros (? ?) "Hsim /=".
       iMod "Hsim" as "Hsim". iMod "Hsim" as "Hsim".
       case_match.
       + by iDestruct ("Hc" with "[$]") as "[$|[% ?]]".
@@ -279,26 +279,39 @@ Section sim_gen.
   Proof. iIntros "?". rewrite sim_gen_unfold. iIntros "?". iLeft. by iFrame. Qed.
 
   Lemma sim_gen_step σ Π :
-    (dualize ts (λ x, ⌜m.(m_step) σ x.1 x.2⌝) (λ x σ', ⌜x.2 σ'⌝) (λ x σ',
-         ▷ₒ?ts |={∅}=> Π x.1 σ' ∨ ⌜x.1 = None⌝ ∗ σ' ≈{ ts, m }≈> Π)) -∗
+    (ts_step ts m σ (λ κ σ', ▷ₒ?ts |={∅}=> Π κ σ' ∨ ⌜κ = None⌝ ∗ σ' ≈{ ts, m }≈> Π)) -∗
     σ ≈{ ts, m }≈> Π.
   Proof.
     iIntros "HΠ". rewrite sim_gen_unfold.
-    iIntros "?". iRight. iModIntro. iApply (dualize_wand with "HΠ").
+    iIntros "?". iRight. iModIntro. iApply (ts_step_wand with "HΠ").
     iIntros (? ?) "Hsim". iMod "Hsim". iMod "Hsim". iModIntro.
     iDestruct "Hsim" as "[?|[% ?]]"; case_match => //. by iApply sim_gen_stop.
   Qed.
 
   Lemma sim_gen_step_end σ Π :
-    (dualize ts (λ x, ⌜m.(m_step) σ x.1 x.2⌝) (λ x σ', ⌜x.2 σ'⌝) (λ x σ',
-         ▷ₒ?ts |={∅}=> Π x.1 σ')) -∗
+    (ts_step ts m σ (λ κ σ', ▷ₒ?ts |={∅}=> Π κ σ')) -∗
     σ ≈{ ts, m }≈> Π.
   Proof.
     iIntros "HΠ". iApply sim_gen_step.
-    iApply (dualize_wand with "HΠ"). iIntros (??) "HΠ".
+    iApply (ts_step_wand with "HΠ"). iIntros (??) "HΠ".
     iMod "HΠ". iMod "HΠ". iModIntro. by iLeft.
   Qed.
+
+  Lemma sim_gen_include {EV'} (m' : mod_trans EV') f σ Π Ψ :
+    let F := (λ σ' Π', (∀ κ σ, Π' κ σ -∗ Π κ σ) -∗ f σ' ≈{ts, m'}≈> Ψ)%I in
+    σ ≈{ts, m}≈> Π -∗
+    (□ ∀ σ Π, sim_gen_pre ts m F σ Π -∗ F σ Π) -∗
+    f σ ≈{ts, m'}≈> Ψ.
+  Proof.
+    iIntros (F) "Hsim #Hrec".
+    iAssert (∀ Π, σ ≈{ ts, m }≈> Π -∗ F σ Π)%I as "Hgen"; last first.
+    { iApply ("Hgen" with "Hsim"). iIntros (??) "?". done. }
+    iIntros (?) "Hsim".
+    iApply (sim_gen_ind with "[] Hsim"). { solve_proper. }
+    by iModIntro.
+  Qed.
 End sim_gen.
+Global Arguments sim_gen_include {_ _ _ _ _ _}.
 
 (** * [sim_tgt] *)
 Section sim_tgt.
@@ -334,7 +347,7 @@ Section sim_tgt.
     iApply (fupd_mono _ _ ⌜_⌝). { iPureIntro. by apply: thas_trace_under_tall. }
     iIntros (κs' [[??]|(?&?&?&?&?&?&?&?)]). { iPureIntro. tend. }
     iMod (fupd_mask_subseteq ∅) as "He"; [set_solver|]. simpl.
-    iMod ("Hsim" $! (_, _) with "[//]") as (b ?) "Hsim".
+    iMod ("Hsim" with "[//]") as (b ?) "Hsim".
     iMod (ord_later_elim with "Hsim Ha [-]"); [|done]. iIntros "Ha".
     iMod (ord_later_update with "Ha"); [shelve|].
     iModIntro. iExists _. iFrame. iSplit; [done|]. iIntros "Ha Hsim". iModIntro => /=.
@@ -373,9 +386,9 @@ Section sim_src.
     iApply (sim_gen_ind with "[] Hsim"). { solve_proper. }
     iIntros "!>" (??) "Hsim". iIntros "Hc".
     iMod (fupd_mask_subseteq ∅) as "He"; [set_solver|].
-    iMod ("Hsim" with "[$]") as "[?|[%x [% Hsim]]]"; iMod "He" as "_".
+    iMod ("Hsim" with "[$]") as "[?|[%κ [% [% Hsim]]]]"; iMod "He" as "_".
     { iDestruct ("Hc" with "[$]") as (??) "?". subst. done. }
-    destruct x as [[] ?]; last first; simplify_eq/=.
+    destruct κ; last first; simplify_eq/=.
     - iApply (fupd_mono _ _ ⌜_⌝). { iPureIntro. by apply TTraceStepNone. }
       iIntros (??).
       iMod (fupd_mask_subseteq ∅) as "He"; [set_solver|].
