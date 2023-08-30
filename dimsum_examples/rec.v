@@ -2104,18 +2104,18 @@ Proof.
 Qed.
 
 (** ** Properties of rec_link *)
-Lemma asm_link_comm fns1 fns2 m1 m2 :
+Lemma rec_link_comm fns1 fns2 m1 m2 :
   fns1 ## fns2 →
   trefines (rec_link fns1 fns2 m1 m2)
            (rec_link fns2 fns1 m2 m1).
 Proof.
   move => ?. unshelve apply: link_comm. {
     exact (λ _ s1 s2, s2 = (λ o : seq_product_case, sp_opp <$> o) <$> s1). }
-  - move => /= p s e p' s' e' ok s2 HR1 ?. destruct!/=. split!.
-    case_match; destruct!/=; split!; repeat case_bool_decide => //=.
-    1: set_solver.
-    all: try destruct p as [[]|]; try destruct p' as [[]|]; naive_solver.
-  - done.
+  { done. }
+  move => /= p s e p' s' e' ok s2 HR1 ?. destruct!/=. split!.
+  case_match; destruct!/=; split!; repeat case_bool_decide => //=.
+  1: set_solver.
+  all: try destruct p as [[]|]; try destruct p' as [[]|]; naive_solver.
 Qed.
 
 (** ** Commuting and associativity of semantic linking (WIP) *)

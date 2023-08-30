@@ -521,11 +521,56 @@ Lemma asm_link_comm ins1 ins2 m1 m2 :
            (asm_link ins2 ins1 m2 m1).
 Proof.
   move => ?. unshelve apply: link_comm. { exact (λ _ s1 s2, s2 = sp_opp <$> s1). }
-  - move => /= p s e p' s' e' ok s2 HR1 ?. destruct!/=. split!.
-    case_match; destruct!/=; split!; repeat case_bool_decide => //=.
-    1: set_solver.
-    all: try destruct p as [[]|]; try destruct p' as [[]|]; naive_solver.
-  - done.
+  { done. }
+  move => /= p s e p' s' e' ok s2 HR1 ?. destruct!/=. split!.
+  case_match; destruct!/=; split!; repeat case_bool_decide => //=.
+  1: set_solver.
+  all: try destruct p as [[]|]; try destruct p' as [[]|]; naive_solver.
+Qed.
+
+Definition PC_to_link_assoc_side (ins1 ins2 ins3 : gset Z) (PC : Z) : option link_assoc_side :=
+  if bool_decide (PC ∈ ins1) then Some LALeft else
+  if bool_decide (PC ∈ ins2) then Some LAMiddle else
+  if bool_decide (PC ∈ ins3) then Some LARight else
+  None.
+
+Lemma asm_link_assoc1 ins1 ins2 ins3 ins23 ins12 m1 m2 m3
+  `{!VisNoAng (m_trans m1)} `{!VisNoAng (m_trans m2)} `{!VisNoAng (m_trans m3)} :
+  ins1 ## ins2 → ins1 ## ins3 → ins2 ## ins3 →
+  ins12 = ins1 ∪ ins2 → ins23 = ins2 ∪ ins3 →
+  trefines (asm_link ins1 ins23 m1 (asm_link ins2 ins3 m2 m3))
+           (asm_link ins12 ins3 (asm_link ins1 ins2 m1 m2) m3).
+Proof.
+  move => *. subst. unshelve apply: (link_assoc1
+   (λ x, asm_link_filter (match x with | LA_1_23 | _ => _ end) (match x with | LA_1_23 | _ => _ end))).
+  { exact (λ la s1_23 s23 s12_3 s12,
+    ∃ lacall, (if la is Some _ then lacall = None else True) ∧
+    s1_23 = la_side_to_sp_side LA_1_23 lacall ∧
+    s23 = la_side_to_sp_side LA_23 lacall ∧
+    s12_3 = la_side_to_sp_side LA_12_3 lacall ∧
+    s12 = la_side_to_sp_side LA_12 lacall). }
+  { move => /= *. by case_match; destruct!. }
+  { eexists None. done. }
+  move => la ?????? e ?? *. destruct!/=.
+  destruct e as [rs ?| |]; destruct!/=.
+  - eexists (PC_to_link_assoc_side ins1 ins2 ins3 (rs !!! "PC")).
+    destruct lacall as [[]|]; try by destruct la. split!.
+    1,2,3,4: rewrite /PC_to_link_assoc_side; destruct la as [[]|]; simplify_eq/=;
+      repeat case_bool_decide => //; set_solver.
+    move => ?????/=.
+    split!.
+    all: unfold PC_to_link_assoc_side in *; destruct la as [[]|]; simplify_eq/=;
+      repeat case_bool_decide => //; destruct!/= => //.
+    all: repeat case_bool_decide => //; split!; set_solver.
+  - eexists lacall. split!. 1,2,3: by destruct la as [[]|], lacall as [[]|].
+    move => ?????/=. set (la' := la).
+    destruct lacall as [[]|]; try by destruct la.
+    destruct la as [[]|]; destruct!/=.
+    all: eexists _; split_and! => //; eexists la'; split!.
+  - destruct la as [[]|]; destruct!/=.
+    eexists lacall. split!. { by destruct lacall as [[]|]. }
+    move => ?????/=.
+    destruct lacall as [[]|]; destruct!/=; split!.
 Qed.
 
 (** * Deeply embedded assembly language *)

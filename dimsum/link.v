@@ -342,14 +342,14 @@ Lemma link_comm {EV S1 S2 : Type}
   (R2 : seq_product_case → S2 → EV → seq_product_case → S2 → EV → bool → Prop)
   (m1 m2 : module (io_event EV))
   s1 s2:
+  INV None s1 s2 →
   (∀ p s e p' s' e' ok s2,
       R1 p s e p' s' e' ok →
       INV p s s2 →
       ∃ s2', R2 (sp_opp <$> p) s2 e (sp_opp <$> p') s2' e' ok ∧ INV p' s' s2') →
-  INV None s1 s2 →
   trefines (link_mod R1 m1 m2 s1) (link_mod R2 m2 m1 s2).
 Proof.
-  move => Hcomm Hinv. apply tsim_implies_trefines => /= n.
+  move => Hinv Hcomm. apply tsim_implies_trefines => /= n.
   unshelve apply: tsim_remember. { simpl. exact (λ _
     '(σl1, s1, σ1, σ2)
     '(σl2, s2, σ1', σ2'),
@@ -407,42 +407,355 @@ Proof.
     repeat case_match => //; destruct!; split!; destruct sp; by simplify_eq/=.
 Qed.
 
-(*
+(* identifies modules, naming: (Left + Middle + Right) *)
 Inductive link_assoc_side :=
 | LALeft | LAMiddle | LARight.
 
-Lemma link_assoc {EV So1 Si1 So2 Si2 : Type}
-  (INV : option link_assoc_side → So1 → Si1 → So2 → Si2 → Prop)
-  (Ro1 : seq_product_case → So1 → EV → seq_product_case → So1 → EV → bool → Prop)
-  (Ri1 : seq_product_case → Si1 → EV → seq_product_case → Si1 → EV → bool → Prop)
-  (Ro2 : seq_product_case → So2 → EV → seq_product_case → So2 → EV → bool → Prop)
-  (Ri2 : seq_product_case → Si2 → EV → seq_product_case → Si2 → EV → bool → Prop)
+(* identifies linkers, naming: (_ 1_23 (_ 23 _)) ↔ ((_ 12 _) 12_3 _) *)
+Inductive link_assoc_linker :=
+| LA_1_23 | LA_23 | LA_12_3 | LA_12.
+
+Definition la_side_to_sp_side (ln : link_assoc_linker) (la : option link_assoc_side)
+  : option seq_product_side :=
+  match ln with
+  | LA_1_23 =>
+      match la with
+      | Some LALeft => Some SPLeft
+      | Some LAMiddle => Some SPRight
+      | Some LARight => Some SPRight
+      | None => None
+      end
+  | LA_23 =>
+      match la with
+      | Some LALeft => None
+      | Some LAMiddle => Some SPLeft
+      | Some LARight => Some SPRight
+      | None => None
+      end
+  | LA_12_3 =>
+      match la with
+      | Some LALeft => Some SPLeft
+      | Some LAMiddle => Some SPLeft
+      | Some LARight => Some SPRight
+      | None => None
+      end
+  | LA_12 =>
+      match la with
+      | Some LALeft => Some SPLeft
+      | Some LAMiddle => Some SPRight
+      | Some LARight => None
+      | None => None
+      end
+  end.
+
+Definition la_wrap_R {EV S}
+  (R : seq_product_case → S → EV → seq_product_case → S → EV → bool → Prop) :
+  seq_product_case → seq_product_case → S → EV → seq_product_case → S → EV → bool → Prop :=
+  λ pdest p s e p' s' e' ok,
+    if bool_decide (p = pdest) then p = p' ∧ s' = s ∧ e' = e ∧ ok = true else R p s e p' s' e' ok.
+
+Arguments la_wrap_R _ _ _ !_ !_ _ _ _ _ _ _ /.
+
+(* The following functions define in which order one traverses the
+linkers from a given link_assoc_side.
+fst1_23: first linker in 1_23 side of assoc lemma
+fst12_3: first linker in 12_3 side of assoc lemma
+snd1_23: second linker in 1_23 side of assoc lemma
+snd12_3: second linker in 12_3 side of assoc lemma *)
+Definition la_side_to_fst_1_23 (la : option link_assoc_side) : link_assoc_linker :=
+  match la with
+  | Some LALeft => LA_1_23
+  | Some LAMiddle => LA_23
+  | Some LARight => LA_23
+  | None => LA_1_23
+  end.
+
+Definition la_side_to_fst_12_3 (la : option link_assoc_side) : link_assoc_linker :=
+  match la with
+  | Some LALeft => LA_12
+  | Some LAMiddle => LA_12
+  | Some LARight => LA_12_3
+  | None => LA_12_3
+  end.
+
+Definition la_side_to_snd_1_23 (la : option link_assoc_side) : link_assoc_linker :=
+  match la with
+  | Some LALeft => LA_23
+  | Some LAMiddle => LA_1_23
+  | Some LARight => LA_1_23
+  | None => LA_23
+  end.
+
+Definition la_side_to_snd_12_3 (la : option link_assoc_side) : link_assoc_linker :=
+  match la with
+  | Some LALeft => LA_12_3
+  | Some LAMiddle => LA_12_3
+  | Some LARight => LA_12
+  | None => LA_12
+  end.
+
+Definition la_sel_state {S} (ln : link_assoc_linker) (s1_23 s23 s12_3 s12 : S) : S :=
+  match ln with
+  | LA_1_23 => s1_23
+  | LA_23 => s23
+  | LA_12_3 => s12_3
+  | LA_12 => s12
+  end.
+
+Definition la_sel_state_rev {S} (la : option link_assoc_side) (ln : link_assoc_linker)
+  (sf1 sf2 ss1 ss2 : S) : S :=
+  match la with
+  | Some LALeft =>
+      match ln with
+      | LA_1_23 => sf1
+      | LA_23 => ss1
+      | LA_12_3 => ss2
+      | LA_12 => sf2
+      end
+  | Some LAMiddle =>
+      match ln with
+      | LA_1_23 => ss1
+      | LA_23 => sf1
+      | LA_12_3 => ss2
+      | LA_12 => sf2
+      end
+  | Some LARight =>
+      match ln with
+      | LA_1_23 => ss1
+      | LA_23 => sf1
+      | LA_12_3 => sf2
+      | LA_12 => ss2
+      end
+  | None =>
+      match ln with
+      | LA_1_23 => sf1
+      | LA_23 => ss1
+      | LA_12_3 => sf2
+      | LA_12 => ss2
+      end
+  end.
+
+Lemma la_sel_state_rev_fst_1_23 {S} (s x : S) la :
+  la_sel_state_rev la (la_side_to_fst_1_23 la) s x x x = s.
+Proof. destruct la as [[]|] eqn:? => //=. Qed.
+Lemma la_sel_state_rev_fst_12_3 {S} (s x : S) la :
+  la_sel_state_rev la (la_side_to_fst_12_3 la) x s x x = s.
+Proof. destruct la as [[]|] eqn:? => //=. Qed.
+Lemma la_sel_state_rev_snd_1_23 {S} (s x : S) la :
+  la_sel_state_rev la (la_side_to_snd_1_23 la) x x s x = s.
+Proof. destruct la as [[]|] eqn:? => //=. Qed.
+Lemma la_sel_state_rev_snd_12_3 {S} (s x : S) la :
+  la_sel_state_rev la (la_side_to_snd_12_3 la) x x x s = s.
+Proof. destruct la as [[]|] eqn:? => //=. Qed.
+
+Lemma link_assoc1 {EV S : Type}
+  (R : link_assoc_linker → seq_product_case → S → EV → seq_product_case → S → EV → bool → Prop)
+  (INV : option link_assoc_side → S → S → S → S → Prop)
   (m1 m2 m3 : module (io_event EV))
-  so1 si1 so2 si2:
-  (* (∀ p s e p' s' e' ok s2, *)
-  (*     R1 p s e p' s' e' ok → *)
-  (*     INV p s s2 → *)
-  (*     ∃ s2', R2 (sp_opp <$> p) s2 e (sp_opp <$> p') s2' e' ok ∧ INV p' s' s2') → *)
-  INV None so1 si1 so2 si2 →
-  trefines (link_mod Ro1 m1 (link_mod Ri1 m2 m3 si1) so1) (link_mod Ro2 (link_mod Ri2 m1 m2 si2) m3 so2).
+  s1_23 s23 s12_3 s12
+  `{!VisNoAng (m_trans m1)} `{!VisNoAng (m_trans m2)} `{!VisNoAng (m_trans m3)}:
+  (∀ ln p s e p' s' e' ok, R ln p s e p' s' e' ok → e = e') →
+  INV None s1_23 s23 s12_3 s12 →
+  (∀ la p1' s1_23 s23 s12_3 s12 sf1' e1 e1' ok1,
+      let lnf1 := la_side_to_fst_1_23 la in
+      let lnf2 := la_side_to_fst_12_3 la in
+      let lns1 := la_side_to_snd_1_23 la in
+      let lns2 := la_side_to_snd_12_3 la in
+      INV la s1_23 s23 s12_3 s12 →
+      R lnf1 (la_side_to_sp_side lnf1 la) (la_sel_state lnf1 s1_23 s23 s12_3 s12) e1 p1' sf1' e1' ok1 →
+      ∃ la' sf2', la_side_to_sp_side lnf1 la' = p1' ∧ ok1 = true ∧
+      R lnf2 (la_side_to_sp_side lnf2 la) (la_sel_state lnf2 s1_23 s23 s12_3 s12) e1
+        (la_side_to_sp_side lnf2 la') sf2' e1' ok1 ∧
+      ∀ p2' ss1' e2' ok2,
+      la_wrap_R (R lns1) (la_side_to_sp_side lns1 la') (la_side_to_sp_side lns1 la)
+        (la_sel_state lns1 s1_23 s23 s12_3 s12) e2' p2' ss1' e1' ok2 →
+      ∃ ss2', la_side_to_sp_side lns1 la' = p2' ∧ ok2 = true ∧
+      la_wrap_R (R lns2) (la_side_to_sp_side lns2 la') (la_side_to_sp_side lns2 la)
+        (la_sel_state lns2 s1_23 s23 s12_3 s12) e2' (la_side_to_sp_side lns2 la') ss2' e1' ok2 ∧
+      INV la'
+        (la_sel_state_rev la LA_1_23 sf1' sf2' ss1' ss2')
+        (la_sel_state_rev la LA_23 sf1' sf2' ss1' ss2')
+        (la_sel_state_rev la LA_12_3 sf1' sf2' ss1' ss2')
+        (la_sel_state_rev la LA_12 sf1' sf2' ss1' ss2')
+   ) →
+  trefines (link_mod (R LA_1_23) m1 (link_mod (R LA_23) m2 m3 s23) s1_23)
+    (link_mod (R LA_12_3) (link_mod (R LA_12) m1 m2 s12) m3 s12_3).
 Proof.
-  move => Hinv. apply tsim_implies_trefines => /= n.
+  move => Heq Hinv HR. apply tsim_implies_trefines => /= n.
   unshelve apply: tsim_remember. { simpl. exact (λ _
-    '(σo1, so1, σ1, (σi1, si1, σ2, σ3))
-    '(σo2, so2, (σi2, si2, σ1', σ2'), σ3'),
-    ∃ la, match la with
-          | None => σo1 = MLFRun None ∧ σi1 = MLFRun None ∧ σo2 = MLFRun None ∧ σi2 = MLFRun None
-          | Some LALeft => True
-          | Some LAMiddle => True
-          | Some LARight => True
-          end ∧ σ1' = σ1 ∧ σ2' = σ2 ∧ σ3' = σ3 ∧ INV la so1 si1 so2 si2). }
-  { split!. 2: done. done. } { done. }
+    '(σ1_23, s1_23, σ1, (σ23, s23, σ2, σ3))
+    '(σ12_3, s12_3, (σ12, s12, σ1', σ2'), σ3'),
+    ∃ la,
+      σ1_23 = MLFRun (la_side_to_sp_side LA_1_23 la) ∧ σ23 = MLFRun (la_side_to_sp_side LA_23 la) ∧
+      σ12_3 = MLFRun (la_side_to_sp_side LA_12_3 la) ∧ σ12 = MLFRun (la_side_to_sp_side LA_12 la) ∧
+      σ1' = σ1 ∧ σ2' = σ2 ∧ σ3' = σ3 ∧ INV la s1_23 s23 s12_3 s12). }
+  { eexists None. split!. } { done. }
   move => {}n _ /= Hloop {Hinv}.
-  move => [[[σo1 {}so1] σ1] [[[σi1 {}si1] σ2] σ3]] [[[σo2 {}so2] [[[σi2 {}si2] σ1'] σ2']] σ3'] Hinv.
-  destruct!. repeat case_match; destruct!.
-  - admit.
-  - admit.
-  - admit.
-  - tstep_i.
-Abort.
-*)
+  move => [[[σ1_23 {}s1_23] σ1] [[[σ23 {}s23] σ2] σ3]] [[[σ12_3 {}s12_3] [[[σ12 {}s12] σ1'] σ2']] σ3'] Hinv.
+  destruct!. destruct la as [[]|] => /=.
+  - tstep_both. apply: steps_impl_step_end => κ ??.
+    destruct κ as [[??]|]. 2: {
+      tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??.
+      tend. split!; [done|]. apply Hloop; [done|]. split!; [..|done]; done.
+    }
+    move => *. simplify_eq/=.
+    exploit HR; [done..|] => -[la'[?[?[?[? Hcont]]]]]. simplify_eq/=.
+    destruct la' as [[]|]; simplify_eq/=.
+    + tstep_s. eexists (Some (Outgoing, _)). split!; [done|] => /=.
+      apply: steps_spec_step_end; [done|] => σ' ?. tend. split!; [done|].
+      exploit Hcont; [done|]. move => ?. destruct!/=.
+      (* TODO: these repeated tsim_mirror are quite annoying, can we
+      do something about them? *)
+      tsim_mirror (m1.(m_trans)) σ'. move => ??? Hc.
+      tstep_both. apply: Hc => κ Pσ ? Hs. destruct κ as [[??]|].
+      2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
+      move => ?. simplify_eq/=. tstep_s. eexists (Some (Incoming, _)). split!.
+      apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+      apply: Hloop; [by apply o_lt_impl_le|]. split!; [..|done]; done.
+    + tstep_s. eexists (Some (Outgoing, _)). split!; [done|] => /=.
+      apply: steps_spec_step_end; [done|] => σ' ?. tend. split!; [done|].
+      tstep_i => *. simplify_eq.
+      exploit Hcont => /=; [done|]. move => *. destruct!/=.
+      tsim_mirror (m2.(m_trans)) σ2. move => ??? Hc.
+      tstep_both. apply: Hc => κ Pσ ? Hs. destruct κ as [[??]|].
+      2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
+      move => ?. simplify_eq/=. tstep_s. eexists (Some (Incoming, _)). split!.
+      apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+      apply: Hloop; [by apply o_lt_impl_le|]. split!; [..|done]; done.
+    + tend. have [σ' Hσ']:= vis_no_all _ _ _ ltac:(done). split!; [naive_solver|].
+      tstep_i => ???? ok' ??. simplify_eq/=.
+      exploit Hcont => /=; [done|]. move => *. destruct!/=.
+      tstep_s. eexists (Some (Outgoing, _)). split!; [done|] => /=.
+      exploit Heq; [done|] => ?. subst.
+      split!; [done|] => /=. apply: steps_spec_step_end; [done|] => σ'' ?.
+      have ? : σ'' = σ' by naive_solver. subst.
+      tsim_mirror (m3.(m_trans)) σ3. move => ??? Hc.
+      tstep_both. apply: Hc => κ Pσ ? Hs. destruct κ as [[??]|].
+      2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
+      move => ?. simplify_eq/=. tstep_s. eexists (Some (Incoming, _)). split!.
+      apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+      apply: Hloop; [by apply o_lt_impl_le|]. split!; [..|done]; done.
+    + tstep_s. eexists (Some (Outgoing, _)). split!; [done|] => /=.
+      exploit Hcont => /=; [done|]. move => *. destruct!/=.
+      split!; [done|] => /=. split!; [done|].
+      apply: steps_spec_step_end; [done|] => σ' ?. tend. split!; [done|].
+      apply Hloop; [done|]. split!; [..|done]; done.
+  - tstep_both. apply: steps_impl_step_end => κ ??.
+    destruct κ as [[??]|]. 2: {
+      tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??.
+      tend. split!; [done|]. apply Hloop; [done|]. split!; [..|done]; done.
+    }
+    move => *. simplify_eq/=.
+    exploit HR; [done..|] => -[la'[?[?[?[? Hcont]]]]]. simplify_eq/=.
+    destruct la' as [[]|]; simplify_eq/=.
+    + move => *. simplify_eq/=.
+      exploit Heq; [done|] => ?. subst.
+      exploit Hcont => /=; [done|]. move => *. destruct!/=.
+      tstep_s. eexists (Some (Outgoing, _)). split!; [done|] => /=.
+      apply: steps_spec_step_end; [done|] => σ' ?. tend. split!; [done|].
+      tsim_mirror (m1.(m_trans)) σ1. move => ??? Hc.
+      tstep_both. apply: Hc => κ Pσ ? Hs. destruct κ as [[??]|].
+      2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
+      move => ?. simplify_eq/=. tstep_s. eexists (Some (Incoming, _)). split!.
+      apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+      apply: Hloop; [by apply o_lt_impl_le|]. split!; [..|done]; done.
+    + tstep_s. eexists (Some (Outgoing, _)). split!; [done|] => /=.
+      apply: steps_spec_step_end; [done|] => σ' ?. tend. split!; [done|].
+      exploit Hcont; [done|] => *. destruct!/=.
+      tsim_mirror (m2.(m_trans)) σ'. move => ??? Hc.
+      tstep_both. apply: Hc => κ Pσ ? Hs. destruct κ as [[??]|].
+      2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
+      move => ?. simplify_eq/=. tstep_s. eexists (Some (Incoming, _)). split!.
+      apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+      apply: Hloop; [by apply o_lt_impl_le|]. split!; [..|done]; done.
+    + tstep_s. eexists (Some (Outgoing, _)). split!; [done|] => /=.
+      exploit Hcont; [done|] => *. destruct!/=. split!; [done|] => /=.
+      apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+      tsim_mirror (m3.(m_trans)) σ3. move => ??? Hc.
+      tstep_both. apply: Hc => κ Pσ ? Hs. destruct κ as [[??]|].
+      2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
+      move => ?. simplify_eq/=. tstep_s. eexists (Some (Incoming, _)). split!.
+      apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+      apply: Hloop; [by apply o_lt_impl_le|]. split!; [..|done]; done.
+    + move => *. simplify_eq/=.
+      exploit Heq; [done|] => ?. subst.
+      exploit Hcont => /=; [done|]. move => *. destruct!/=.
+      tstep_s. eexists (Some (Outgoing, _)). split!; [done|] => /=. split!; [done|] => /=.
+      split!; [done|]. apply: steps_spec_step_end; [done|] => σ' ?. tend. split!; [done|].
+      apply: Hloop; [done|]. split!; [..|done]; done.
+  - tstep_both. apply: steps_impl_step_end => κ ??.
+    destruct κ as [[??]|]. 2: {
+      tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??.
+      tend. split!; [done|]. apply Hloop; [done|]. split!; [..|done]; done.
+    }
+    move => *. simplify_eq/=.
+    exploit HR; [done..|] => -[la'[?[?[?[? Hcont]]]]]. simplify_eq/=.
+    destruct la' as [[]|]; simplify_eq/=.
+    + move => *. simplify_eq/=.
+      exploit Heq; [done|] => ?. subst.
+      exploit Hcont => /=; [done|]. move => *. destruct!/=.
+      tstep_s. eexists (Some (Outgoing, _)). split!; [done|] => /=.
+      apply: steps_spec_step_end; [done|] => σ' ?. tend. split!; [done|].
+      tstep_s. split!; [done|] => /=.
+      tsim_mirror (m1.(m_trans)) σ1. move => ??? Hc.
+      tstep_both. apply: Hc => κ Pσ ? Hs. destruct κ as [[??]|].
+      2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
+      move => ?. simplify_eq/=. tstep_s. eexists (Some (Incoming, _)). split!.
+      apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+      apply: Hloop; [by apply o_lt_impl_le|]. split!; [..|done]; done.
+    + tstep_s. eexists (Some (Outgoing, _)). split!; [done|] => /=.
+      apply: steps_spec_step_end; [done|] => σ' ?. tend. split!; [done|].
+      exploit Hcont; [done|] => *. destruct!/=.
+      tstep_s. split!; [done|] => /=.
+      tsim_mirror (m2.(m_trans)) σ2. move => ??? Hc.
+      tstep_both. apply: Hc => κ Pσ ? Hs. destruct κ as [[??]|].
+      2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
+      move => ?. simplify_eq/=. tstep_s. eexists (Some (Incoming, _)). split!.
+      apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+      apply: Hloop; [by apply o_lt_impl_le|]. split!; [..|done]; done.
+    + tstep_s. eexists (Some (Outgoing, _)). split!; [done|] => /=.
+      apply: steps_spec_step_end; [done|] => σ' ?. tend. split!; [done|].
+      exploit Hcont; [done|] => *. destruct!/=.
+      tsim_mirror (m3.(m_trans)) σ'. move => ??? Hc.
+      tstep_both. apply: Hc => κ Pσ ? Hs. destruct κ as [[??]|].
+      2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
+      move => ?. simplify_eq/=. tstep_s. eexists (Some (Incoming, _)). split!.
+      apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+      apply: Hloop; [by apply o_lt_impl_le|]. split!; [..|done]; done.
+    + move => *. simplify_eq/=.
+      exploit Heq; [done|] => ?. subst.
+      exploit Hcont => /=; [done|]. move => *. destruct!/=.
+      tstep_s. eexists (Some (Outgoing, _)). split!; [done|] => /=. split!; [done|] => /=.
+      apply: steps_spec_step_end; [done|] => σ' ?. tend. split!; [done|].
+      apply: Hloop; [done|]. split!; [..|done]; done.
+  - tstep_i => ???? ok ?.
+    exploit HR; [done..|] => -[la'[?[?[?[? Hcont]]]]]. simplify_eq/=.
+    tstep_s. split!; [done|].
+    destruct la' as [[]|]; simplify_eq/=.
+    + exploit (Hcont None); [done|] => *. destruct!/=.
+      tstep_s. split!; [done|] => /=.
+      tsim_mirror (m1.(m_trans)) σ1. move => ??? Hc.
+      tstep_both. apply: Hc => κ Pσ ? Hs. destruct κ as [[??]|].
+      2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
+      move => ?. simplify_eq/=. tstep_s. eexists (Some (Incoming, _)). split!.
+      apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+      apply: Hloop; [by apply o_lt_impl_le|]. split!; [..|done]; done.
+    + tstep_i => ???? ok ??. simplify_eq/=. exploit Hcont; simpl; [done|].
+      move => *. destruct!. tstep_s. split!; [done|].
+      tsim_mirror (m2.(m_trans)) σ2. move => ??? Hc.
+      tstep_both. apply: Hc => κ Pσ ? Hs. destruct κ as [[??]|].
+      2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
+      move => ?. simplify_eq/=. tstep_s. eexists (Some (Incoming, _)). split!.
+      apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+      apply: Hloop; [by apply o_lt_impl_le|]. split!; [..|done]; done.
+    + tstep_i => ???? ok ??. simplify_eq/=. exploit Hcont; simpl; [done|].
+      move => *. destruct!/=.
+      tsim_mirror (m3.(m_trans)) σ3. move => ??? Hc.
+      tstep_both. apply: Hc => κ Pσ ? Hs. destruct κ as [[??]|].
+      2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
+      move => ?. simplify_eq/=. tstep_s. eexists (Some (Incoming, _)). split!.
+      apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+      apply: Hloop; [by apply o_lt_impl_le|]. split!; [..|done]; done.
+    + exploit (Hcont None); [done|] => *. destruct!/=.
+      apply: Hloop; [done|]. split!; [..|done]; done.
+Qed.
