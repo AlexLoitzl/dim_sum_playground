@@ -562,14 +562,18 @@ Lemma link_assoc1 {EV S : Type}
       let lns1 := la_side_to_snd_1_23 la in
       let lns2 := la_side_to_snd_12_3 la in
       INV la s1_23 s23 s12_3 s12 →
+      (** We first traverse the first linker in the implementation ... *)
       R lnf1 (la_side_to_sp_side lnf1 la) (la_sel_state lnf1 s1_23 s23 s12_3 s12) e1 p1' sf1' e1' ok1 →
       ∃ la' sf2', la_side_to_sp_side lnf1 la' = p1' ∧ ok1 = true ∧
+      (** ... then the first linker in the specification ... *)
       R lnf2 (la_side_to_sp_side lnf2 la) (la_sel_state lnf2 s1_23 s23 s12_3 s12) e1
         (la_side_to_sp_side lnf2 la') sf2' e1' ok1 ∧
       ∀ p2' ss1' e2' ok2,
+      (** ... then optionally the second linker in the implementation ... *)
       la_wrap_R (R lns1) (la_side_to_sp_side lns1 la') (la_side_to_sp_side lns1 la)
         (la_sel_state lns1 s1_23 s23 s12_3 s12) e2' p2' ss1' e1' ok2 →
       ∃ ss2', la_side_to_sp_side lns1 la' = p2' ∧ ok2 = true ∧
+      (** ... and finally optionally the second linker in the specification. *)
       la_wrap_R (R lns2) (la_side_to_sp_side lns2 la') (la_side_to_sp_side lns2 la)
         (la_sel_state lns2 s1_23 s23 s12_3 s12) e2' (la_side_to_sp_side lns2 la') ss2' e1' ok2 ∧
       INV la'

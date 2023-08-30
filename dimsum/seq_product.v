@@ -8,7 +8,7 @@ Inductive seq_product_side :=
 
 Global Instance seq_product_side_inhabited : Inhabited seq_product_side := populate SPLeft.
 Global Instance seq_product_side_eq_dec : EqDecision seq_product_side.
-Proof. solve_decision. Qed.
+Proof. solve_decision. Defined.
 
 Definition sp_opp (sp : seq_product_side) : seq_product_side :=
   if sp is SPLeft then SPRight else SPLeft.
