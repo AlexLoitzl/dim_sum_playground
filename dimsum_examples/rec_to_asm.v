@@ -188,13 +188,15 @@ Qed.
 Canonical Structure rec_to_asm_elemO := leibnizO rec_to_asm_elem.
 
 Definition rec_to_asmUR : ucmra :=
-  prodUR (gmap_viewUR prov rec_to_asm_elemO) (gmap_viewUR Z (optionO ZO)).
+  prodUR (prodUR (gmap_viewUR prov rec_to_asm_elemO) (gmap_viewUR Z (optionO ZO)))
+   (optionUR (agreeR (leibnizO (gmap string Z)))).
 
 Global Instance rec_to_asmUR_shrink : Shrink rec_to_asmUR.
 Proof. solve_shrink. Qed.
 
-Definition r2a_heap_inj (r : (gmap_viewUR prov rec_to_asm_elemO)) : rec_to_asmUR := (r, ε).
-Definition r2a_mem_inj (r : (gmap_viewUR Z (optionO ZO))) : rec_to_asmUR := (ε, r).
+Definition r2a_heap_inj (r : (gmap_viewUR prov rec_to_asm_elemO)) : rec_to_asmUR := (r, ε, ε).
+Definition r2a_mem_inj (r : (gmap_viewUR Z (optionO ZO))) : rec_to_asmUR := (ε, r, ε).
+Definition r2a_f2i_inj (f2i : gmap string Z) : rec_to_asmUR := (ε, ε, Some (to_agree f2i)).
 
 Definition r2a_heap_auth (h : gmap prov rec_to_asm_elemO) : uPred rec_to_asmUR :=
   uPred_ownM (r2a_heap_inj (gmap_view_auth (DfracOwn 1) h)).
@@ -211,6 +213,18 @@ Definition r2a_mem_constant (a : Z) (v : option Z) : uPred rec_to_asmUR :=
 Definition r2a_mem_map (m : gmap Z (option Z)) : uPred rec_to_asmUR :=
   ([∗ map] a↦v ∈ m, r2a_mem_constant a v).
 
+(* TODO: This might need an auth to support the vertical proof. Also
+one maybe needs a whitness that a certain address is not storing a
+function. This could be done by using a [gmap (string + Z) Z] (where
+the Z in the keys is some dummy identifier) together with the
+invariant that the values are disjoint (as ghost state)? *)
+Definition r2a_f2i_full (f2i : gmap string Z) : uPred rec_to_asmUR := uPred_ownM (r2a_f2i_inj f2i).
+
+Definition r2a_f2i_incl (f2i : gmap string Z) : uPred rec_to_asmUR :=
+  ∃ full, ⌜f2i ⊆ full⌝ ∗ r2a_f2i_full full.
+Definition r2a_f2i_f (f : string) (i : Z) : uPred rec_to_asmUR :=
+  ∃ f2i, ⌜f2i !! f = Some i⌝ ∗ r2a_f2i_full f2i.
+
 (** ** Ghost state lemmas *)
 Lemma r2a_mem_constant_excl a v1 v2 :
   r2a_mem_constant a v1 -∗
@@ -218,7 +232,7 @@ Lemma r2a_mem_constant_excl a v1 v2 :
   False.
 Proof.
   apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id. rewrite -uPred.ownM_op.
-  etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [?/=/gmap_view_frag_op_valid[??]].
+  etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [[?/=/gmap_view_frag_op_valid[??]]?].
   naive_solver.
 Qed.
 
@@ -252,7 +266,7 @@ Lemma r2a_heap_alloc' rh p b:
 Proof.
   move => ?.
   rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
-  rewrite -pair_op_1. apply prod_update; [|done].
+  rewrite -pair_op_1. apply prod_update; [|done]. apply prod_update; [|done].
   by apply gmap_view_alloc.
 Qed.
 
@@ -274,7 +288,7 @@ Lemma r2a_heap_to_shared' p h rh a:
   r2a_heap_auth rh ∗ r2a_heap_constant p h ⊢ |==> r2a_heap_auth (<[p := R2AShared a]> rh) ∗ r2a_heap_shared p a.
 Proof.
   rewrite -!uPred.ownM_op. apply uPred.bupd_ownM_update.
-  rewrite -!pair_op_1. apply prod_update; [|done].
+  rewrite -!pair_op_1. apply prod_update; [|done]. apply prod_update; [|done].
   etrans; [by apply gmap_view_update|].
   apply cmra_update_op; [done|].
   apply gmap_view_frag_persist.
@@ -307,7 +321,7 @@ Lemma r2a_heap_update' p h h' rh :
   r2a_heap_auth rh ∗ r2a_heap_constant p h ⊢ |==> r2a_heap_auth (<[p := R2AConstant h']> rh) ∗ r2a_heap_constant p h'.
 Proof.
   rewrite -!uPred.ownM_op. apply uPred.bupd_ownM_update.
-  rewrite -!pair_op_1. apply prod_update; [|done].
+  rewrite -!pair_op_1. apply prod_update; [|done]. apply prod_update; [|done].
   by apply gmap_view_update.
 Qed.
 
@@ -315,7 +329,7 @@ Lemma r2a_heap_free' h p h' :
   r2a_heap_auth h ∗ r2a_heap_constant p h' ⊢ |==> r2a_heap_auth (delete p h).
 Proof.
   rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
-  rewrite -pair_op_1. apply prod_update; [|done].
+  rewrite -pair_op_1. apply prod_update; [|done]. apply prod_update; [|done].
   by apply gmap_view_delete.
 Qed.
 
@@ -337,7 +351,7 @@ Lemma r2a_heap_lookup' h p h' :
   ⌜h !! p = Some (R2AConstant h')⌝.
 Proof.
   apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id. rewrite -uPred.ownM_op.
-  etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [/gmap_view_both_valid_L??]. naive_solver.
+  etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [[/gmap_view_both_valid_L??]?]. naive_solver.
 Qed.
 
 Lemma r2a_heap_shared_lookup' h p a :
@@ -346,7 +360,7 @@ Lemma r2a_heap_shared_lookup' h p a :
   ⌜h !! p = Some (R2AShared a)⌝.
 Proof.
   apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id. rewrite -uPred.ownM_op.
-  etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [/gmap_view_both_valid_L??]. naive_solver.
+  etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [[/gmap_view_both_valid_L??]?]. naive_solver.
 Qed.
 
 Lemma r2a_heap_lookup_big' m h :
@@ -381,7 +395,7 @@ Lemma r2a_heap_shared_ag p a1 a2 :
   ⌜a1 = a2⌝.
 Proof.
   apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id. rewrite -uPred.ownM_op.
-  etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [/=/gmap_view_frag_op_valid[??]?].
+  etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [[/=/gmap_view_frag_op_valid[??]?]?].
   naive_solver.
 Qed.
 
@@ -403,7 +417,7 @@ Lemma r2a_mem_alloc' a v amem :
 Proof.
   move => ?.
   rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
-  rewrite -pair_op_2. apply prod_update; [done|].
+  rewrite -pair_op_1. rewrite -pair_op_2. apply prod_update; [|done]. apply prod_update; [done|].
   by apply gmap_view_alloc.
 Qed.
 
@@ -423,7 +437,7 @@ Lemma r2a_mem_update' v' a v amem :
   r2a_mem_auth amem ∗ r2a_mem_constant a v ⊢ |==> r2a_mem_auth (<[a := v']> amem) ∗ r2a_mem_constant a v'.
 Proof.
   rewrite -!uPred.ownM_op. apply uPred.bupd_ownM_update.
-  rewrite -!pair_op_2. apply prod_update; [done|].
+  rewrite -!pair_op_1. rewrite -!pair_op_2. apply prod_update; [|done]. apply prod_update; [done|].
   by apply gmap_view_update.
 Qed.
 
@@ -431,7 +445,7 @@ Lemma r2a_mem_delete' a v amem :
   r2a_mem_auth amem ∗ r2a_mem_constant a v ⊢ |==> r2a_mem_auth (delete a amem).
 Proof.
   rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
-  rewrite -pair_op_2. apply prod_update; [done|].
+  rewrite -pair_op_1. rewrite -pair_op_2. apply prod_update; [|done]. apply prod_update; [done|].
   by apply gmap_view_delete.
 Qed.
 
@@ -451,7 +465,7 @@ Lemma r2a_mem_lookup' a v amem :
   ⌜amem !! a = Some v⌝.
 Proof.
   apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id -uPred.ownM_op.
-  etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [?/gmap_view_both_valid_L?]. naive_solver.
+  etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [[?/gmap_view_both_valid_L?]?]. naive_solver.
 Qed.
 
 Lemma r2a_mem_lookup_big' m mem :
@@ -542,11 +556,17 @@ Proof.
   done.
 Qed.
 
+Lemma r2a_f2i_incl_subset f2i1 f2i2 :
+  f2i2 ⊆ f2i1 →
+  r2a_f2i_incl f2i1 -∗ r2a_f2i_incl f2i2.
+Proof. iIntros (?) "[%full [% Hf]]". iExists _. iFrame. iPureIntro. by etrans. Qed.
+
 (** * invariants *)
 Definition r2a_val_rel (iv : val) (av : Z) : uPred rec_to_asmUR :=
   match iv with
   | ValNum z => ⌜av = z⌝
   | ValBool b => ⌜av = bool_to_Z b⌝
+  | ValFn f => r2a_f2i_f f av
   | ValLoc l => ∃ z, ⌜av = (z + l.2)%Z⌝ ∗ r2a_heap_shared l.1 z
   end.
 
@@ -990,16 +1010,18 @@ Proof.
   iPureIntro. split; [|done]. set_solver.
 Qed.
 
-Lemma r2a_res_init mem:
-  satisfiable (r2a_mem_auth mem ∗ ([∗ map] a↦v∈mem, r2a_mem_constant a v) ∗ r2a_heap_inv ∅).
+Lemma r2a_res_init mem f2i:
+  satisfiable (r2a_mem_auth mem ∗ ([∗ map] a↦v∈mem, r2a_mem_constant a v) ∗ r2a_heap_inv ∅ ∗ r2a_f2i_incl f2i).
 Proof.
   apply: (satisfiable_init (r2a_mem_inj (gmap_view_auth (DfracOwn 1) ∅) ⋅
-                              r2a_heap_inj (gmap_view_auth (DfracOwn 1) ∅))).
-  { split => /=; rewrite ?left_id ?right_id; apply gmap_view_auth_valid. }
-  rewrite uPred.ownM_op. iIntros "[Hmem Hh]".
+                            r2a_heap_inj (gmap_view_auth (DfracOwn 1) ∅) ⋅
+                            r2a_f2i_inj f2i)). {
+    split; [split|] => /=; rewrite ?left_id ?right_id; [apply gmap_view_auth_valid..|done]. }
+  rewrite uPred.ownM_op. iIntros "[[Hmem Hh] Hfn]".
   iMod (r2a_mem_alloc_big' with "[$]") as "[? $]"; [solve_map_disjoint|]. rewrite right_id_L. iFrame.
-  iModIntro.
-  iExists _. iFrame. iSplit!. by rewrite r2a_rh_shared_empty.
+  iModIntro. iSplitR "Hfn".
+  - iExists _. iFrame. iSplit!. by rewrite r2a_rh_shared_empty.
+  - iExists _. by iFrame.
 Qed.
 
 Definition r2a_mem_stack_mem (sp : Z) (ssz : N) : gmap Z (option Z) :=
@@ -1149,7 +1171,7 @@ Definition rec_to_asm_post (ins : gset Z) (fns : gset string) (f2i : gmap string
   pp_quant $ λ mem,
   pp_quant $ λ ssz,
   pp_quant $ λ avs,
-  pp_star (r2a_mem_inv (rs !!! "SP") ssz mem ∗ r2a_heap_inv (heap_of_event e.2) ∗
+  pp_star (r2a_mem_inv (rs !!! "SP") ssz mem ∗ r2a_heap_inv (heap_of_event e.2)  ∗
              [∗ list] v;av∈(vals_of_event e.2);avs, r2a_val_rel v av) $
   match e with
   | (i, ERCall f vs h) =>
@@ -1186,7 +1208,7 @@ Definition rec_to_asm_trans (ins : gset Z) (fns : gset string) (f2i : gmap strin
 Definition rec_to_asm (ins : gset Z) (fns : gset string) (f2i : gmap string Z) (mo : gmap Z (option Z))
            (m : module rec_event) : module asm_event :=
   Mod (rec_to_asm_trans ins fns f2i m.(m_trans))
-      (SMFilter, m.(m_init), (PPOutside, R2A [] ∅, uPred_shrink (r2a_mem_map mo)%I)).
+      (SMFilter, m.(m_init), (PPOutside, R2A [] ∅, uPred_shrink (r2a_mem_map mo ∗ r2a_f2i_incl f2i)%I)).
 
 Lemma rec_to_asm_trefines mo m m' ins fns f2i `{!VisNoAng m.(m_trans)}:
   trefines m m' →
@@ -1256,7 +1278,10 @@ Proof.
   have {}Ho2 : (∀ f i, f2i2 !! f = Some i → i ∈ ins1 → f ∈ fns1). {
     move => ?? /Ho2. naive_solver.
   }
-
+  have ? : f2i2 ⊆ f2i1 ∪ f2i2. {
+    apply map_subseteq_spec => g ??. apply lookup_union_Some_raw.
+    destruct (f2i1 !! g) eqn:?; naive_solver.
+  }
   unshelve apply: prepost_link. { exact (λ ips '(R2A cs1 lr1) '(R2A cs2 lr2) '(R2A cs lr) x1 x2 x s ics,
   rec_to_asm_combine_stacks ins1 ins2 ips ics cs cs1 cs2 ∧ s = None ∧
   ((ips = None ∧ (x ⊣⊢ x1 ∗ x2)) ∨
@@ -1265,7 +1290,12 @@ Proof.
   (ips = Some SPRight ∧ x2 = (x ∗ x1)%I
       ∧ map_scramble touched_registers lr lr2)))). }
   { move => ?? [] /=*; naive_solver. }
-  { split!. econs. by rewrite /r2a_mem_map big_sepM_union. }
+  { split!. econs.
+rewrite /r2a_mem_map big_sepM_union //.
+iSplit; iIntros!; iFrame.
+admit.
+admit.
+}
   all: move => [cs1 lr1] [cs2 lr2] [cs lr] x1 x2 x ? ics.
   - move => e ? e' /= ? ??.
     destruct!.
@@ -1360,7 +1390,7 @@ Proof.
       inversion Hstack; repeat case_match; destruct!/= => //.
       r2a_split!.
       1: { iSatMono. iIntros!. iFrame. }
-Qed.
+Admitted.
 
 (** * Proof technique for [rec_to_asm] *)
 Lemma rec_to_asm_proof ins fns ins_dom fns_dom f2i :
@@ -1371,7 +1401,7 @@ Lemma rec_to_asm_proof ins fns ins_dom fns_dom f2i :
       ins !! pc = Some i →
       fns !! f = Some fn →
       f2i !! f = Some pc →
-      satisfiable (r2a_mem_inv (rs !!! "SP") ssz mem ∗ r2a_heap_inv h ∗ r2a_args 0 vs rs ∗ rf ∗ rc) →
+      satisfiable (r2a_mem_inv (rs !!! "SP") ssz mem ∗ r2a_heap_inv h ∗ r2a_f2i_incl f2i ∗ r2a_args 0 vs rs ∗ rf ∗ rc) →
       length vs = length (fd_args fn) →
       map_scramble touched_registers lr rs →
       (* Call *)
@@ -1381,19 +1411,19 @@ Lemma rec_to_asm_proof ins fns ins_dom fns_dom f2i :
           (ins !! pc' = None ↔ fns !! f' = None) →
           f2i !! f' = Some pc' →
           satisfiable (r2a_mem_inv (rs' !!! "SP") ssz' mem' ∗ r2a_heap_inv h' ∗
-                      r2a_args 0 vs rs' ∗ rf' ∗ r') →
+                      r2a_args 0 vs rs' ∗ rc ∗ rf' ∗ r') →
           is_Some (ins !! (rs' !!! "R30")) →
           map_scramble touched_registers lr' rs' →
           (∀ rs'' ssz'' mem'' av v h'' rf'' lr'',
               rs'' !!! "PC" = rs' !!! "R30" →
               satisfiable (r2a_mem_inv (rs'' !!! "SP") ssz'' mem'' ∗ r2a_heap_inv h'' ∗
-                           r2a_val_rel v av ∗ rf'' ∗ r') →
+                           r2a_val_rel v av ∗ rc ∗ rf'' ∗ r') →
               r2a_regs_ret rs'' rs' av →
               map_scramble touched_registers lr'' rs'' →
               AsmState (ARunning []) rs'' mem'' ins ⪯{asm_trans, rec_to_asm_trans ins_dom fns_dom f2i rec_trans, n, true}
                (SMProg, Rec (expr_fill K (expr_fill K' (Val v))) h'' fns, (PPInside, R2A cs lr'', uPred_shrink rf''))) →
           AsmState (ARunning []) rs' mem' ins ⪯{asm_trans, rec_to_asm_trans ins_dom fns_dom f2i rec_trans, n, true}
-               (SMProg, Rec (expr_fill K (expr_fill K' (rec.Call f' es))) h' fns, (PPInside, R2A cs lr', uPred_shrink rf'))) →
+               (SMProg, Rec (expr_fill K (expr_fill K' (rec.Call (Val (ValFn f')) es))) h' fns, (PPInside, R2A cs lr', uPred_shrink rf'))) →
       (* Return *)
       (∀ rs' mem' ssz' av v h' lr' rf',
           rs' !!! "PC" = rs !!! "R30" →
@@ -1416,14 +1446,14 @@ Proof.
       ∃ K rr1 rr2,
         i2 = AWaiting ∧ ins'2 = ins ∧ e2 = expr_fill K (Waiting (bool_decide (d ≠ 0%nat))) ∧ fns'2 = fns ∧
         t2 = PPOutside ∧ σfs2 = SMFilter ∧ (d = 0%nat ↔ cs2 = []) ∧
-        r1 = uPred_shrink rr1 ∧ r2 = uPred_shrink rr2 ∧
+        r1 = uPred_shrink rr1 ∧ r2 = uPred_shrink rr2 ∧ (rr2 ⊢ r2a_f2i_incl f2i) ∧
       if b then
         e2 = e1 ∧
         cs2 = cs1 ∧
         rr1 = rr2
       else
         True
-                 ). }
+  ). }
   { simpl. exact (λ  '(AsmState i1 rs1 mem1 ins'1) '(σfs1, Rec e1 h1 fns'1, (t1, R2A cs1 lr1, r1))
                      '(AsmState i2 rs2 mem2 ins'2) '(σfs2, Rec e2 h2 fns'2, (t2, R2A cs2 lr2, r2)),
     ∃ i K av v pc lr' ssz rr1 rr2,
@@ -1444,7 +1474,7 @@ Proof.
 ). }
   { move => ??? *. destruct!. repeat case_match; naive_solver. }
   { move => /= *. destruct!. repeat case_match. naive_solver. }
-  { move => /=. eexists []. split!. }
+  { move => /=. eexists []. split!. iIntros "[_ $]". }
   move => /= n [i rs mem ins'] [[?[???]][[?[cs ?]]r]] d ? ? Hstay Hcall Hret. destruct!/=.
   tstep_i => ??????.
   go_s. split!.
@@ -1462,7 +1492,7 @@ Proof.
          f2i !! f = Some pc ∧
          ins'1 = ins ∧
          fns'1 = fns ∧
-         satisfiable (r2a_mem_inv (rs1 !!! "SP") ssz mem1 ∗ r2a_heap_inv h1 ∗
+         satisfiable (r2a_mem_inv (rs1 !!! "SP") ssz mem1 ∗ r2a_heap_inv h1 ∗ r2a_f2i_incl f2i ∗
                                    r2a_args 0 vs rs1 ∗ r' ∗ rr1) ∧
          i1 = ARunning [] ∧
          e1 = expr_fill K' (AllocA fn.(fd_vars) $ subst_l fn.(fd_args) vs fn.(fd_body)) ∧
@@ -1472,7 +1502,7 @@ Proof.
          σfs1 = SMProg ∧
          (∀ rs' mem' ssz' av v h' lr' rf',
           rs' !!! "PC" = rs1 !!! "R30" →
-          satisfiable (r2a_mem_inv (rs' !!! "SP") ssz' mem' ∗ r2a_heap_inv h' ∗
+          satisfiable (r2a_mem_inv (rs' !!! "SP") ssz' mem' ∗ r2a_heap_inv h' ∗ r2a_f2i_incl f2i ∗
                       r2a_val_rel v av ∗ r' ∗ rf') →
           r2a_regs_ret rs' rs1 av  →
           map_scramble touched_registers lr' rs' →
@@ -1480,11 +1510,13 @@ Proof.
                (SMProg, Rec (expr_fill K' (Val v)) h' fns, (PPInside, R2A cs1 lr', uPred_shrink rf'))) ). }
     { eexists (ReturnExtCtx _:: _). split! => //. {
         iSatMono. iIntros!. iFrame.
-        iDestruct (r2a_args_intro with "[$]") as "$"; [done|]. iAccu. }
+        iDestruct (r2a_args_intro with "[$]") as "$"; [done|].
+        iSplit; [|iAccu]. rename select (_ ⊢ _) into Hrr2. by iApply Hrr2. }
       iSatClear. move => *.
       tstep_s.
       tstep_i => ??. simplify_map_eq'.
-      tstep_s. split!. { instantiate (1:=[_]). done. } { iSatMono. iIntros!. iFrame. iAccu. }
+      tstep_s. split!. { instantiate (1:=[_]). done. } {
+        iSatMono. iIntros!. iFrame. iDestruct select (r2a_f2i_incl _) as "_". iAccu. }
       apply Hstay; [done|]. by split!.
     }
     { move => ?? [????] [[?[???]][[?[??]]?]] ??. destruct!. split!; [done..|].
@@ -1492,7 +1524,8 @@ Proof.
     iSatClear.
     move => n' /= Hn' IH [i' rs' mem' ins'] [[?[???]][[?[??]]?]] ?. destruct!.
     apply: Hf; [try done..| |].
-    { iSatMono. iIntros!. iFrame. iAccu. }
+    { iSatMono. iIntros!. iDestruct select (r2a_f2i_incl _) as "#Hf2i".
+      iFrame "∗#". iDestruct "Hf2i" as "-#Hf2i". iAccu. }
     + iSatClear.
       move => K'' rs'' mem'' f'' es vs'' pc'' ssz'' h'' lr rf'' r'' Hall ?????? Hret'.
       have ?: es = Val <$> vs''. { clear -Hall. elim: Hall; naive_solver. } subst.
@@ -1513,7 +1546,7 @@ Proof.
         iDestruct (r2a_args_elim with "[$]") as (??) "?". iSatStop.
         r2a_split!. { by apply not_elem_of_dom. } { by apply elem_of_dom. }
         { iSatMono. iIntros!. iFrame. iAccu. }
-        apply Hcall. { etrans; [|done]. apply o_le_S. } { by split!. }
+        apply Hcall. { etrans; [|done]. apply o_le_S. } { split!; [done|]. by iIntros!. }
         iSatClear.
         move => [i2 rs2 mem2 ins'2] [[?[???]][[?[??]]?]].
         move => [i3 rs3 mem3 ins'3] [[?[???]][[?[??]]?]] ??. destruct!.
@@ -1523,7 +1556,7 @@ Proof.
         eapply Hret' => //.
         iSatMono. iIntros!. iFrame.
     + iSatClear. move => *.
-      apply: H15 => //.
+      apply: H16 => //.
       iSatMono. iIntros!. iFrame.
   - move => *.
     tstep_s. simplify_eq. destruct d; [exfalso; naive_solver|]. split!.

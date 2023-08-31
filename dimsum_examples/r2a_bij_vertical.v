@@ -473,92 +473,102 @@ Ltac r2a_mem_transfer Hfrom Hto :=
 (** * pure versions *)
 (** ** rec to asm *)
 (** *** r2a_val_rel_pure *)
-Definition r2a_val_rel_pure (rh : gmap prov prov) (iv : val) (av : Z) : Prop :=
+Definition r2a_val_rel_pure (f2i : gmap string Z) (rh : gmap prov prov) (iv : val) (av : Z) : Prop :=
   match iv with
   | ValNum z => av = z
   | ValBool b => av = bool_to_Z b
+  | ValFn f => f2i !! f = Some av
   | ValLoc l => ∃ z, av = (z + l.2)%Z ∧ rh !! l.1 = Some z
   end.
 
-Lemma r2a_val_rel_to_pure v av rh :
+Lemma r2a_val_rel_to_pure f2i v av rh :
+  r2a_f2i_full f2i -∗
   r2a_heap_auth rh -∗
   r2a_val_rel v av -∗
-  ⌜r2a_val_rel_pure (r2a_rh_shared rh) v av⌝.
+  ⌜r2a_val_rel_pure f2i (r2a_rh_shared rh) v av⌝.
 Proof.
-  iIntros "Hh Hv". destruct v => //=. iDestruct!.
-  iDestruct (r2a_heap_shared_lookup' with "[$] [$]") as %?.
-  iPureIntro. setoid_rewrite r2a_ih_shared_Some. naive_solver.
-Qed.
+  iIntros "Hf2i Hh Hv". destruct v => //=.
+  - admit.
+  - iDestruct!.
+    iDestruct (r2a_heap_shared_lookup' with "[$] [$]") as %?.
+    iPureIntro. setoid_rewrite r2a_ih_shared_Some. naive_solver.
+Admitted.
 
-Lemma r2a_val_rel_of_pure rh v av :
-  r2a_val_rel_pure rh v av →
+Lemma r2a_val_rel_of_pure f2i rh v av :
+  r2a_val_rel_pure f2i rh v av →
+  r2a_f2i_incl f2i -∗
   ([∗ map] p↦a ∈ rh, r2a_heap_shared p a) -∗
   r2a_val_rel v av.
 Proof.
-  iIntros (Hv) "Hsh". destruct v => //=. simplify_eq/=. destruct!.
-  iSplit!; [done|]. by iApply (big_sepM_lookup with "[$]").
-Qed.
+  iIntros (Hv) "Hf2i Hsh". destruct v => //=; destruct!/=.
+  - admit.
+  - iSplit!; [done|]. by iApply (big_sepM_lookup with "[$]").
+Admitted.
 
-Lemma r2a_val_rel_pure_through_bij iv av rh1 rh2 bij:
-  r2a_val_rel_pure rh1 iv av →
+Lemma r2a_val_rel_pure_through_bij f2i iv av rh1 rh2 bij:
+  r2a_val_rel_pure f2i rh1 iv av →
   rh1 = r2a_combine_bij rh2 bij →
-  r2a_val_rel_pure rh2 (val_through_bij bij iv) av.
+  r2a_val_rel_pure f2i rh2 (val_through_bij bij iv) av.
 Proof.
   move => Hp ?. subst. destruct iv => //; simplify_eq/=.
   move: Hp => [? [? /r2a_combine_bij_lookup_Some[?[??]]]]. simplify_map_eq.
   naive_solver.
 Qed.
 
-Lemma r2a_val_rel_big_to_pure vs avs rh :
+Lemma r2a_val_rel_big_to_pure f2i vs avs rh :
+  r2a_f2i_full f2i -∗
   r2a_heap_auth rh -∗
   ([∗ list] v;av∈vs;avs, r2a_val_rel v av) -∗
-  ⌜Forall2 (r2a_val_rel_pure (r2a_rh_shared rh)) vs avs⌝.
+  ⌜Forall2 (r2a_val_rel_pure f2i (r2a_rh_shared rh)) vs avs⌝.
 Proof.
-  iIntros "Hh Hv".
+  iIntros "Hf2i Hh Hv".
   iDestruct (big_sepL2_length with "[$]") as %?.
   iApply bi.pure_mono; [by apply Forall2_same_length_lookup_2|].
-  iIntros (?????). iApply (r2a_val_rel_to_pure with "[$]").
+  iIntros (?????). iApply (r2a_val_rel_to_pure with "[$] [$]").
   by iApply (big_sepL2_lookup with "Hv").
 Qed.
 
-Lemma r2a_val_rel_big_of_pure rh vs avs :
-  Forall2 (r2a_val_rel_pure rh) vs avs →
+Lemma r2a_val_rel_big_of_pure f2i rh vs avs :
+  Forall2 (r2a_val_rel_pure f2i rh) vs avs →
+  r2a_f2i_incl f2i -∗
   ([∗ map] p↦a ∈ rh, r2a_heap_shared p a) -∗
   ([∗ list] v;av∈vs;avs, r2a_val_rel v av).
 Proof.
-  iIntros (Hall) "#Hsh". iInduction Hall as [] "IH"; [done|].
+  iIntros (Hall) "#Hf2i #Hsh". iInduction Hall as [] "IH"; [done|].
   iFrame "#". by iApply r2a_val_rel_of_pure.
 Qed.
 
-Lemma r2a_val_rel_big_through_bij vs avs rh1 rh2 bij :
-  Forall2 (r2a_val_rel_pure rh1) vs avs →
+Lemma r2a_val_rel_big_through_bij f2i vs avs rh1 rh2 bij :
+  Forall2 (r2a_val_rel_pure f2i rh1) vs avs →
   rh1 = r2a_combine_bij rh2 bij →
+  r2a_f2i_incl f2i -∗
   ([∗ map] p↦a ∈ rh2, r2a_heap_shared p a) -∗
   [∗ list] v;av ∈ (val_through_bij bij <$> vs);avs, r2a_val_rel v av.
 Proof.
-  iIntros (Hall ?) "#Hih2". subst.
+  iIntros (Hall ?) "#Hf2i #Hih2". subst.
   rewrite big_sepL2_fmap_l. iApply big_sepL2_intro. { by apply: Forall2_length. }
   iIntros "!>" (? v ???).
-  iApply (r2a_val_rel_of_pure with "Hih2"). apply: r2a_val_rel_pure_through_bij; [|done].
+  iApply (r2a_val_rel_of_pure with "Hf2i Hih2"). apply: r2a_val_rel_pure_through_bij; [|done].
   by apply: Forall2_lookup_lr.
 Qed.
 
 (** *** r2a_heap_shared_agree_pure *)
-Definition r2a_heap_shared_agree_pure (h : gmap loc val) (rh : gmap prov Z) (mem : gmap Z (option Z)) : Prop :=
+Definition r2a_heap_shared_agree_pure (f2i : gmap string Z) (h : gmap loc val) (rh : gmap prov Z) (mem : gmap Z (option Z)) : Prop :=
   ∃ m2l : gmap Z loc,
   map_Forall (λ l v,
                if rh !! l.1 is Some a then
-                 ∃ av, r2a_val_rel_pure rh v av ∧ mem !! (a + l.2) = Some (Some av) ∧ m2l !! (a + l.2) = Some l
+                 ∃ av, r2a_val_rel_pure f2i rh v av ∧ mem !! (a + l.2) = Some (Some av) ∧ m2l !! (a + l.2) = Some l
                else True
   ) h.
 
 
-Lemma r2a_heap_shared_agree_to_pure h rh :
+Lemma r2a_heap_shared_agree_to_pure f2i h rh :
+  r2a_f2i_full f2i -∗
   r2a_heap_shared_agree h rh -∗
   r2a_heap_auth rh -∗
-  ∃ m, ⌜r2a_heap_shared_agree_pure h (r2a_rh_shared rh) m⌝ ∗ r2a_mem_map m ∗ r2a_heap_auth rh.
+  ∃ m, ⌜r2a_heap_shared_agree_pure f2i h (r2a_rh_shared rh) m⌝ ∗ r2a_mem_map m ∗ r2a_heap_auth rh.
 Proof.
-  iIntros "Hag Hauth".
+  iIntros "#Hf2i Hag Hauth".
   iInduction h as [|l v h ?] "IH" using map_ind.
   { iExists ∅. iFrame. rewrite /r2a_mem_map big_sepM_empty. iSplit!. eexists ∅ => ?? //. }
   rewrite /r2a_heap_shared_agree big_sepM_insert //. iDestruct "Hag" as "[??]".
@@ -568,7 +578,7 @@ Proof.
     move => ?? /lookup_insert_Some[[??]|[??]]; simplify_option_eq => //. by apply Hag.
   }
   move: Hl => /r2a_ih_shared_Some Hl. simplify_option_eq.
-  iDestruct!. iDestruct (r2a_val_rel_to_pure with "[$] [$]") as %?.
+  iDestruct!. iDestruct (r2a_val_rel_to_pure with "[$] [$] [$]") as %?.
   iDestruct (r2a_mem_map_constant_excl with "[$] [$]") as %?.
   iExists (<[a + l.2 := Some av]>m). rewrite /r2a_mem_map big_sepM_insert //. iFrame. iPureIntro.
   eexists (<[a + l.2 := l]>m2l). move => ?? /lookup_insert_Some[[??]|[??]]; simplify_eq.
@@ -577,13 +587,14 @@ Proof.
     rewrite !lookup_insert_ne; [|move => Heq; rewrite ->Heq in *; naive_solver..]. naive_solver.
 Qed.
 
-Lemma r2a_heap_shared_agree_of_pure rh h m :
-  r2a_heap_shared_agree_pure h (r2a_rh_shared rh) m →
+Lemma r2a_heap_shared_agree_of_pure f2i rh h m :
+  r2a_heap_shared_agree_pure f2i h (r2a_rh_shared rh) m →
+  r2a_f2i_incl f2i -∗
   ([∗ map] p↦a ∈ r2a_rh_shared rh, r2a_heap_shared p a) -∗
   r2a_mem_map m -∗
   r2a_heap_shared_agree h rh.
 Proof.
-  iIntros (Hag) "#Hsh Hm".
+  iIntros (Hag) "#Hf2i #Hsh Hm".
   iInduction h as [|l v h Hl] "IH" using map_ind forall (m Hag). { by iApply big_sepM_empty. }
   move: Hag => [m2l /map_Forall_insert [//|? Hag]].
   iApply big_sepM_insert; [done|].
@@ -601,19 +612,19 @@ Proof.
     + iApply ("IH" with "[%] Hm"). by eexists _.
 Qed.
 
-Lemma r2a_heap_shared_agree_pure_lookup l v rh h m :
-  r2a_heap_shared_agree_pure h rh m →
+Lemma r2a_heap_shared_agree_pure_lookup f2i l v rh h m :
+  r2a_heap_shared_agree_pure f2i h rh m →
   h !! l = Some v →
   is_Some (rh !! l.1) →
-  ∃ a, r2a_val_rel_pure rh v a.
+  ∃ a, r2a_val_rel_pure f2i rh v a.
 Proof. move => [? Hag] Hl [??]. have := Hag _ _ ltac:(done). simplify_option_eq. naive_solver. Qed.
 
-Lemma r2a_heap_shared_agree_pure_impl f rh1 h1 rh2 h2 m :
-  r2a_heap_shared_agree_pure h1 rh1 m →
+Lemma r2a_heap_shared_agree_pure_impl f f2i rh1 h1 rh2 h2 m :
+  r2a_heap_shared_agree_pure f2i h1 rh1 m →
   (∀ l2 v2 a, h2 !! l2 = Some v2 → rh2 !! l2.1 = Some a →
     ∃ p1 v1, f p1 = Some l2.1 ∧ h1 !! (p1, l2.2) = Some v1 ∧ rh1 !! p1 = Some a ∧
-               (∀ av, r2a_val_rel_pure rh1 v1 av → r2a_val_rel_pure rh2 v2 av)) →
-  r2a_heap_shared_agree_pure h2 rh2 m.
+               (∀ av, r2a_val_rel_pure f2i rh1 v1 av → r2a_val_rel_pure f2i rh2 v2 av)) →
+  r2a_heap_shared_agree_pure f2i h2 rh2 m.
 Proof.
   move => [m2l Hh] Himpl.
   eexists (omap (λ x, (λ y, (y, x.2)) <$> f x.1) m2l). move => l2 v2 ?. case_match => //.
@@ -629,6 +640,7 @@ Definition val_in_bij_pure (bij : heap_bij) (v1 v2 : val) : Prop :=
   match v1, v2 with
   | ValNum n1, ValNum n2 => n1 = n2
   | ValBool b1, ValBool b2 => b1 = b2
+  | ValFn f1, ValFn f2 => f1 = f2
   | ValLoc l1, ValLoc l2 => l1.2 = l2.2 ∧ hb_bij bij !! l2.1 = Some (HBShared l1.1)
   | _, _ => False
   end.
@@ -699,8 +711,8 @@ Proof.
 Qed.
 
 (** ** combining *)
-Lemma val_in_through_bij bij v av rh1 rh:
-  r2a_val_rel_pure rh1 v av →
+Lemma val_in_through_bij f2i bij v av rh1 rh:
+  r2a_val_rel_pure f2i rh1 v av →
   rh1 = r2a_combine_bij rh bij →
   ([∗ map] p2↦p1 ∈ hb_shared bij, heap_bij_shared p1 p2) -∗
   val_in_bij (val_through_bij bij v) v.
@@ -711,20 +723,20 @@ Proof.
   by apply hb_shared_lookup_Some.
 Qed.
 
-Lemma r2a_val_rel_pure_combine rh bij v1 v2 av :
-  r2a_val_rel_pure rh v1 av →
+Lemma r2a_val_rel_pure_combine f2i rh bij v1 v2 av :
+  r2a_val_rel_pure f2i rh v1 av →
   val_in_bij_pure bij v1 v2 →
-  r2a_val_rel_pure (r2a_combine_bij rh bij) v2 av.
+  r2a_val_rel_pure f2i (r2a_combine_bij rh bij) v2 av.
 Proof.
   move => ??. destruct v1, v2; simplify_eq/= => //. destruct!.
   split!; [by f_equal|]. apply r2a_combine_bij_lookup_Some. naive_solver.
 Qed.
 
-Lemma r2a_heap_shared_agree_pure_combine rh bij h1 h2 h m :
-  r2a_heap_shared_agree_pure h1 rh m →
+Lemma r2a_heap_shared_agree_pure_combine f2i rh bij h1 h2 h m :
+  r2a_heap_shared_agree_pure f2i h1 rh m →
   heap_in_bij_pure bij h2 h →
   (∀ l v, h_heap h2 !! l = Some v → l.1 ∈ hb_shared_i bij → h1 !! l = Some v) →
-  r2a_heap_shared_agree_pure (h_heap h) (r2a_combine_bij rh bij) m.
+  r2a_heap_shared_agree_pure f2i (h_heap h) (r2a_combine_bij rh bij) m.
 Proof.
   move => ? Hbij Hincl.
   apply: (r2a_heap_shared_agree_pure_impl (λ p, hb_shared_rev bij !! p)); [done|].
@@ -754,7 +766,7 @@ Proof.
           hob = r2a_combine_priv (r2a_rh_shared rha) bijb hb ∖ ho ∧
           (P ⊣⊢ r2a_mem_map mo ∗ r2a_mem_map mh ∗
              ([∗ map] p↦a ∈ r2a_combine_bij (r2a_rh_shared rha) bijb, r2a_heap_shared p a) ∗
-             ([∗ map] p↦h ∈ ho, r2a_heap_constant p h)) ∧
+             ([∗ map] p↦h ∈ ho, r2a_heap_constant p h) ∗ r2a_f2i_incl f2i) ∧
           satisfiable (Pa ∗ r2a_mem_auth mem' ∗ r2a_heap_auth rha ∗
                           r2a_mem_map moa ∗
                           ([∗ map]p↦a ∈ r2a_rh_shared rha, r2a_heap_shared p a)) ∧
@@ -769,7 +781,7 @@ Proof.
           heap_preserved (r2a_rh_constant rha) hprev ∧
           heap_preserved (hb_priv_i bijb) hprev ∧
           r2a_combine_priv_shared (r2a_rh_shared rha) bijb hb ⊆ ho ∧
-          r2a_heap_shared_agree_pure (filter (λ x, x.1.1 ∉ hb_shared_i bijb) (h_heap hprev))
+          r2a_heap_shared_agree_pure f2i (filter (λ x, x.1.1 ∉ hb_shared_i bijb) (h_heap hprev))
                                      (r2a_rh_shared rha) mh
         else
           ∃ rha bijb rh hob ho hb,
@@ -789,7 +801,7 @@ Proof.
   { simpl. split_and!; [done..|].
     eexists moinit, ∅, moinit, ∅, ∅, ∅, ∅, ∅, ∅, ∅. split!.
     - by rewrite map_difference_diag.
-    - iSplit; iIntros!; [|done]. iFrame.
+    - iSplit; iIntros!; iFrame.
       rewrite /r2a_mem_map r2a_rh_shared_empty /r2a_combine_bij omap_empty !big_sepM_empty. done.
     - apply: satisfiable_mono; [apply r2a_res_init|]. iIntros!. iFrame.
       rewrite r2a_rh_shared_empty /r2a_mem_map !big_sepM_empty. iSplit; [|done].
@@ -815,8 +827,9 @@ Proof.
     iDestruct select (r2a_heap_inv _) as (rh ??) "[Hsh [Hhag Hh]]".
     iDestruct (r2a_heap_shared_lookup_big' (r2a_combine_bij _ _) with "[$] [$]") as %?.
     iDestruct (r2a_heap_lookup_big' with "[$] [$]") as %?.
-    iDestruct (r2a_heap_shared_agree_to_pure with "[$] [$]") as (??) "[? ?]".
-    iDestruct (r2a_val_rel_big_to_pure with "[$] [$]") as %Hvs.
+    iDestruct select (r2a_f2i_incl _) as (f2ifull ?) "#Hf2i".
+    iDestruct (r2a_heap_shared_agree_to_pure with "[$] [$] [$]") as (??) "[? ?]".
+    iDestruct (r2a_val_rel_big_to_pure with "[$] [$] [$]") as %Hvs.
     iSatStop HP'.
 
     have [| | | | | |rh' [bijb' ?]]:= r2a_combine_extend (h_provs hprev) rha bijb rh ho hb => //.

@@ -64,7 +64,7 @@ Definition rec_add_client : fndef := {|
   fd_vars := [("tmp", 1)];
   fd_body := (LetE "_" (Store (Var "tmp") (Val 1))
              (LetE "v" (Load (Var "tmp"))
-             (rec.Call "add" [Val 1; Var "v"])));
+             (rec.Call (Val (ValFn "add")) [Val 1; Var "v"])));
   fd_static := I
 |}.
 
@@ -141,7 +141,7 @@ Proof.
   tstep_s.
   tstep_s => ???. simplify_map_eq. rewrite heap_alloc_h_lookup; [|done|lia] => ?; simplify_map_eq.
   tstep_s.
-  change (FreeA [(heap_fresh ∅ h, 1)] (rec.Call "add" [Val 1; Val 1])) with (expr_fill [FreeACtx [(heap_fresh ∅ h, 1)]] (rec.Call "add" [Val 1; Val 1])).
+  change (FreeA [(heap_fresh ∅ h, 1)] (rec.Call (Val (ValFn "add")) [Val 1; Val 1])) with (expr_fill [FreeACtx [(heap_fresh ∅ h, 1)]] (rec.Call (Val (ValFn "add")) [Val 1; Val 1])).
   apply: Hcall. { repeat econs. } { by simplify_map_eq. } { simplify_map_eq'. set_solver. } { by simplify_map_eq'. }
   { iSatMonoBupd.
     iMod (r2a_mem_alloc with "[$]") as (?) "[? Hp]"; [done|done|].

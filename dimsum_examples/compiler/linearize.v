@@ -53,10 +53,11 @@ Fixpoint pass (e : static_expr) : M var_val :=
       v ← fresh_var;
       cappend (λ x, LLetE v (LStore v1 v2) x);;
       mret $ VVar v
-  | SCall f args =>
+  | SCall e1 args =>
+      v1 ← pass e1;
       vs ← cmap (pass <$> args) 0 (λ _ a, a);
       v ← fresh_var;
-      cappend (λ x, LLetE v (LCall f vs) x);;
+      cappend (λ x, LLetE v (LCall v1 vs) x);;
       mret $ VVar v
   | SLetE v e1 e2 =>
       v1 ← pass e1;
@@ -77,7 +78,7 @@ Fixpoint pass (e : static_expr) : M var_val :=
 Definition test_fn_1 : fndef := {|
   fd_args := ["x"];
   fd_vars := [];
-  fd_body := (BinOp (BinOp (Var "x") OffsetOp (Val 2)) AddOp (Call "f" [Load (Var "x"); Val 1]));
+  fd_body := (BinOp (BinOp (Var "x") OffsetOp (Val 2)) AddOp (Call (Val (ValFn "f")) [Load (Var "x"); Val 1]));
   fd_static := I;
 |}.
 
@@ -87,7 +88,7 @@ Lemma test_1 :
   CResult 4%N (λ x,
        LLetE "$0$" (LBinOp (VVar "x") OffsetOp (VVal (StaticValNum 2)))
          (LLetE "$1$" (LLoad (VVar "x"))
-            (LLetE "$2$" (LCall "f" [VVar "$1$"; VVal (StaticValNum 1)])
+            (LLetE "$2$" (LCall (VVal (StaticValFn "f")) [VVar "$1$"; VVal (StaticValNum 1)])
                (LLetE "$3$" (LBinOp (VVar "$0$") AddOp (VVar "$2$")) x)))) (CSuccess (VVar "$3$")).
 Proof. vm_compute. match goal with |- ?x = ?x => exact: eq_refl end. Abort.
 
@@ -142,8 +143,8 @@ Proof.
   all: try pose proof (IHes3 _ _ _ _ ltac:(done)).
   all: try pose proof (IHes _ _ _ _ ltac:(done)).
   all: try lia.
-  move: 0%nat H0 => m.
-  elim: H s x x0 x1 m. { move => *; simplify_crun_eq; lia. }
+  etrans; [done|]. move: 0%nat H1 => m. clear H0 H2.
+  elim: H x x3 x4 x5 m. { move => *; simplify_crun_eq; lia. }
   move => ?? IH1 ? IH2 *. simplify_crun_eq. move: H => /IH1. move: H0 => /IH2. lia.
 Qed.
 
@@ -290,16 +291,23 @@ Proof.
     * move => ? /Hvsi'' [|[?|?]]; [ |set_unfold; naive_solver lia..].
       move => /lookup_insert_is_Some'[|]; [set_solver|].
       move => /Hvsi'; set_unfold; naive_solver lia.
-  - move => f args IH es s s' ei ei' v vsi vss h Ks [?] Hrun Hsub Hnodup Htmp Hvsi1 Hvsi2 Hcont. subst.
-    simplify_eq/=. move: Hrun => /cbind_success[s''[p''[v''[?[Hrun ?]]]]]. prepare_goal.
+  - move => e args IHe IH es s s' ei ei' v vsi vss h Ks [?] Hrun Hsub /=/NoDup_app [Hnodupe [Hnotin Hnodupargs]] Htmp Hvsi1 Hvsi2 Hcont.
+    simplify_eq/=.
+    move: Hrun => /cbind_success[s0'[?[?[?[Hr1 [Hrun ?]]]]]].
+    move: Hrun => /cbind_success[s''[p''[v''[?[Hrun ?]]]]].
+    prepare_goal. rename select (s ≤ s0')%N into Hs0'.
+    apply: IHe; [done|done|done|set_solver|set_solver|done|].
+    move => {}h ? vsi' _ Hvsi'v Hvsisub Hvsi'/=.
     move: 0%nat Hrun => m Hrun.
     change (v'') with ([] ++ v''). move Heqvr'': ([]) => vr''.
     change (subst_map vss <$> (static_expr_to_expr <$> args)) with ((Val <$> []) ++ (subst_map vss <$> (static_expr_to_expr <$> args))). move Heqva'': ([]) => va''.
-    have Hall : Forall2 (λ vr va, lookup_var_val vsi vr = Some va) vr'' va'' by subst; constructor.
-    clear Heqvr'' Heqva''.
-    elim: IH m p'' v'' s s'' vsi vr'' va'' h Hrun Hsub Hvsi1 Hvsi2 Hnodup Htmp Hall Hcont.
-    + move => /= ??????????????? /lookup_var_val_to_expr_fmap Hall Hcont. simplify_crun_eq. rewrite !app_nil_r.
-      rewrite Hall.
+    have Hall : Forall2 (λ vr va, lookup_var_val vsi' vr = Some va) vr'' va'' by subst; constructor.
+    clear Heqvr'' Heqva''. clear Hr1.
+    elim: IH m p'' v'' s s0' s'' vsi' vr'' va'' h Hrun Hs0' Hsub Hvsi'v Hvsisub Hvsi' Hvsi2 Hnodupargs Htmp Hall Hcont.
+    + move => /= ??????????????????? /lookup_var_val_to_expr_fmap Hall Hcont. simplify_crun_eq.
+      rewrite !app_nil_r. rewrite Hall.
+      erewrite lookup_var_val_to_expr; [|done].
+      tstep_s => ??. subst.
       apply: Hcall; [done| | |done|done|..].
       { apply Forall2_fmap_l. apply Forall_Forall2_diag. by apply Forall_true. }
       { apply Forall2_fmap_l. apply Forall_Forall2_diag. by apply Forall_true. }
@@ -308,10 +316,22 @@ Proof.
       apply Hcont.
       * lia.
       * by simplify_map_eq.
-      * apply insert_subseteq. apply eq_None_not_Some; naive_solver lia.
-      * move => ? /lookup_insert_is_Some'[|]; naive_solver lia.
-    + csimpl. move => ?? IHe _ IH ???????????????? Hcont. prepare_goal.
-      eapply IHe; [ |done|done|done|set_solver|set_solver|done|].
+      * etrans; [done|]. apply insert_subseteq.
+        admit.
+(* apply eq_None_not_Some; naive_solver lia. *)
+      *  admit.
+(* move => ? /lookup_insert_is_Some'[|]; naive_solver lia. *)
+    + csimpl. move => ?? IHe _ IH ???????????????????? Hcont. prepare_goal.
+      eapply IHe; [ |done| |done| | | |].
+      { constructor. by instantiate (2:=(CallCtx _ _ _) ::_). }
+      { by etrans. }
+      { set_solver. }
+
+fail.
+
+      { set_solver. }
+      { apply rec_expr_fill_expr_fill. eapply rec_expr_fill_Call. apply _.
+apply _. ; [ |done|done|done| | | |].
       { constructor. by instantiate (1:=(CallCtx _ _ _) ::_). }
       move => ?????? Hvsi /=. rewrite !cons_middle !app_assoc -fmap_snoc.
       eapply IH.

@@ -50,9 +50,10 @@ Fixpoint pass (ren : gmap string string) (e : static_expr) (s : N) : (N * static
       let p1 := pass ren e1 s in
       let p2 := pass ren e2 p1.1 in
       (p2.1, SStore p1.2 p2.2)
-  | SCall f args =>
-      let p1 := state_bind (pass ren <$> args) s in
-      (p1.1, SCall f p1.2)
+  | SCall e args =>
+      let p1 := pass ren e s in
+      let p2 := state_bind (pass ren <$> args) p1.1 in
+      (p2.1, SCall p1.2 p2.2)
   | SLetE v e1 e2 =>
       let p1 := pass ren e1 (s + 1) in
       let p2 := pass (<[v := ssa_var v s]> ren) e2 p1.1 in
@@ -85,7 +86,7 @@ Lemma pass_state ren s e :
 Proof.
   revert ren s. induction e => //= ren s; try lia.
   all: rewrite ?IHe1 ?IHe2 ?IHe3 ?app_length; try lia.
-  move: ren s.
+  rewrite IHe Nat2N.inj_add N.add_assoc. move: ren (s + _)%N.
   revert select (Forall _ _). elim; csimpl; [lia|].
   move => ?? IH1 _ IH2 ??. rewrite IH1 IH2 app_length. lia.
 Qed.
@@ -101,9 +102,11 @@ Proof.
               | |- _ ++ _ = _ ++ _ => f_equal
               | |- imap _ _ = imap _ _ => apply imap_ext => * /=
               | |- ssa_var _ _ = ssa_var _ _ => f_equal
-              end; try lia.
-  revert s. revert select (Forall _ _).
-  elim => //; csimpl => ?? IH1 _ IH2 s.
+              end; try lia; try done.
+  (* setoid_rewrite does not work in the argument of imap so we have to use this workaround *)
+  erewrite imap_ext. 2: { move => ?? _. rewrite Nat2N.inj_add N.add_assoc. done. }
+  move: (s + _)%N. revert select (Forall _ _).
+  elim => //; csimpl => ?? IH1 _ IH2 {}s.
   rewrite imap_app IH2 pass_state. f_equal; [done|].
   apply imap_ext => * /=. f_equal. lia.
 Qed.
@@ -149,19 +152,26 @@ Proof.
       apply lookup_insert_Some. right. split!. move => ?. subst. move: Hvsi.
       apply: eq_None_ne_Some_1. naive_solver lia.
     + move => ? s'. rewrite !pass_state => ?. apply lookup_insert_None. naive_solver lia.
-  - rewrite -(app_nil_l (subst_map vsi <$> _)) -(app_nil_l (subst_map vss <$> _)).
-    change ([]) with (Val <$> []). move: [] => vs. move: s vs h Hvars.
+  - apply: IHes'; [done|done|] => /= {}h ?.
+    rewrite pass_state. move Heq: (s + _)%N => s0'. have Hs0': (s ≤ s0')%N by lia. clear Heq.
+    rewrite -(app_nil_l (subst_map vsi <$> _)) -(app_nil_l (subst_map vss <$> _)).
+    change ([]) with (Val <$> []). move: [] => vs. move: s0' vs h Hs0' Hvars.
     revert select (Forall _ _). elim.
-    + move => ???? /=. rewrite app_nil_r.
+    + move => ????? /=. rewrite app_nil_r.
+      tstep_s => ? ->.
       apply: Hcall; [done| | |done|done|done].
       { apply Forall2_fmap_l. apply Forall_Forall2_diag. by apply Forall_true. }
       { apply Forall2_fmap_l. apply Forall_Forall2_diag. by apply Forall_true. }
-    + move => ?? IH _ IH2 s vs h Hvars. csimpl.
-      eapply IH; [| |done|done|] => /=.
-      { constructor. by instantiate (1:=(CallCtx _ _ _) ::_). }
-      { constructor. by instantiate (1:=(CallCtx _ _ _) ::_). }
-      move => ?? /=. rewrite !cons_middle !app_assoc -fmap_snoc. apply IH2.
-      rewrite pass_state. naive_solver lia.
+    + move => ?? IH _ IH2 s0' vs h Hs0' Hvars. csimpl.
+      eapply IH => /=.
+      { constructor. by instantiate (2:=(CallCtx _ _ _) ::_). }
+      { constructor. by instantiate (4:=(CallCtx _ _ _) ::_). }
+      { done. }
+      { move => ??. naive_solver lia. }
+      move => ?? /=. rewrite !cons_middle !app_assoc -fmap_snoc.
+      apply IH2.
+      { rewrite pass_state. naive_solver lia. }
+      { done. }
 Qed.
 
 (** * pass_fn *)
