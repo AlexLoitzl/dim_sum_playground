@@ -298,12 +298,35 @@ Proof.
     prepare_goal. rename select (s ≤ s0')%N into Hs0'.
     apply: IHe; [done|done|done|set_solver|set_solver|done|].
     move => {}h ? vsi' _ Hvsi'v Hvsisub Hvsi'/=.
+
+    (* Integrate Hvsi' into the other hypothesis for the induction *)
+    have Hvsi'1 : ∀ v, is_Some (vsi' !! v) → v ∉ mjoin (assigned_vars <$> (static_expr_to_expr <$> args)).
+    { set_unfold. naive_solver lia. }
+    have Hvsi'2 : (∀ n, is_Some (vsi' !! tmp_var n) → (n < s0')%N).
+    { set_unfold. naive_solver lia. }
+    have {}Hcont : ∀ (h' : heap_state) (v' : val) (vsi'' : gmap string val),
+            (s0' ≤ s'' + 1)%N
+            → vsi'' !! tmp_var s'' = Some v'
+              → vsi' ⊆ vsi''
+                → (∀ v : string,
+                     is_Some (vsi'' !! v)
+                     → is_Some (vsi' !! v)
+                       ∨ v
+                         ∈ mjoin (assigned_vars <$> (static_expr_to_expr <$> args))
+                         ∨ (∃ n : N, v = tmp_var n ∧ (n < s'' + 1)%N))
+                  → Rec (expr_fill Ki (subst_map vsi'' (lexpr_to_expr ei'))) h' fns1 ⪯{rec_trans, rec_trans, n, false}
+                  Rec (expr_fill Ks (Val v')) h' fns2. {
+      move => ?????? Hvsi''. apply: Hcont; [lia|done|by etrans|..].
+      move => ? /Hvsi''[|]. 2: clear; set_unfold; naive_solver lia.
+      move => /Hvsi'. set_unfold; naive_solver lia.
+    }
+
     move: 0%nat Hrun => m Hrun.
     change (v'') with ([] ++ v''). move Heqvr'': ([]) => vr''.
     change (subst_map vss <$> (static_expr_to_expr <$> args)) with ((Val <$> []) ++ (subst_map vss <$> (static_expr_to_expr <$> args))). move Heqva'': ([]) => va''.
     have Hall : Forall2 (λ vr va, lookup_var_val vsi' vr = Some va) vr'' va'' by subst; constructor.
-    clear Heqvr'' Heqva''. clear Hr1.
-    elim: IH m p'' v'' s s0' s'' vsi' vr'' va'' h Hrun Hs0' Hsub Hvsi'v Hvsisub Hvsi' Hvsi2 Hnodupargs Htmp Hall Hcont.
+    clear Heqvr'' Heqva''. clear Hr1 Hvsi1 Hvsi2 Hvsi'.
+    elim: IH m p'' v'' s s0' s'' vsi' vr'' va'' h Hrun Hs0' Hsub Hvsi'v Hvsisub Hvsi'1 Hvsi'2 Hnodupargs Htmp Hall Hcont.
     + move => /= ??????????????????? /lookup_var_val_to_expr_fmap Hall Hcont. simplify_crun_eq.
       rewrite !app_nil_r. rewrite Hall.
       erewrite lookup_var_val_to_expr; [|done].
@@ -317,35 +340,34 @@ Proof.
       * lia.
       * by simplify_map_eq.
       * etrans; [done|]. apply insert_subseteq.
-        admit.
-(* apply eq_None_not_Some; naive_solver lia. *)
-      *  admit.
-(* move => ? /lookup_insert_is_Some'[|]; naive_solver lia. *)
+        apply eq_None_not_Some; naive_solver lia.
+      * move => ? /lookup_insert_is_Some'[|]; naive_solver lia.
     + csimpl. move => ?? IHe _ IH ???????????????????? Hcont. prepare_goal.
       eapply IHe; [ |done| |done| | | |].
       { constructor. by instantiate (2:=(CallCtx _ _ _) ::_). }
       { by etrans. }
       { set_solver. }
-
-fail.
-
       { set_solver. }
-      { apply rec_expr_fill_expr_fill. eapply rec_expr_fill_Call. apply _.
-apply _. ; [ |done|done|done| | | |].
-      { constructor. by instantiate (1:=(CallCtx _ _ _) ::_). }
+      { done. }
       move => ?????? Hvsi /=. rewrite !cons_middle !app_assoc -fmap_snoc.
       eapply IH.
       * done.
+      * done.
+      * done.
+      * apply: lookup_var_val_mono; [done|]. done.
       * by etrans.
-      * set_solver.
+      * set_unfold; naive_solver lia.
       * set_unfold; naive_solver lia.
       * done.
-      * set_unfold; naive_solver lia.
+      * set_unfold; naive_solver.
       * apply Forall2_app; [|by econs].
         apply: Forall2_impl; [done|] => ?? /=?. apply: lookup_var_val_mono; [done|]. by etrans.
-      * move => ?????? Hvsi'. apply Hcont; [lia|done|by etrans|].
-        move => ? /Hvsi'[|]; [| set_unfold; naive_solver lia].
-        move => /Hvsi. set_unfold; naive_solver lia.
+      * move => ?????? Hvsi'.
+        apply Hcont; [lia|done|by etrans|].
+        move => ? /Hvsi'[|]. 2: clear; set_unfold; naive_solver lia.
+        move => /Hvsi[|[|]].
+        1,2: clear; set_unfold; naive_solver lia.
+        1: set_unfold; naive_solver lia.
 Qed.
 
 (** * pass_fn *)
@@ -365,7 +387,7 @@ Lemma test_1 :
     lfd_body :=
       LLetE "$0$" (LBinOp (VVar "x") OffsetOp (VVal (StaticValNum 2)))
         (LLetE "$1$" (LLoad (VVar "x"))
-           (LLetE "$2$" (LCall "f" [VVar "$1$"; VVal (StaticValNum 1)])
+           (LLetE "$2$" (LCall (VVal (StaticValFn "f")) [VVar "$1$"; VVal (StaticValNum 1)])
               (LLetE "$3$" (LBinOp (VVar "$0$") AddOp (VVar "$2$")) (LEnd (LVarVal (VVar "$3$"))))))
   |}.
 Proof. vm_compute. match goal with |- ?x = ?x => exact: eq_refl end. Abort.
