@@ -460,50 +460,6 @@ Proof.
     naive_solver.
 Qed.
 
-Lemma tsim_mirror {EV1 EV2} (m : mod_trans EV1) (σ : m.(m_state)) (fm1 : mod_trans EV1 → mod_trans EV2) fm2 fσ1 fσ2 n b  :
-  (∀ σ n',
-      oS?b n' ⊆ n →
-      (∀ (P : _ → _ → _ → Prop),
-          (∀ κ Pσ, m_step m σ κ Pσ → (∀ σ', fσ1 σ' ⪯{fm1 m, fm2 m, n', true} fσ2 σ') → P true κ Pσ) →
-            σ -{ m }-> P) →
-      fσ1 σ ⪯{fm1 m, fm2 m, n', false} fσ2 σ) →
-
-  fσ1 σ ⪯{fm1 m, fm2 m, n, b} fσ2 σ.
-Proof.
-  move => Hσ.
-  unshelve apply: tsim_remember. { exact: (λ _ σ1 σ2, ∃ σ', σ1 = fσ1 σ' ∧ σ2 = fσ2 σ'). }
-  { by split!. } { done. }
-  move => n1 /= ? IH ???. destruct!.
-  apply Hσ; [done|].
-  move => P Hcont.
-  apply steps_impl_step_end => κ Pσ2 ?.
-  naive_solver.
-Qed.
-
-Ltac tsim_mirror m σ :=
-  lazymatch goal with
-  | |- ?σ1 ⪯{?m1, ?m2, _, _} ?σ2 =>
-      lazymatch m1 with
-      | context C [m] =>
-      let x := fresh "x" in
-      let fm1 := constr:(λ x, ltac:(let y := context C [x] in exact y)) in
-      lazymatch m2 with
-      | context C [m] =>
-      let fm2 := constr:(λ x, ltac:(let y := context C [x] in exact y)) in
-      lazymatch σ1 with
-      | context C [σ] =>
-      let fσ1 := constr:(λ x, ltac:(let y := context C [x] in exact y)) in
-      lazymatch σ2 with
-      | context C [σ] =>
-      let fσ2 := constr:(λ x, ltac:(let y := context C [x] in exact y)) in
-      (* idtac fm1 fm2 fσ1 fσ2 *)
-      apply (tsim_mirror m σ fm1 fm2 fσ1 fσ2)
-      end
-      end
-      end
-      end
-  end.
-
 Lemma tsim_step_l {EV} {mi ms : mod_trans EV} σi σs n b :
   (∀ κ Pσi,
       mi.(m_step) σi κ Pσi →
@@ -656,6 +612,72 @@ Lemma tstep_s_generic EV (m : mod_trans EV) σ:
   TStepS m σ (λ G, ∃ κ, G κ (λ G', σ -{m, κ}->ₛ G')).
 Proof. constructor => ? [??]. eexists _, _. split; [done|]. done. Qed.
 Global Hint Resolve tstep_s_generic | 1000 : typeclass_instances.
+
+(** * tsim mirror *)
+
+Lemma tsim_mirror {EV1 EV2} (m : mod_trans EV1) (σ : m.(m_state)) (fm1 : mod_trans EV1 → mod_trans EV2) fm2 fσ1 fσ2 n b  :
+  (∀ σ n',
+      oS?b n' ⊆ n →
+      (∀ (P : _ → _ → _ → Prop),
+          (∀ κ Pσ, m_step m σ κ Pσ → (∀ σ', fσ1 σ' ⪯{fm1 m, fm2 m, n', true} fσ2 σ') → P true κ Pσ) →
+            σ -{ m }-> P) →
+      fσ1 σ ⪯{fm1 m, fm2 m, n', false} fσ2 σ) →
+
+  fσ1 σ ⪯{fm1 m, fm2 m, n, b} fσ2 σ.
+Proof.
+  move => Hσ.
+  unshelve apply: tsim_remember. { exact: (λ _ σ1 σ2, ∃ σ', σ1 = fσ1 σ' ∧ σ2 = fσ2 σ'). }
+  { by split!. } { done. }
+  move => n1 /= ? IH ???. destruct!.
+  apply Hσ; [done|].
+  move => P Hcont.
+  apply steps_impl_step_end => κ Pσ2 ?.
+  naive_solver.
+Qed.
+
+Lemma tsim_mirror_s {EV1 EV2} (m : mod_trans EV1) (σ : m.(m_state)) (fm1 : mod_trans EV1 → mod_trans EV2) fm2 fσ1 fσ2 n (Pσ : m.(m_state) → Prop) :
+  m_step m σ None Pσ →
+  (∀ σ', fσ1 σ' ⪯{fm1 m, fm2 m, n, true} fσ2 σ') →
+  σ -{ m, None }->ₛ (λ σ2', (fσ2 σ2') ~{ fm2 m, tnil }~>ₜ (λ σ2'',
+                      ∃ σ1', Pσ σ1' ∧ fσ1 σ1' ⪯{fm1 m, fm2 m, n, true} σ2'')).
+Proof. move => ??. apply: steps_spec_step_end; [done|]. move => ??. tend. split!; naive_solver. Qed.
+
+Ltac tsim_mirror m σ :=
+  lazymatch goal with
+  | |- ?σ1 ⪯{?m1, ?m2, _, _} ?σ2 =>
+  let x := fresh "x" in
+  lazymatch m1 with | context C [m] =>
+  let fm1 := constr:(λ x, ltac:(let y := context C [x] in exact y)) in
+  lazymatch m2 with | context C [m] =>
+  let fm2 := constr:(λ x, ltac:(let y := context C [x] in exact y)) in
+  lazymatch σ1 with | context C [σ] =>
+  let fσ1 := constr:(λ x, ltac:(let y := context C [x] in exact y)) in
+  lazymatch σ2 with | context C [σ] =>
+  let fσ2 := constr:(λ x, ltac:(let y := context C [x] in exact y)) in
+  (* idtac fm1 fm2 fσ1 fσ2 *)
+  apply (tsim_mirror m σ fm1 fm2 fσ1 fσ2);
+  let σ' := fresh "σ'" in
+  let n := fresh "n" in
+  let Hn := fresh "Hn" in
+  let Hcont := fresh "Hcont" in
+  intros σ' n Hn Hcont;
+  tstep_both;
+  apply Hcont; clear Hcont;
+  case; last first; [
+    let Pσ := fresh "Pσ" in
+    let Hstep := fresh "Hstep" in
+    let Hloop := fresh "Hloop" in
+    let Hend := fresh "Hend" in
+    intros Pσ Hstep Hloop;
+    pose proof (tsim_mirror_s m _ fm1 fm2 fσ1 fσ2 n Pσ Hstep Hloop) as Hend;
+    clear Hstep Hloop
+  | let e := fresh "e" in
+    let Pσ := fresh "Pσ" in
+    let Hstep := fresh "Hstep" in
+    intros e Pσ Hstep _; revert σ' n Hn e Pσ Hstep]
+      end end end end
+  end.
+
 
 (** * proving a refinement based on another refinement *)
 

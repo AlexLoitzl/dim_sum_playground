@@ -587,10 +587,8 @@ Proof.
   split!. { naive_solver. } { fast_set_solver. }
   { iSatMono. iIntros!. rewrite /r2a_mem_map/mo big_sepM_empty big_sepM_union //. iDestruct!. iFrame.
     iDestruct (r2a_mem_stack_init with "[$]") as "?". iAccu. }
-  tsim_mirror m1 σ1. move => ??? Hcont.
-  tstep_both. apply Hcont => κ ?? Hs. destruct κ.
-  2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
-  clear Hcont Hs. move => ?. subst.
+  tsim_mirror m1 σ1. { tstep_s. by exists None. }
+  move => *. subst.
   tstep_s. eexists (Some (Incoming, _)). split!. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
   unshelve apply: tsim_remember. { simpl. exact (λ _
       '(σpy1, σpy2, (yt, yregs), (σpc1, σpc2, (σsm1, σ1, (pp1, (R2A cs1 lr1), x1)), (σsm2, σ2, (pp2, (R2A cs2 lr2), x2))))
@@ -650,10 +648,8 @@ Proof.
   move => n ? Hloop [[[σpy1 σpy2][yt yregs]][[[σpc1 σpc2][[σsm1 σ1][[pp1 [cs1 lr1]]x1]]][[σsm2 σ2][[pp2 [cs2 lr2]]x2]]]].
   move => [[σsm' [[[σlc σc] σ1'] σ2']][[ppc [csc lrc]] xc]] [state ?]. destruct!.
   destruct σc as [[| |] finit] => //; destruct!/=.
-  - tsim_mirror m1 σ1. move => ??? Hcont.
-    tstep_both. apply Hcont => κ ? Hstep Hs. destruct κ as [[? e]|].
-    2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
-    clear Hcont Hs.
+  - tsim_mirror m1 σ1. { tstep_s. by eexists None. }
+    move => ???[i e]? Hstep.
     tend. have [σ' Hσ'] := vis_no_all _ _ _ Hstep. eexists σ'. split; [naive_solver|].
     destruct i; [by tstep_i|].
     tstep_s. eexists (Some (Outgoing, e)).
@@ -703,10 +699,8 @@ Proof.
           iDestruct (r2a_mem_swap_stack with "Hm [$]") as "[Hm ?]".
           iMod (r2a_mem_update_big with "Hm [$]") as "[? $]"; [apply coro_regs_mem_dom|].
           iModIntro. iAccu. }
-        tsim_mirror m2 σ2. move => ??? Hcont.
-        tstep_both. apply Hcont => κ ?? Hs. destruct κ.
-        2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
-        clear Hs Hcont. move => ?. subst.
+        tsim_mirror m2 σ2. { tstep_s. by exists None. }
+        move => *. subst.
         tstep_s. eexists (Some (Incoming, _)). split!. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
         apply: Hloop. { etrans; [|done]. etrans; [|done]. apply o_le_S. }
         split!.
@@ -732,10 +726,8 @@ Proof.
           iDestruct (r2a_mem_swap_stack with "Hm [$]") as "[Hm ?]".
           iMod (r2a_mem_update_big with "Hm [$]") as "[? $]"; [apply coro_regs_mem_dom|].
           iModIntro. iAccu. }
-        tsim_mirror m2 σ2. move => ??? Hcont.
-        tstep_both. apply Hcont => κ ?? Hs. destruct κ.
-        2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
-        clear Hs Hcont. move => ?. subst.
+        tsim_mirror m2 σ2. { tstep_s. by eexists None. }
+        move => *. subst.
         tstep_s. eexists (Some (Incoming, _)). split!. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
         apply: Hloop. { etrans; [|done]. etrans; [|done]. apply o_le_S. }
         split!.
@@ -779,9 +771,8 @@ Proof.
       tstep_i => *. simplify_eq.
       tstep_i => *. eexists false. split!. { done. }
       { iSatMono. iIntros!. iFrame. iAccu. }
-      tsim_mirror m1 σ' => ??? Hcont.
-      tstep_both. apply Hcont => -[?|] ?? Hs *. simplify_eq.
-      2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
+      tsim_mirror m1 σ'. { tstep_s. by eexists None. }
+      move => *. simplify_eq.
       tstep_s. eexists (Some (Incoming, _)). split!.
       apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
       apply: Hloop. { etrans; [|done]. etrans; [|done]. apply o_le_S. }
@@ -812,17 +803,13 @@ Proof.
       tstep_i. eexists true. split; [done|]. eexists h', ssz', vs', avs', f'.
       split!. { destruct (f2i1 !! f') eqn:?; naive_solver. } { fast_set_solver. }
       { iSatMono. iIntros!. iFrame. iAccu. }
-      tsim_mirror m1 σ'. move => ??? Hcont.
-      tstep_both. apply Hcont => κ ?? Hs. destruct κ.
-      2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
-      clear Hcont Hs. move => ?. subst.
+      tsim_mirror m1 σ'. { tstep_s. by eexists None. }
+      move => *. subst.
       tstep_s. eexists (Some (Incoming, _)). split!. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
       apply: Hloop. { etrans; [|done]. etrans; [|done]. apply o_le_S. }
       split!. { iSplit; iIntros!; iFrame. }
-  - tsim_mirror m2 σ2. move => ??? Hcont.
-    tstep_both. apply Hcont => κ ? Hstep Hs. destruct κ as [[? e]|].
-    2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
-    clear Hcont Hs.
+  - tsim_mirror m2 σ2. { tstep_s. by exists None. }
+    move => ??? [i e] ? Hstep.
     tend. have [σ' Hσ'] := vis_no_all _ _ _ Hstep. eexists σ'. split; [naive_solver|].
     destruct i; [by tstep_i|].
     tstep_s. eexists (Some (Outgoing, e)).
@@ -872,10 +859,8 @@ Proof.
         iDestruct (r2a_mem_swap_stack with "Hm [$]") as "[Hm ?]".
         iMod (r2a_mem_update_big with "Hm [$]") as "[? $]"; [apply coro_regs_mem_dom|].
         iModIntro. iAccu. }
-      tsim_mirror m1 σ1. move => ??? Hcont.
-      tstep_both. apply Hcont => κ ?? Hs. destruct κ.
-      2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
-      clear Hs Hcont. move => ?. subst.
+      tsim_mirror m1 σ1. { tstep_s. by eexists None. }
+      move => *. subst.
       tstep_s. eexists (Some (Incoming, _)). split!. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
       apply: Hloop. { etrans; [|done]. etrans; [|done]. apply o_le_S. }
       split!.
@@ -923,9 +908,8 @@ Proof.
       tstep_i => *. simplify_eq.
       tstep_i => *. eexists false. split!. { done. }
       { iSatMono. iIntros!. iFrame. iAccu. }
-      tsim_mirror m2 σ' => ??? Hcont.
-      tstep_both. apply Hcont => -[?|] ?? Hs *. simplify_eq.
-      2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
+      tsim_mirror m2 σ'. { tstep_s. by eexists None. }
+      move => *. simplify_eq.
       tstep_s. eexists (Some (Incoming, _)). split!.
       apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
       apply: Hloop. { etrans; [|done]. etrans; [|done]. apply o_le_S. }
