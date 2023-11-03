@@ -936,7 +936,7 @@ Proof.
     iApply (big_sepM_kmap_intro (λ n : nat, l +ₗ n)).
     iApply (big_sepM_impl_strong' with "[$]").
     iIntros "!>" (??) "Hm". iIntros ([i [?[?[??]%lookup_seqZ]%lookup_map_seq_Some]]%lookup_kmap_Some); [|done].
-    simplify_eq/=. rewrite map_filter_lookup_true; [|naive_solver].
+    simplify_eq/=. rewrite map_lookup_filter_true; [|naive_solver].
     case_match. 2: { exfalso. eapply not_eq_None_Some; [|done]. apply Hr; [done|]. simpl. lia. } simplify_map_eq.
     iDestruct!. iSplit!; [done|]. by rewrite Nat.sub_0_r Hl2.
   - iExists _. iFrame. iPureIntro. split; [done|].

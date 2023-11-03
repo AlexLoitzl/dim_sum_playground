@@ -414,7 +414,7 @@ Section sim.
   Global Instance sim_pre_ne n:
     Proper ((dist n ==> dist n ==> dist n) ==> dist n ==> dist n ==> dist n) sim_pre.
   Proof.
-    move => ?? Hsim ?? -> ?? ->. rewrite /sim_pre/bi_mono1.
+    move => ?? Hsim ?? -> ?? eq. cbv in eq. rewrite eq /sim_pre/bi_mono1.
     f_equiv. move => ?? -> ?? ->.
     f_equiv. move => ?? -> ?? ->.
     repeat (f_equiv || eapply Hsim || eapply HΠ || reflexivity).

@@ -504,7 +504,7 @@ Lemma tsim_tstep_i {EV} (mi : mod_trans EV) σi P `{!TStepI mi σi P} ms σs n b
   σi ⪯{mi, ms, n, b} σs.
 Proof.
   move => HP κs n' Hn /= Hi.
-  efeed pose proof @steps_impl_elim_n as Hd. 2: done. { by apply: tstepi_proof. }
+  opose proof* @steps_impl_elim_n as Hd. 2: done. { by apply: tstepi_proof. }
   apply: thas_trace_under_tall; [done..|] => {Hi HP Hd} {}κs /= [?|]. { tend. }
   move => [?[?[?[?[?[[b'[? [HP [? HG']]]][<-[??]]]]]]]]. move: HP => /HG'[?[? Hs]].
   apply: Hs. 2: naive_solver.
@@ -517,7 +517,7 @@ Lemma tsim_tstep_both {EV} (mi : mod_trans EV) σi P `{!TStepI mi σi P} ms σs 
   σi ⪯{mi, ms, n, b} σs.
 Proof.
   move => HP κs n' Hn Hi /=.
-  efeed pose proof @steps_impl_elim_n as Hd. 2: done. { by apply: tstepi_proof. }
+  opose proof* @steps_impl_elim_n as Hd. 2: done. { by apply: tstepi_proof. }
   apply: thas_trace_under_tall; [done..|] => {Hi HP Hd} {}κs /= [?|]. { tend. }
   move => [?[?[?[?[?[[?[?[?[? HG']]]][<-[??]]]]]]]].
   apply: thas_trace_trans; [done|] => ? /HG' [σi' [? {}Ht]].

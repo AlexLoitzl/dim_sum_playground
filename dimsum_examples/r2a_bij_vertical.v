@@ -375,7 +375,7 @@ Proof.
     split => ?; destruct!.
     + destruct (decide (ps ∈ hb_shared_s bijb)) as [[pi ?]%elem_of_hb_shared_s|]. 2: naive_solver.
       right.
-      efeed pose proof Hrev; [done..|]. destruct!.
+      opose proof* Hrev; [done..|]. destruct!.
       eexists _. split_and!; [by left | |done|done].
       apply eq_None_ne_Some => ?. rewrite r2a_combine_r2a_Some => ?. destruct!.
       fresh_map_learn. destruct!. simplify_eq. revert select (_ ∉ X). apply. apply HXb.
@@ -465,7 +465,7 @@ Qed.
 
 Ltac r2a_mem_transfer Hfrom Hto :=
   let H := fresh in
-  efeed pose proof r2a_mem_transfer as H;
+  opose proof* r2a_mem_transfer as H;
   [ | iSatMono Hto; iIntros!; iFrame; by iAccu |];
   [ iSatMono Hfrom; iIntros!; iFrame; by iAccu | ];
   clear Hfrom Hto; destruct H as [Hfrom Hto].
@@ -799,7 +799,7 @@ Proof.
     - apply: satisfiable_mono; [apply heap_bij_init|]. iIntros "$".
       rewrite /hb_shared omap_empty !big_sepM_empty. iSplit!.
       iIntros (????). done.
-    - eexists ∅. move => ?? /map_filter_lookup_Some. naive_solver.
+    - eexists ∅. move => ?? /map_lookup_filter_Some. naive_solver.
   }
   all: move => [csa lra] [] [cs lr] Pa Pb P [? e] ?/=; destruct!.
   - move: e => []//= regs mem b ? h ? vs avs.
@@ -881,18 +881,18 @@ Proof.
             by apply elem_of_dom.
           - apply not_elem_of_dom. apply r2a_rh_shared_None. naive_solver.
         }
-        rewrite lookup_union_r. 2: { apply map_filter_lookup_None. naive_solver. }
-        rewrite map_filter_lookup_true; [by apply Hpreva|naive_solver].
+        rewrite lookup_union_r. 2: { apply map_lookup_filter_None. naive_solver. }
+        rewrite map_lookup_filter_true; [by apply Hpreva|naive_solver].
       * iApply r2a_heap_shared_agree_union. {
-          apply map_disjoint_spec => -[p o] ?? /map_filter_lookup_Some[/=/heap_through_bij_Some??].
-          move => /map_filter_lookup_Some[?[//|]] /=. destruct!.
+          apply map_disjoint_spec => -[p o] ?? /map_lookup_filter_Some[/=/heap_through_bij_Some??].
+          move => /map_lookup_filter_Some[?[//|]] /=. destruct!.
           apply. apply elem_of_hb_shared_i. naive_solver.
         }
         iDestruct select (r2a_mem_map mh) as "Hmh".
         iSplitR "Hmh".
         -- iApply r2a_heap_shared_agree_of_pure; [|done..].
            apply: (r2a_heap_shared_agree_pure_impl (λ p, hb_shared bijb' !! p)); [done|].
-           move => ??? /map_filter_lookup_Some [/heap_through_bij_Some[?[?[?[??]]]] ?] Hsh. simplify_eq/=.
+           move => ??? /map_lookup_filter_Some [/heap_through_bij_Some[?[?[?[??]]]] ?] Hsh. simplify_eq/=.
            split!.
            ++ by apply hb_shared_lookup_Some.
            ++ done.
@@ -904,13 +904,13 @@ Proof.
            2: { iApply (r2a_heap_shared_agree_of_pure with "[] [$]"); [done|].
                 rewrite r2a_rh_shared_union // big_sepM_union //. 2: by apply map_disjoint_omap.
                 by iDestruct!. }
-           move => l ?? /map_filter_lookup_Some[? Hne] Ha.
+           move => l ?? /map_lookup_filter_Some[? Hne] Ha.
            move: Hne => [Hne|Hne]; simplify_eq/=. {
              contradict Hne. apply elem_of_dom.
              move: Ha. rewrite -r2a_ih_shared_Some r2a_rh_shared_union // r2a_rh_shared_fmap. done.
            }
            split.
-           ++ apply map_filter_lookup_Some => /=. split; [done|].
+           ++ apply map_lookup_filter_Some => /=. split; [done|].
               contradict Hne. move: Hne => /elem_of_hb_shared_i[?]. rewrite -hb_shared_lookup_Some => ?.
               apply elem_of_hb_shared_i. eexists _. rewrite -hb_shared_lookup_Some.
               by apply: lookup_weaken.
@@ -934,19 +934,19 @@ Proof.
            naive_solver.
         -- iPureIntro. rewrite -Hpriveq.
            move => [p o] ?? /=. rewrite lookup_union_r. 2: {
-             apply map_filter_lookup_None. left.
+             apply map_lookup_filter_None. left.
              apply eq_None_not_Some => /heap_through_bij_is_Some[?[/hb_disj]].
              rewrite -Hpriveq. naive_solver.
            }
-           rewrite map_filter_lookup_true; [by apply Hprevb|].
+           rewrite map_lookup_filter_true; [by apply Hprevb|].
            move => ?? /=. right. move => /elem_of_hb_shared_i[??].
-           efeed pose proof hb_disj as HNone; [done|]. rewrite -Hpriveq in HNone. naive_solver.
+           opose proof* hb_disj as HNone; [done|]. rewrite -Hpriveq in HNone. naive_solver.
         -- done.
         -- iIntros (p1 p2 o ?) => /=.
            destruct (decide (p1 ∈ dom (rh' ∪ r2a_rh_shared rha))) as [Hin|].
            ++ rewrite lookup_union_l.
-              2: { apply map_filter_lookup_None. right => ?? /=. rewrite elem_of_hb_shared_i. naive_solver. }
-              rewrite map_filter_lookup_true; [|done].
+              2: { apply map_lookup_filter_None. right => ?? /=. rewrite elem_of_hb_shared_i. naive_solver. }
+              rewrite map_lookup_filter_true; [|done].
               iSplit; [iPureIntro; by apply heap_through_bij_is_Some1|].
               iIntros (??[?[?[?[??]]]]%heap_through_bij_Some ?). simplify_bij.
               have [|??]:= r2a_heap_shared_agree_pure_lookup _ _ _ _ _ ltac:(done) ltac:(done) => /=. {
@@ -954,8 +954,8 @@ Proof.
                 naive_solver.
               }
               by iApply (val_in_through_bij with "[$]").
-           ++ rewrite lookup_union_r. 2: { apply map_filter_lookup_None. naive_solver. }
-              rewrite map_filter_lookup_true; [|naive_solver].
+           ++ rewrite lookup_union_r. 2: { apply map_lookup_filter_None. naive_solver. }
+              rewrite map_lookup_filter_true; [|naive_solver].
               revert select (heap_preserved (r2a_rh_constant rh) h) => Hpre.
               have -> : h_heap h !! (p2, o) = h_heap hb !! (p2, o). {
                 rewrite -(h_block_lookup hb). apply Hpre.
@@ -1049,7 +1049,7 @@ Proof.
         -- iApply (r2a_heap_shared_agree_of_pure with "[] [$]").
            all: rewrite r2a_rh_shared_union // r2a_rh_shared_fmap r2a_rh_shared_fmap_constant right_id_L //.
            apply: r2a_heap_shared_agree_pure_combine; [done..|].
-           move => ????. by apply map_filter_lookup_Some.
+           move => ????. by apply map_lookup_filter_Some.
       * iApply (r2a_val_rel_big_of_pure with "Hsh").
         apply Forall2_same_length_lookup. split; [solve_length|].
         move => ?????. move: Hvs => /(Forall2_lookup_r _ _ _ _ _). move => /(_ _ _ ltac:(done))[?[??]].

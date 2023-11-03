@@ -538,7 +538,7 @@ Qed.
 
 Program Definition heap_free (h : heap_state) (l : loc) : heap_state :=
   Heap (filter (λ '(l', v), l'.1 ≠ l.1) h.(h_heap)) h.(h_provs) _.
-Next Obligation. move => ???. rewrite map_filter_lookup => -[?/bind_Some[?[??]]]. by apply heap_wf. Qed.
+Next Obligation. move => ???. rewrite map_lookup_filter => -[?/bind_Some[?[??]]]. by apply heap_wf. Qed.
 
 Program Definition heap_merge (h1 h2 : heap_state) : heap_state :=
   Heap (h_heap h1 ∪ h_heap h2) (h_provs h1 ∪ h_provs h2) _.
@@ -546,7 +546,7 @@ Next Obligation. move => ???. move => /lookup_union_is_Some[/heap_wf?|/heap_wf?]
 
 Program Definition heap_restrict (h : heap_state) (P : prov → Prop) `{!∀ x, Decision (P x)} : heap_state :=
   Heap (filter (λ x, P x.1.1) h.(h_heap)) h.(h_provs) _.
-Next Obligation. move => ????. rewrite map_filter_lookup => -[?/bind_Some[?[??]]]. by apply heap_wf. Qed.
+Next Obligation. move => ????. rewrite map_lookup_filter => -[?/bind_Some[?[??]]]. by apply heap_wf. Qed.
 
 Program Definition heap_add_provs (h : heap_state) (p : gset prov) : heap_state :=
   Heap (h_heap h) (p ∪ h_provs h) _.
@@ -662,7 +662,7 @@ Lemma h_block_heap_alloc h l n:
 Proof.
   intros Hfresh.
   rewrite /h_block /heap_alloc /zero_block /=.
-  eapply map_leibniz, map_equiv_iff; intros i.
+  apply map_eq; intros i.
   rewrite !lookup_total_gmap_curry.
   assert (h_heap h !! (l.1, i) = None) as Hlook.
   { rewrite /heap_is_fresh in Hfresh.
@@ -723,7 +723,7 @@ Lemma heap_preserved_free l h m:
   m !! l.1 = None →
   heap_preserved m (heap_free h l).
 Proof.
-  move => Hp ? l' f ? /=. rewrite map_filter_lookup. etrans; [|by eapply Hp].
+  move => Hp ? l' f ? /=. rewrite map_lookup_filter. etrans; [|by eapply Hp].
   destruct (h_heap h !! l') => //=. case_option_guard => //. destruct l, l'; naive_solver.
 Qed.
 

@@ -794,7 +794,7 @@ Proof.
       tstep_s => -[] //= ? h' ssz' vs' avs' f' *.
       tstep_s. split!.
       tstep_s => ?.
-      have ? : regs !!! "PC" ∈ ins1. { efeed pose proof Hi1; [done|]. destruct!. naive_solver. }
+      have ? : regs !!! "PC" ∈ ins1. { opose proof* Hi1; [done|]. destruct!. naive_solver. }
       rewrite bool_decide_false; [|fast_set_solver].
       rewrite bool_decide_true; [|fast_set_solver].
       tstep_i => *. case_match; destruct!/=.

@@ -94,7 +94,7 @@ Definition hb_player_s (pl : player) (bij : heap_bij) : gset prov :=
 Lemma elem_of_hb_player_s pl bij ps :
   ps ∈ hb_player_s pl bij ↔ hb_bij bij !! ps = Some (HBOwned pl).
 Proof.
-  unfold hb_player_s. unlock. rewrite elem_of_dom /is_Some. setoid_rewrite map_filter_lookup_Some.
+  unfold hb_player_s. unlock. rewrite elem_of_dom /is_Some. setoid_rewrite map_lookup_filter_Some.
   naive_solver.
 Qed.
 
@@ -113,7 +113,7 @@ Definition hb_player_i (pl : player) (bij : heap_bij) : gset prov :=
 Lemma elem_of_hb_player_i pl bij pi :
   pi ∈ hb_player_i pl bij ↔ hb_players_i bij !! pi = Some pl.
 Proof.
-  unfold hb_player_i. unlock. rewrite elem_of_dom /is_Some. setoid_rewrite map_filter_lookup_Some.
+  unfold hb_player_i. unlock. rewrite elem_of_dom /is_Some. setoid_rewrite map_lookup_filter_Some.
   naive_solver.
 Qed.
 
@@ -491,9 +491,9 @@ Proof.
   move => Hbij Hin p1 p2 o /=?.
   have [Hbij1 Hbij2]:= Hbij p1 p2 o ltac:(done).
   split.
-  - rewrite !map_filter_lookup /=. destruct (h_heap hi !! (p1, o)), (h_heap hs !! (p2, o)) => //=.
+  - rewrite !map_lookup_filter /=. destruct (h_heap hi !! (p1, o)), (h_heap hs !! (p2, o)) => //=.
     all: repeat case_option_guard => //; simplify_bij; naive_solver.
-  - move => ??. rewrite !map_filter_lookup => /bind_Some[?[??]] /bind_Some[?[??]].
+  - move => ??. rewrite !map_lookup_filter => /bind_Some[?[??]] /bind_Some[?[??]].
     repeat case_option_guard => //; naive_solver.
 Qed.
 
@@ -502,7 +502,7 @@ Lemma heap_in_bij_free_r hi hs l2 bij:
   (∀ p, hb_bij bij !! l2.1 = Some (HBShared p) → False) →
   heap_in_bij bij hi (heap_free hs l2).
 Proof.
-  move => /= Hbij Hin ???? /=. rewrite map_filter_lookup_true. 1: by apply Hbij.
+  move => /= Hbij Hin ???? /=. rewrite map_lookup_filter_true. 1: by apply Hbij.
   naive_solver.
 Qed.
 
@@ -556,7 +556,7 @@ Lemma heap_preserved_bij_player_free pl pi ps l he hp bij:
   heap_preserved (hb_player_s pl bij) he hp →
   heap_preserved (hb_player_s pl bij) he (heap_free hp l).
 Proof.
-  move => ?? Hp p' o /= Hin. rewrite map_filter_lookup. etrans; [by apply Hp|].
+  move => ?? Hp p' o /= Hin. rewrite map_lookup_filter. etrans; [by apply Hp|].
   destruct (h_heap hp !! (p', o)) => //=. case_option_guard => //.
   exfalso. move: Hin => /elem_of_hb_player_s?. naive_solver.
 Qed.
@@ -575,7 +575,7 @@ Lemma heap_preserved_free_r l he hp bij:
   l.1 ∉ bij →
   heap_preserved bij he hp →
   heap_preserved bij he (heap_free hp l).
-Proof. move => Hni Hp p o /= ?. rewrite map_filter_lookup_true; [by apply Hp|]. set_solver. Qed.
+Proof. move => Hni Hp p o /= ?. rewrite map_lookup_filter_true; [by apply Hp|]. set_solver. Qed.
 
 (** * rec_heap_bij module *)
 Record rec_heap_bij_state := RecHeapBij {
@@ -1027,10 +1027,10 @@ Proof.
       by simplify_option_eq.
     + move => pii pi o /= ?.
       rewrite lookup_union.
-      rewrite map_filter_lookup_true. 2: { move => *. rewrite elem_of_hb_shared_s. naive_solver. }
+      rewrite map_lookup_filter_true. 2: { move => *. rewrite elem_of_hb_shared_s. naive_solver. }
       destruct (decide (pi ∈ hb_shared_i bijb')) as [Hpi'|Hpi'].
       all: rewrite elem_of_hb_shared_i in Hpi'; destruct!.
-      * rewrite map_filter_lookup_None_2.
+      * rewrite map_lookup_filter_None_2.
         2: { right. move => *. rewrite !elem_of_hb_shared_s elem_of_hb_shared_i /=. naive_solver. }
         rewrite right_id_L.
         rewrite heap_through_bij_is_Some' //.
@@ -1043,7 +1043,7 @@ Proof.
       * destruct (h_heap (heap_through_bij bijb' h') !! (pi, o)) as [|] eqn: Hht => /=.
         { move: Hht => /heap_through_bij_Some. naive_solver. }
         rewrite left_id.
-        rewrite map_filter_lookup_true. 2: { move => *. rewrite elem_of_hb_shared_i. naive_solver. }
+        rewrite map_lookup_filter_true. 2: { move => *. rewrite elem_of_hb_shared_i. naive_solver. }
         move: (Hpi pii o) => <-. 2: {
           rewrite heap_bij_merge_player_i. right. split!; [done|]. by rewrite elem_of_hb_shared_i.
         }
@@ -1052,8 +1052,8 @@ Proof.
         rewrite HS. split; [done|]. move => ????. apply: val_in_bij_mono; [naive_solver|].
         unfold heap_bij_extend in *. naive_solver.
     + move => pi o /=. rewrite elem_of_hb_player_s => ?. rewrite lookup_union_r.
-      2: { apply map_filter_lookup_None. right. move => ??. rewrite elem_of_hb_shared_s. naive_solver. }
-      rewrite map_filter_lookup_true //.
+      2: { apply map_lookup_filter_None. right. move => ??. rewrite elem_of_hb_shared_s. naive_solver. }
+      rewrite map_lookup_filter_true //.
       move => ??. rewrite elem_of_hb_shared_s. naive_solver.
     + apply: heap_preserved_mono; [done|]. move => ?.
       rewrite {1}elem_of_hb_player_i /= heap_bij_merge_player_i. naive_solver.
@@ -1067,8 +1067,8 @@ Proof.
       destruct (decide (pi ∈ hb_shared_s bija')) as [Hpi'|Hpi'];
         rewrite elem_of_hb_shared_s in Hpi'; destruct!.
       * rewrite lookup_union.
-        rewrite map_filter_lookup_true. 2: { move => *. rewrite elem_of_hb_shared_s. naive_solver. }
-        rewrite map_filter_lookup_None_2.
+        rewrite map_lookup_filter_true. 2: { move => *. rewrite elem_of_hb_shared_s. naive_solver. }
+        rewrite map_lookup_filter_None_2.
         2: { right. move => *. rewrite elem_of_hb_shared_s elem_of_hb_shared_i. naive_solver. }
         rewrite right_id_L.
         rewrite heap_through_bij_is_Some' //. split; [done|].
@@ -1078,8 +1078,8 @@ Proof.
         simplify_option_eq. revert select (h_heap h' !! _ = Some _) => ->. move => [_ [//|v' ?]] Hv.
         exploit Hv; [done..|]. destruct v' => //; simplify_eq/=. rewrite heap_bij_merge_shared. naive_solver.
       * rewrite lookup_union.
-        rewrite map_filter_lookup_None_2. 2: { right. move => *. rewrite elem_of_hb_shared_s. naive_solver. }
-        rewrite map_filter_lookup_true. 2: { move => *. rewrite elem_of_hb_shared_s. naive_solver. }
+        rewrite map_lookup_filter_None_2. 2: { right. move => *. rewrite elem_of_hb_shared_s. naive_solver. }
+        rewrite map_lookup_filter_true. 2: { move => *. rewrite elem_of_hb_shared_s. naive_solver. }
         rewrite left_id_L.
         move: (Hps ps o) => <-. 2: {
           rewrite heap_bij_merge_player_s. right. eexists _. split; [done|]. apply default_eq_Some'.
@@ -1093,8 +1093,8 @@ Proof.
     + apply: heap_preserved_mono; [done|].
       move => ?. rewrite heap_bij_merge_player_s elem_of_hb_player_s. naive_solver.
     + move => pi o /=. rewrite elem_of_hb_player_i => ?. rewrite lookup_union_r.
-      2: { apply map_filter_lookup_None. right. move => /=?/heap_through_bij_Some[?[?[/hb_disj??]]]. naive_solver. }
-      rewrite map_filter_lookup_true //.
+      2: { apply map_lookup_filter_None. right. move => /=?/heap_through_bij_Some[?[?[/hb_disj??]]]. naive_solver. }
+      rewrite map_lookup_filter_true //.
       move => ??. rewrite elem_of_hb_shared_i /=. right => -[? /hb_disj]. naive_solver.
     + instantiate (1 := True%I). by rewrite !right_id.
     + by rewrite event_set_vals_heap_idemp.

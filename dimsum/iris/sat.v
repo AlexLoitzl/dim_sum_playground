@@ -58,11 +58,11 @@ Proof. intros ????. rewrite -!discrete_iff -cmra_discrete_valid_iff. auto. Qed.
 
 Lemma core_cancelableN_total x `{!CoreCancelable x} `{!CmraTotal A} n y z :
   ✓{n}(x ⋅ y) → x ⋅ y ≡{n}≡ x ⋅ z → y ⋅ core x ≡{n}≡ z ⋅ core x.
-Proof. move => ??. efeed generalize (core_cancelableN x); [done..|]. by rewrite cmra_pcore_core. Qed.
+Proof. move => ??. ogeneralize* (core_cancelableN x); [done..|]. by rewrite cmra_pcore_core. Qed.
 
 Global Instance cancelable_core_cancelable x `{!Cancelable x} : CoreCancelable x.
 Proof.
-  rewrite /CoreCancelable => n y z Hvalid Hz. efeed generalize @cancelableN; [done..|]. move => ->. done.
+  rewrite /CoreCancelable => n y z Hvalid Hz. ogeneralize* @cancelableN; [done..|]. move => ->. done.
 Qed.
 
 Global Instance coreid_core_cancelable x `{!CoreId x} : CoreCancelable x.
@@ -84,7 +84,7 @@ Proof.
     + apply: cmra_monoN_l. apply cmra_included_includedN. by apply cmra_included_pcore.
     + apply cmra_includedN_l.
   }
-  efeed pose proof (Hx1 n (x2 ⋅ y) (x2 ⋅ z)).
+  opose proof* (Hx1 n (x2 ⋅ y) (x2 ⋅ z)).
   - by rewrite assoc.
   - by rewrite !assoc.
   - by rewrite -!cmra_op_opM_assoc.
@@ -108,8 +108,8 @@ Lemma prod_core_cancelable {A B : cmra} (x1 : A) (x2 : B) :
 Proof.
   move => Hx1 Hx2 [? Hp1] [? Hp2].
   move => n [y1 y2] [z1 z2] /=. rewrite -!pair_op => /pair_validN[/=??] [/= ??].
-  efeed specialize Hx1; [done..|].
-  efeed specialize Hx2; [done..|].
+  ospecialize* Hx1; [done..|].
+  ospecialize* Hx2; [done..|].
   rewrite pair_pcore /= Hp1 Hp2 /=.
   rewrite Hp1/= in Hx1. rewrite Hp2/= in Hx2.
   done.
@@ -248,7 +248,7 @@ Section sat.
       as (?[?[?[-> ?]]]) "[Ha Hf]".
     2: { iModIntro. iSplitL "Ha"; iExists _; by iFrame. }
     apply view_updateP. move => ? f [/cmra_discrete_included_iff [i Heq] /cmra_discrete_valid_iff Hvalid].
-    feed destruct (Hholds 0 (f ⋅ i)) as [x [?%cmra_discrete_valid_iff ?]].
+    destruct (Hholds 0 (f ⋅ i)) as [x [?%cmra_discrete_valid_iff ?]].
     { done. } { rewrite assoc -Heq. by apply cmra_valid_validN. }
     eexists (x ⋅ f ⋅ i), x.
     split; [by eexists (x ⋅ f ⋅ i), x|].
@@ -404,7 +404,7 @@ Section sat.
         apply local_update_unital_discrete.
         move => z Hz Heq2. split.
         * rewrite -Ha2' -Ha. by apply/cmra_discrete_valid_iff.
-        * efeed pose proof @core_cancelable as Heq; [done..|].
+        * opose proof* @core_cancelable as Heq; [done..|].
           rewrite cmra_pcore_core/= comm in Heq.
           rewrite Heq -!assoc. f_equiv.
           by rewrite (comm _ z) assoc.

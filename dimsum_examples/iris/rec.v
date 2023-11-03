@@ -376,7 +376,7 @@ Section lemmas.
     iMod (ghost_map_delete_big with "Ha [$]") => /=.
     have -> : (h_heap h ∖ array l vs = (filter (λ '(l', _), l'.1 ≠ l.1) (h_heap h))); [|done].
     apply map_eq => i. apply option_eq => v.
-    rewrite map_filter_lookup_Some lookup_difference_Some.
+    rewrite map_lookup_filter_Some lookup_difference_Some.
     rewrite array_lookup_None.
     unfold heap_range in Hr. split; [|naive_solver lia].
     move => [Hh ?]. split!. move => ?. have := Hr i. rewrite Hh /is_Some. naive_solver lia.
@@ -464,7 +464,7 @@ Section lemmas.
     iMod (ghost_map_delete with "[$] [$]"). iModIntro. iExists _. iFrame.
     iPureIntro. split => ?? /lookup_delete_Some. 1: naive_solver.
     move => [??] ?? /=. rewrite -Hl //.
-    rewrite !elem_of_dom map_filter_lookup_true //. naive_solver.
+    rewrite !elem_of_dom map_lookup_filter_true //. naive_solver.
   Qed.
 
   Lemma rec_alloc_free_list h ls szs :

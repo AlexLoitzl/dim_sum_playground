@@ -210,7 +210,7 @@ Lemma prod_mod1_not_refines_prod_mod':
   ¬ srefines prod_mod1 prod_mod'.
 Proof.
   move => [/=Hr].
-  feed pose proof (Hr (λ κs, κs = [] ∨ κs = [Vis 1] ∨ κs = [Vis 1; Vis 3] ∨ κs = [Vis 1; Vis 3; Nb] ∨
+  opose proof* (Hr (λ κs, κs = [] ∨ κs = [Vis 1] ∨ κs = [Vis 1; Vis 3] ∨ κs = [Vis 1; Vis 3; Nb] ∨
                              κs = [Vis 2] ∨ κs = [Vis 2; Vis 4] ∨ κs = [Vis 2; Vis 4; Nb])) as Hr'.
   - apply: STraceStep. { constructor. } 2: naive_solver.
     move => /= ? [?|?]; simplify_eq.
