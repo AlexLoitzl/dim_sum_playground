@@ -492,9 +492,9 @@ Proof.
   have [Hbij1 Hbij2]:= Hbij p1 p2 o ltac:(done).
   split.
   - rewrite !map_lookup_filter /=. destruct (h_heap hi !! (p1, o)), (h_heap hs !! (p2, o)) => //=.
-    all: repeat case_option_guard => //; simplify_bij; naive_solver.
+    all: repeat case_guard => //; simplify_bij; naive_solver.
   - move => ??. rewrite !map_lookup_filter => /bind_Some[?[??]] /bind_Some[?[??]].
-    repeat case_option_guard => //; naive_solver.
+    repeat case_guard => //; naive_solver.
 Qed.
 
 Lemma heap_in_bij_free_r hi hs l2 bij:
@@ -557,7 +557,7 @@ Lemma heap_preserved_bij_player_free pl pi ps l he hp bij:
   heap_preserved (hb_player_s pl bij) he (heap_free hp l).
 Proof.
   move => ?? Hp p' o /= Hin. rewrite map_lookup_filter. etrans; [by apply Hp|].
-  destruct (h_heap hp !! (p', o)) => //=. case_option_guard => //.
+  destruct (h_heap hp !! (p', o)) => //=. case_guard => //.
   exfalso. move: Hin => /elem_of_hb_player_s?. naive_solver.
 Qed.
 

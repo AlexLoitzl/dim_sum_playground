@@ -12,7 +12,6 @@ Local Set Default Proof Using "Type*".
 (** * Tactics *)
 (** Inspired by inv in CompCert/Coqlib.v *)
 (* TODO: upstream? See https://gitlab.mpi-sws.org/iris/stdpp/-/issues/40 *)
-Ltac inv H := inversion H; clear H; simplify_eq.
 Tactic Notation "inv/=" ident(H) := inversion H; clear H; simplify_eq/=.
 
 Ltac inv_all_tac f :=
@@ -344,7 +343,7 @@ Section map_filter.
   Implicit Types m : M A.
   Lemma map_lookup_filter_true m i :
     (∀ x, m !! i = Some x → P (i, x)) → filter P m !! i = m !! i.
-  Proof. move => ?. rewrite map_lookup_filter. destruct (m !! i) => //=. case_option_guard; naive_solver. Qed.
+  Proof. move => ?. rewrite map_lookup_filter. destruct (m !! i) => //=. case_guard; naive_solver. Qed.
 
 (* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/394 *)
   Lemma map_filter_empty_iff_2 m :

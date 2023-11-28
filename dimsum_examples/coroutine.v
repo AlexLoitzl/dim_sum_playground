@@ -178,7 +178,7 @@ Proof.
   apply map_eq => k.
   destruct (decide (k = coro_state_addr + i)); simplify_map_eq.
   - symmetry. eapply coro_regs_mem_n_lookup_Some; [lia|done|]. split!; [lia|by simplify_map_eq'].
-  - rewrite /coro_regs_mem_n !lookup_map_seqZ. apply option_eq => ?. case_option_guard; [|done].
+  - rewrite /coro_regs_mem_n !lookup_map_seqZ. apply option_eq => ?. case_guard; [|done].
     rewrite !list_lookup_fmap !fmap_Some.
     setoid_rewrite lookup_take_Some.
     setoid_rewrite coro_get_regs_lookup_Some.

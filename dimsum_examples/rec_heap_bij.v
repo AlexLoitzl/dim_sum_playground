@@ -715,10 +715,9 @@ Proof.
   iDestruct ("Hh" $! p1 p2 o with "[//]") as "[%Hh1 Hh2]".
   iSplit => /=.
   - iPureIntro. rewrite !map_lookup_filter /=. destruct (h_heap hi !! (p1, o)), (h_heap hs !! (p2, o)) => //=.
-    all: repeat case_option_guard => //; simplify_bij; naive_solver.
+    all: repeat case_guard => //; simplify_bij; naive_solver.
   - iIntros (??). rewrite !map_lookup_filter. iIntros ([?[??]]%bind_Some [?[??]]%bind_Some).
-    repeat case_option_guard => //; simplify_bij; try naive_solver.
-    by iApply "Hh2".
+    repeat case_guard => //; simplify_eq/=. by iApply "Hh2".
 Qed.
 
 Lemma heap_in_bij_free_r l2 hi hs bij:
