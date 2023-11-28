@@ -253,7 +253,7 @@ Section language.
     - intros σ1 κ e2' σ2 efs yld Hpstep.
       destruct (fill_step_inv e1 σ1 κ e2' σ2 efs yld) as (e2'' & -> & ?); [|exact Hpstep|].
       + destruct (Hred σ1) as (? & ? & ? & ? & ?); eauto using val_stuck.
-      + efeed generalize Hstep; [done|]. naive_solver.
+      + ogeneralize* Hstep; [done|]. naive_solver.
   Qed.
 
   Lemma pure_step_nsteps_ctx K `{!@LanguageCtx Λ K} n e1 e2 :

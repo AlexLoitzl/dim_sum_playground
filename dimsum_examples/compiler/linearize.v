@@ -377,7 +377,7 @@ Proof.
   rewrite !subst_l_subst_map; [|lia..].
   tstep_both => ???.
   tstep_s. split!; [done|] => ?. tend. split!.
-  efeed pose proof heap_alloc_list_length as Hl; [done|]. rewrite fmap_length in Hl.
+  opose proof* heap_alloc_list_length as Hl; [done|]. rewrite fmap_length in Hl.
   rewrite !subst_l_subst_map; [|rewrite ?fmap_length; lia..]. rewrite -!subst_map_subst_map.
   apply tsim_mono_b_false.
   have ->: ∀ K ls e, expr_fill K (FreeA ls e) = expr_fill (FreeACtx ls :: K) e by [].

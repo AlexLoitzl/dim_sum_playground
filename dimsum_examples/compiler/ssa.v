@@ -214,7 +214,7 @@ Proof.
   rewrite imap_length. move => ?? Hret.
   tstep_both => ls ? Hl. rewrite fmap_imap (imap_const snd) in Hl.
   tstep_s. split!; [done|] => ?. tend. rewrite fmap_imap (imap_const snd). split!.
-  efeed pose proof heap_alloc_list_length as Hlen; [done|]. rewrite fmap_length in Hlen.
+  opose proof* heap_alloc_list_length as Hlen; [done|]. rewrite fmap_length in Hlen.
   rewrite !subst_l_subst_map; [|rewrite ?fmap_length ?imap_length; lia..].
   rewrite -!subst_map_subst_map. apply tsim_mono_b_false.
   apply: pass_correct; [done|..].

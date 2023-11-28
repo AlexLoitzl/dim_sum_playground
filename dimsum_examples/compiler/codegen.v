@@ -1506,7 +1506,7 @@ Proof.
       setoid_rewrite lookup_zip_with_Some.
       split => ?; destruct!.
       * split!. by rewrite seqZ_length.
-      * efeed pose proof @Forall2_lookup_r; [done..|]. destruct!.
+      * opose proof* @Forall2_lookup_r; [done..|]. destruct!.
         split!. by rewrite seqZ_length.
     + iFrame.
   - unfold r2a_regs_ret. simplify_map_eq'. split!.

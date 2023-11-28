@@ -364,7 +364,7 @@ Proof.
   destruct sp as [[]|] => //=; case_match; destruct!.
   - tsim_mirror (m1.(m_trans)) σ1. { tstep_s. by eexists None. }
     move => ???[??]?? p' ?? ok HR1 ?. simplify_eq/=.
-    efeed generalize Hcomm; [done|done|] => /= -[?[??]].
+    ogeneralize* Hcomm; [done|done|] => /= -[?[??]].
     tstep_s. eexists (Some (Outgoing, _)). split!; [done|].
     destruct p' => /=.
     + apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
@@ -379,7 +379,7 @@ Proof.
     apply Hloop; [done|]. split!.
   - tsim_mirror (m2.(m_trans)) σ2. { tstep_s. by eexists None. }
     move => ??? [??] Pσ Hs p' ?? ok HR1 ?. simplify_eq/=.
-    efeed generalize Hcomm; [done|done|] => /= -[?[??]].
+    ogeneralize* Hcomm; [done|done|] => /= -[?[??]].
     tstep_s. eexists (Some (Outgoing, _)). split!; [done|].
     destruct p' => /=.
     + apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
@@ -393,7 +393,7 @@ Proof.
     apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
     apply Hloop; [done|]. split!.
   - tstep_i. move => ? p' ?? ok HR1.
-    efeed generalize Hcomm; [done|done|] => /= -[?[??]].
+    ogeneralize* Hcomm; [done|done|] => /= -[?[??]].
     tstep_s. split!; [done|]. destruct ok; [|by tstep_s] => /=.
     apply Hloop; [done|].
     repeat case_match => //; destruct!; split!; destruct sp; by simplify_eq/=.

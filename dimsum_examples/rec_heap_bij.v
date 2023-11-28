@@ -714,9 +714,9 @@ Proof.
   iIntros (?) "Hh". iIntros (p1 p2 o ?).
   iDestruct ("Hh" $! p1 p2 o with "[//]") as "[%Hh1 Hh2]".
   iSplit => /=.
-  - iPureIntro. rewrite !map_filter_lookup /=. destruct (h_heap hi !! (p1, o)), (h_heap hs !! (p2, o)) => //=.
+  - iPureIntro. rewrite !map_lookup_filter /=. destruct (h_heap hi !! (p1, o)), (h_heap hs !! (p2, o)) => //=.
     all: repeat case_option_guard => //; simplify_bij; naive_solver.
-  - iIntros (??). rewrite !map_filter_lookup. iIntros ([?[??]]%bind_Some [?[??]]%bind_Some).
+  - iIntros (??). rewrite !map_lookup_filter. iIntros ([?[??]]%bind_Some [?[??]]%bind_Some).
     repeat case_option_guard => //; simplify_bij; try naive_solver.
     by iApply "Hh2".
 Qed.
@@ -726,7 +726,7 @@ Lemma heap_in_bij_free_r l2 hi hs bij:
   heap_in_bij bij hi hs -∗
   heap_in_bij bij hi (heap_free hs l2).
 Proof.
-  iIntros (?) "Hh". iIntros (????) => /=. rewrite map_filter_lookup_true. 1: by iApply "Hh".
+  iIntros (?) "Hh". iIntros (????) => /=. rewrite map_lookup_filter_true. 1: by iApply "Hh".
   naive_solver.
 Qed.
 

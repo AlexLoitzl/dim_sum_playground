@@ -486,7 +486,7 @@ Proof. apply: srefines_equiv_equiv => ?. rewrite mod_ang_comm1_straces mod_ang_c
 Lemma mod_ang_comm_not_trefines:
   ¬ trefines mod_ang_comm2 mod_ang_comm1.
 Proof.
-  move => [/=Hr]. feed pose proof (Hr (tex bool (λ b, if b then tcons 1 $ tcons 2 tnil else tcons 1 $ tcons 3 tnil))) as Hr2.
+  move => [/=Hr]. opose proof* (Hr (tex bool (λ b, if b then tcons 1 $ tcons 2 tnil else tcons 1 $ tcons 3 tnil))) as Hr2.
   - tstep_None; [ constructor|]. move => ?[->|->].
     + apply: (thas_trace_ex true).
       tstep_Some; [constructor|] => ? ->.

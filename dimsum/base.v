@@ -60,7 +60,7 @@ Ltac fast_set_solver := set_unfold; naive_solver.
 
 (** exploit from CompCert/Coqlib.v *)
 (* TODO: Is this a good idea? *)
-Ltac exploit x := efeed generalize x.
+Ltac exploit x := ogeneralize* x.
 
 (** [specialize_hyps] looks for hypothesis of the form [∀ x, P x → ...] and
  tries to find a unique solution for x. *)
@@ -342,9 +342,9 @@ Section map_filter.
   Context `{FinMap K M}.
   Context {A} (P : K * A → Prop) `{!∀ x, Decision (P x)}.
   Implicit Types m : M A.
-  Lemma map_filter_lookup_true m i :
+  Lemma map_lookup_filter_true m i :
     (∀ x, m !! i = Some x → P (i, x)) → filter P m !! i = m !! i.
-  Proof. move => ?. rewrite map_filter_lookup. destruct (m !! i) => //=. case_option_guard; naive_solver. Qed.
+  Proof. move => ?. rewrite map_lookup_filter. destruct (m !! i) => //=. case_option_guard; naive_solver. Qed.
 
 (* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/394 *)
   Lemma map_filter_empty_iff_2 m :
