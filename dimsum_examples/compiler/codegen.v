@@ -1427,7 +1427,7 @@ Proof.
       set (pc1 := rs !!! "PC") in *.
       set (pc2 := rs0 !!! "PC") in *. clearbody pc1 pc2.
       match goal with | |- context [length ?l] => destruct (decide (pc2 = pc1 + length l - 1)); [|lia] end.
-      subst. exfalso. move: Hi. clear. rewrite lookup_map_seqZ. case_option_guard => //.
+      subst. exfalso. move: Hi. clear. rewrite lookup_map_seqZ. case_guard => //.
       rewrite list_lookup_fmap. rewrite !lookup_app_r ?app_length /=; [|lia..].
       move => /fmap_Some[?[]]. rewrite lookup_cons_Some. naive_solver lia.
     - apply map_scramble_insert_r_in; [compute_done|].

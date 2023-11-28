@@ -724,7 +724,7 @@ Lemma heap_preserved_free l h m:
   heap_preserved m (heap_free h l).
 Proof.
   move => Hp ? l' f ? /=. rewrite map_lookup_filter. etrans; [|by eapply Hp].
-  destruct (h_heap h !! l') => //=. case_option_guard => //. destruct l, l'; naive_solver.
+  destruct (h_heap h !! l') => //=. case_guard => //. destruct l, l'; naive_solver.
 Qed.
 
 Lemma heap_preserved_insert_const p m h:
