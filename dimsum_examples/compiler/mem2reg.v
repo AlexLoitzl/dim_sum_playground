@@ -47,6 +47,7 @@ Definition lexpr_op_pass (x: string) (e: lexpr_op) : M lexpr_op :=
       mret $ LVarVal v2
     else mret $ LStore v1 v2
   | LCall f args =>
+    cassert UsedAsLoc (f ≠ VVar x);;
     cassert UsedAsLoc (Forall (λ v, v ≠ VVar x) args);;
     mret (LCall f args)
   end.
@@ -175,7 +176,7 @@ Proof. vm_compute. match goal with |- ?x = ?x => exact: eq_refl end. Abort.
 Definition test_fn_3 : fndef := {|
   fd_args := ["y"];
   fd_vars := [("x", 4%Z)];
-  fd_body := (BinOp (BinOp (Var "y") OffsetOp (Val 2)) AddOp (Call "f" [Load (Var "x"); Val 1]));
+  fd_body := (BinOp (BinOp (Var "y") OffsetOp (Val 2)) AddOp (Call (Val (ValFn "f")) [Load (Var "x"); Val 1]));
   fd_static := I;
 |}.
 
@@ -189,7 +190,7 @@ Lemma test_3 :
         LLetE "x" (LVarVal (VVal (StaticValNum 0)))
           (LLetE "$0$" (LBinOp (VVar "y") OffsetOp (VVal (StaticValNum 2)))
              (LLetE "$1$" (LVarVal (VVar "x"))
-                (LLetE "$2$" (LCall "f" [VVar "$1$"; VVal (StaticValNum 1)])
+                (LLetE "$2$" (LCall (VVal (StaticValFn "f")) [VVar "$1$"; VVal (StaticValNum 1)])
                    (LLetE "$3$" (LBinOp (VVar "$0$") AddOp (VVar "$2$")) (LEnd (LVarVal (VVar "$3$")))))))
     |}.
 Proof. vm_compute. match goal with |- ?x = ?x => exact: eq_refl end. Abort.
@@ -257,17 +258,17 @@ Proof.
 Qed.
 
 
-Lemma lexpr_tsim_var_val_call vs' ws' ys es ei Ks Ki vss vsi x n hi hs fns1 fns2 rf f r
-  `{Hfill2: !RecExprFill ei Ki (Call f ((Val <$> vs') ++ (subst_map vsi <$> (var_val_to_expr <$> ys))))}
-  `{Hfill1: !RecExprFill es Ks (Call f ((Val <$> ws') ++ (subst_map vss <$> (var_val_to_expr <$> ys))))}:
+Lemma lexpr_tsim_var_val_call vs' ws' ys es ei Ks Ki vss vsi x n hi hs fns1 fns2 rf fi fs r
+  `{Hfill2: !RecExprFill ei Ki (Call (Val fi) ((Val <$> vs') ++ (subst_map vsi <$> (var_val_to_expr <$> ys))))}
+  `{Hfill1: !RecExprFill es Ks (Call (Val fs) ((Val <$> ws') ++ (subst_map vss <$> (var_val_to_expr <$> ys))))}:
     dom vss ⊆ dom vsi →
     Forall (λ v, v ≠ VVar x) ys →
     satisfiable (([∗ map] vi;vs ∈ (delete x vsi); (delete x vss), val_in_bij vi vs) ∗ ([∗ list] v; w ∈ vs'; ws', val_in_bij v w) ∗ r) →
     (∀ vs ws,
       satisfiable (([∗ map] vi;vs ∈ (delete x vsi); (delete x vss), val_in_bij vi vs) ∗ ([∗ list] v; w ∈ vs' ++ vs; ws' ++ ws, val_in_bij v w) ∗ r) →
-      Rec (expr_fill Ki (Call f (Val <$> (vs' ++ vs)))) hi fns1
+      Rec (expr_fill Ki (Call (Val fi) (Val <$> (vs' ++ vs)))) hi fns1
         ⪯{rec_trans, rec_heap_bij_trans rec_trans, n, true}
-      (SMProg, Rec (expr_fill Ks (Call f (Val <$> (ws' ++ ws)))) hs fns2, (PPInside, (), rf))
+      (SMProg, Rec (expr_fill Ks (Call (Val fs) (Val <$> (ws' ++ ws)))) hs fns2, (PPInside, (), rf))
     ) →
     Rec ei hi fns1
       ⪯{rec_trans, rec_heap_bij_trans rec_trans, n, true}
@@ -350,7 +351,7 @@ Proof.
       intros v1 v2 _ _ Hsat; simpl.
       tstep_s. intros l' v' -> Hlook'.
       iSatStart. iIntros "(Hvals & Hbij & Hinv & Hval & Hl & r & rf)".
-      destruct v1 as [| |l'']; simpl; try done.
+      destruct v1 as [| |l''|]; simpl; try done.
       iDestruct (heap_bij_inv_lookup with "Hinv Hbij") as "[%w [%Heq' #Hval']]"; first done.
       iSatStop. tstep_i. split!. eapply Hcont; [done..|].
       iSatMono. iFrame. done.
@@ -375,20 +376,24 @@ Proof.
       intros u1 u2 _ _ Hsat; simpl.
       tstep_s. intros l' Heq Halive; subst w2.
       iSatStart. iIntros "(Hvals & #Hu & Hw & Hinv & Hval & Hl & r & rf)".
-      destruct w1 as [| |l'']; simpl; try done.
+      destruct w1 as [| |l''|]; simpl; try done.
       iDestruct (heap_bij_inv_alive with "Hinv Hw") as "%"; first done.
       iDestruct (heap_bij_inv_update with "Hinv Hw Hu") as "Hheap".
       iSatStop. tstep_i. split!. eapply Hcont; [done..|].
       iSatMono. iFrame. done.
-  - simplify_crun_eq. apply: (lexpr_tsim_var_val_call nil nil); eauto.
+  - simplify_crun_eq.
+    apply: (lexpr_tsim_var_val); eauto; clear Hsat.
+    intros w1 w2 _ _ Hsat; simpl.
+    apply: (lexpr_tsim_var_val_call nil nil); eauto.
     { iSatMono. iIntros "[$ H]". simpl. iSplit; first done. iExact "H". }
     simpl. clear Hsat. intros vs' ws' Hsat.
+    tstep_s => f ?. simplify_eq/=.
+    iSatStart. iIntros!. destruct w1; iDestruct!. iSatStop.
     apply: Hcalls; eauto.
     { by eapply Forall2_fmap_l, Forall_Forall2_diag, Forall_forall. }
     { by eapply Forall2_fmap_l, Forall_Forall2_diag, Forall_forall. }
-    { iSatMono. iIntros "(H1 & $ & $ & H2 & H3 & H4 & $)".
-      iCombine "H1 H2 H3 H4" as "H". iExact "H". }
-    clear Hsat; intros v1'' v2'' h1'' h2'' rf'' Hsat; simpl.
+    { iSatMono. iFrame. iAccu. }
+    iSatClear. intros v1'' v2'' h1'' h2'' rf'' Hsat; simpl.
     eapply Hcont; [done..|].
     iSatMono. iIntros "($ & $ & (_ & $ & $ & $) & $)".
 Qed.
