@@ -67,7 +67,7 @@ Definition rec_expr_itree (e : expr) : itree (callE expr val +' moduleE rec_even
       fns ← get_rec_fns;
       if fns !! f is Some fn then
         assume (length vs = length fn.(fd_args));;
-        call (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body)))
+        call (AllocA fn.(fd_vars) (subst_static  f fn.(fd_static_vars) (subst_l fn.(fd_args) vs fn.(fd_body))))
       else
         h ← get_rec_heap;
         visible (Outgoing, ERCall f vs h);;
@@ -270,11 +270,11 @@ Proof.
     case_match.
     + go_s. split!. move => ?. go_i. split!. go. go_i. go_i.
       apply Hloop; [done|].
-      split!; [done|apply _| |done].
-      cbn. apply rec_itree_expr_inv_subst_l.
+      split! => //=.
+      do 2 apply rec_itree_expr_inv_subst_l.
       apply is_static_expr_rec_itree_expr_inv. apply fd_static.
     + go_i. go_i. go_s. split!. go_i. go_i.
-      apply Hloop; [done|]. split!; [done|apply _|done|done].
+      apply Hloop; [done|]. split! => //=.
   - go.
     destruct (decide (Forall (λ x : Z, 0 < x) ls.*2)).
     2: { go_s. exploit (heap_alloc_list_fresh ls.*2 ∅) => -[??]. by split!. }
@@ -413,11 +413,11 @@ Proof.
     move => /= *. go_s => ??. go. destruct vf; simplify_eq/=.
     go_s. tstep_both. split => *; simplify_option_eq.
     + go_s => ?. go. tend. split!. go_s. go_s.
-      apply Hloop; [done|]. split!; [done|apply _| |done].
-      cbn. apply rec_itree_expr_inv_subst_l.
+      apply Hloop; [done|]. split! => //=.
+      do 2 apply rec_itree_expr_inv_subst_l.
       apply is_static_expr_rec_itree_expr_inv. apply fd_static.
     + go_s. go_s. split!; [done|]. go. tend. go_s. go_s.
-      apply Hloop; [done|]. split!; [done|apply _|done|done].
+      apply Hloop; [done|]. split! => //.
   - go_s. go_s => ?. go. go_i => *. split!.
     go_s. go_s. eexists _. go. go_s. eexists _. go. go_s. split!; [done|]. go.
     go_s. go_s. go_s. go_s.

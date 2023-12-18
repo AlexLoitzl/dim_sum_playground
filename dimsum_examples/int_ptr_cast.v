@@ -84,7 +84,7 @@ Local Ltac go_i :=
 
 Lemma int_to_ptr_asm_refines_spec :
   trefines (asm_mod int_to_ptr_asm)
-           (rec_to_asm (dom int_to_ptr_asm) int_to_ptr_f2i ∅
+           (rec_to_asm (dom int_to_ptr_asm) int_to_ptr_f2i ∅ ∅
               (itree_mod int_to_ptr_spec ∅)).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
@@ -172,6 +172,7 @@ void main () {
 
 Definition main_rec : fndef := {|
   fd_args := [];
+  fd_static_vars := [];
   fd_vars := [("l", 1)];
   fd_body := LetE "_" (Store (Var "l") (Val 1)) $
              LetE "z" (rec.Call (Val (ValFn "cast_ptr_to_int")) [(Var "l")]) $
@@ -243,7 +244,7 @@ Proof.
   go_i => *. go. destruct!.
   go_i. split!. move => *. simplify_eq.
   go_i.
-  go_i. eexists _. simplify_map_eq. rewrite heap_alloc_h_lookup; [|lia..]. split. { by simplify_map_eq. }
+  go_i. eexists _. simplify_map_eq. rewrite heap_alloc_h_lookup; [|done|lia]. split. { by simplify_map_eq. }
   go_i. split. { move => *; simplify_map_eq. }
   move => ????. rewrite bool_decide_false; [|compute_done].
   move => *. destruct!/=.
@@ -255,7 +256,7 @@ Qed.
 Definition main_f2i : gmap string Z := <["main" := 200]> $ <["exit" := 100]> int_to_ptr_f2i .
 
 Definition main_asm : gmap Z asm_instr :=
-  deep_to_asm_instrs 200 ltac:(r2a_compile main_f2i main_rec).
+  deep_to_asm_instrs 200 ltac:(r2a_compile main_f2i 100 main_rec).
 
 (* We need to lock this, otherwise simpl goes crazy. *)
 Definition main_asm_dom : gset Z := locked dom main_asm.
@@ -268,8 +269,8 @@ Definition main_asm_dom : gset Z := locked dom main_asm.
 
 Lemma main_asm_refines_rec :
   trefines (asm_mod main_asm)
-           (rec_to_asm (dom main_asm) main_f2i ∅ (rec_mod main_rec_prog)).
-Proof. apply: compile_correct; [|done|..]; compute_done. Qed.
+           (rec_to_asm (dom main_asm) main_f2i ∅ ∅ (rec_mod main_rec_prog)).
+Proof. apply: (compile_correct 100); [|done|..]; compute_done. Qed.
 
 (* https://thog.github.io/syscalls-table-aarch64/latest.html *)
 Definition __NR_EXIT : Z := 93.
@@ -373,7 +374,7 @@ Definition top_level_spec : itree (moduleE asm_event unit) void :=
 
 Lemma top_level_refines_spec :
   trefines (asm_link (main_asm_dom ∪ dom int_to_ptr_asm) (dom exit_asm)
-              (rec_to_asm (main_asm_dom ∪ dom int_to_ptr_asm) main_f2i ∅
+              (rec_to_asm (main_asm_dom ∪ dom int_to_ptr_asm) main_f2i ∅ ∅
                  (itree_mod main_spec tt)) (itree_mod exit_spec tt))
     (itree_mod top_level_spec tt).
 Proof.
@@ -389,7 +390,7 @@ Proof.
   go_i. eexists true => /=. split; [done|]. eexists ∅, _, [], [], "main".
   split!.
   { simplify_map_eq'. rewrite/main_asm_dom. unlock. compute_done. }
-  { apply: satisfiable_mono; [by eapply (r2a_res_init mem main_f2i)|].
+  { apply: satisfiable_mono; [by eapply (r2a_res_init mem ∅ main_f2i)|].
     iIntros!. rewrite /r2a_mem_map big_sepM_empty. iFrame.
     iDestruct select (r2a_f2i_full _) as "#Hf2i".
     iSplit!. 2: iSplitL; iSplit!.

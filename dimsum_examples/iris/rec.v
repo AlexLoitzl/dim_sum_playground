@@ -70,7 +70,7 @@ Section lifting.
   Lemma sim_tgt_rec_Call_internal f fn es Π Φ vs `{!AsVals es vs None} :
     length vs = length (fd_args fn) →
     f ↪ Some fn -∗
-    (▷ₒ TGT AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body)) [{ Π }] {{ Φ }}) -∗
+    (▷ₒ TGT AllocA fn.(fd_vars) (subst_static f (fd_static_vars fn) (subst_l fn.(fd_args) vs fn.(fd_body))) [{ Π }] {{ Φ }}) -∗
     TGT Call (Val (ValFn f)) es [{ Π }] {{ Φ }}.
   Proof.
     destruct AsVals0. iIntros (?) "Hfn HΦ".
@@ -269,7 +269,7 @@ Section memmove.
       iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
       destruct (decide (d.1 = s.1 ∧ s.2 ≤ d.2 + length hvss)) as [[??]|Hn]; simplify_eq.
       + rewrite -(insert_union_l _ _ s) insert_union_r. 2: { apply array_lookup_None => /=. lia. }
-        rewrite delete_union. rewrite delete_notin. 2: { apply array_lookup_None => /=. lia. }
+        rewrite delete_union. rewrite delete_notin. 2: { apply array_lookup_None => /=. naive_solver lia. }
         destruct (decide (d = s)); simplify_eq.
         * rewrite delete_insert_delete delete_insert. 2: { apply array_lookup_None => /=. lia. }
           iApply ("IH" with "[%] [%] [//] [//] [%] Hm"). { lia. } { done. } { simpl. lia. }
@@ -278,20 +278,26 @@ Section memmove.
           rewrite insert_insert. by iApply (big_sepM_insert_2 with "[Hdv]"); [done|].
         * rewrite delete_insert_ne // delete_insert. 2: { apply array_lookup_None => /=. lia. }
           have ?: d.2 ≠ s.2. { destruct d, s; naive_solver. }
-          rewrite (array_insert s ( d+ₗ1)) //=; [|lia].
-          iApply ("IH" with "[%] [%] [//] [//] [%] Hm"). { lia. } { rewrite insert_length. done. } { simpl. lia. }
+          rewrite (array_insert s ( d+ₗ1)) //=; [|naive_solver lia].
+          iApply ("IH" with "[%] [%] [//] [//] [%] Hm"). { lia. } { rewrite insert_length. done. } { simpl. naive_solver lia. }
           iIntros "?". iSplit!. iApply ("HΦ" with "[-]").
           rewrite -insert_union_l. iApply (big_sepM_insert_2 with "[Hdv]"); [done|].
-          rewrite -insert_union_r_Some //. apply array_lookup_is_Some. split!; lia.
+          rewrite -insert_union_r_Some //. apply array_lookup_is_Some. split!; naive_solver lia.
       + rewrite delete_union delete_insert. 2: { apply array_lookup_None => /=. lia. }
-        rewrite delete_insert_ne. 2: { move => ?. subst. lia. }
-        rewrite delete_notin. 2: { apply array_lookup_None => /=. lia. }
+        rewrite delete_insert_ne. 2: { move => ?. subst. naive_solver lia. }
+        rewrite delete_notin. 2: {
+          apply array_lookup_None => /=.
+          destruct (decide (s.2 ≤ d.2 + length hvss)); naive_solver lia. }
         rewrite -!insert_union_l (big_sepM_delete _ (<[s:=_]>_) s v). 2: by simplify_map_eq.
         iDestruct "Hm" as "[Hsv Hm]".
-        rewrite delete_insert. 2: { apply lookup_union_None. rewrite !array_lookup_None => /=. lia. }
-        iApply ("IH" with "[%] [%] [//] [//] [%] Hm"). { lia. } { done. } { simpl. lia. }
+        rewrite delete_insert. 2: {
+          apply lookup_union_None. rewrite !array_lookup_None => /=.
+          destruct (decide (s.2 ≤ d.2 + length hvss)); naive_solver lia. }
+        iApply ("IH" with "[%] [%] [//] [//] [%] Hm"). { lia. } { done. } { simpl. naive_solver lia. }
         iIntros "?". iSplit!. iApply ("HΦ" with "[-]").
-        rewrite -insert_union_r. 2: { apply array_lookup_None => /=. lia. }
+        rewrite -insert_union_r. 2: {
+          apply array_lookup_None => /=.
+          destruct (decide (s.2 ≤ d.2 + length hvss)); naive_solver lia. }
         iApply (big_sepM_insert_2 with "[Hdv]"); [done|].
         iApply (big_sepM_insert_2 with "[Hsv]"); [done|].
         done.
@@ -323,7 +329,7 @@ Section memmove.
       iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
       destruct (decide (d.1 = s.1 ∧ d.2 ≤ s.2 + length hvss)) as [[??]|Hn]; simplify_eq.
       + rewrite -(insert_union_l _ _ s) insert_union_r. 2: { apply array_lookup_None => /=. lia. }
-        rewrite delete_union. rewrite delete_notin. 2: { apply array_lookup_None => /=. lia. }
+        rewrite delete_union. rewrite delete_notin. 2: { apply array_lookup_None => /=. naive_solver lia. }
         destruct (decide (d = s)); simplify_eq.
         * rewrite delete_insert_delete delete_insert. 2: { apply array_lookup_None => /=. lia. }
           iApply ("IH" with "[%] [%] [%] [%] [%] Hm"). { lia. } { lia. }
@@ -334,24 +340,30 @@ Section memmove.
           rewrite insert_insert. by iApply (big_sepM_insert_2 with "[Hdv]"); [done|].
         * rewrite delete_insert_ne // delete_insert. 2: { apply array_lookup_None => /=. lia. }
           have ?: d.2 ≠ s.2. { destruct d, s; naive_solver. }
-          rewrite (array_insert s (d +ₗ - length hvss)) //=; [|lia].
+          rewrite (array_insert s (d +ₗ - length hvss)) //=; [|naive_solver lia].
           iApply ("IH" with "[%] [%] [%] [%] [%] Hm"). { lia. } { rewrite insert_length. lia. }
-          { apply loc_eq; split!; lia. } { apply loc_eq; split!; lia. } { simpl. lia. }
+          { apply loc_eq; split!; lia. } { apply loc_eq; split!; lia. } { simpl. naive_solver lia. }
           iIntros "?". iSplit!. iApply ("HΦ" with "[-]").
           rewrite -(insert_union_r _ ∅). 2: { apply array_lookup_None => /=. lia. }
           rewrite right_id_L -insert_union_l. iApply (big_sepM_insert_2 with "[Hdv]"); [done|].
-          rewrite -insert_union_r_Some //. apply array_lookup_is_Some. split!; lia.
+          rewrite -insert_union_r_Some //. apply array_lookup_is_Some. split!; naive_solver lia.
       + rewrite delete_union delete_insert. 2: { apply array_lookup_None => /=. lia. }
-        rewrite delete_insert_ne. 2: { move => ?. subst. lia. }
-        rewrite delete_notin. 2: { apply array_lookup_None => /=. lia. }
+        rewrite delete_insert_ne. 2: { move => ?. subst. naive_solver lia. }
+        rewrite delete_notin. 2: {
+          apply array_lookup_None => /=.
+          destruct (decide (d.2 ≤ s.2 + length hvss)); naive_solver lia. }
         rewrite -!insert_union_l (big_sepM_delete _ (<[s:=_]>_) s v). 2: by simplify_map_eq.
         iDestruct "Hm" as "[Hsv Hm]".
-        rewrite delete_insert. 2: { apply lookup_union_None. rewrite !array_lookup_None => /=. lia. }
+        rewrite delete_insert. 2: {
+          apply lookup_union_None. rewrite !array_lookup_None => /=.
+          destruct (decide (d.2 ≤ s.2 + length hvss)); naive_solver lia. }
         iApply ("IH" $! hvss hvsd with "[%] [%] [%] [%] [%] Hm"). { lia. } { lia. }
-        { apply loc_eq; split!; lia. } { apply loc_eq; split!; lia. } { simpl. lia. }
+        { apply loc_eq; split!; lia. } { apply loc_eq; split!; lia. } { simpl. naive_solver lia. }
         iIntros "?". iSplit!. iApply ("HΦ" with "[-]").
         rewrite -(insert_union_r _ _ d). 2: { apply array_lookup_None => /=. lia. }
-        rewrite -insert_union_l right_id_L -insert_union_r. 2: { apply array_lookup_None => /=. lia. }
+        rewrite -insert_union_l right_id_L -insert_union_r. 2: {
+          apply array_lookup_None => /=.
+          destruct (decide (d.2 ≤ s.2 + length hvss)); naive_solver lia. }
         iApply (big_sepM_insert_2 with "[Hdv]"); [done|].
         iApply (big_sepM_insert_2 with "[Hsv]"); [done|].
         done.

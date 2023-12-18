@@ -78,6 +78,7 @@ Fixpoint pass (e : static_expr) : M var_val :=
 Definition test_fn_1 : fndef := {|
   fd_args := ["x"];
   fd_vars := [];
+  fd_static_vars := [];
   fd_body := (BinOp (BinOp (Var "x") OffsetOp (Val 2)) AddOp (Call (Val (ValFn "f")) [Load (Var "x"); Val 1]));
   fd_static := I;
 |}.
@@ -376,6 +377,7 @@ Definition pass_fn (f : static_fndef) : compiler_success error lfndef :=
   (λ v, {|
      lfd_args := f.(sfd_args);
      lfd_vars := f.(sfd_vars);
+     lfd_static_vars := f.(sfd_static_vars);
      lfd_body := x.(c_prog) (LEnd $ LVarVal v);
   |} ) <$> x.(c_result).
 
@@ -384,6 +386,7 @@ Lemma test_1 :
   CSuccess {|
     lfd_args := ["x"];
     lfd_vars := [];
+    lfd_static_vars := [];
     lfd_body :=
       LLetE "$0$" (LBinOp (VVar "x") OffsetOp (VVal (StaticValNum 2)))
         (LLetE "$1$" (LLoad (VVar "x"))
@@ -396,22 +399,27 @@ Proof. vm_compute. match goal with |- ?x = ?x => exact: eq_refl end. Abort.
 Lemma pass_fn_args fn fn' :
   pass_fn fn = CSuccess fn' →
   lfd_args fn' = sfd_args fn.
-Proof. rewrite /pass_fn => /(compiler_success_fmap_success _ _ _ _ _ _). naive_solver. Qed.
+Proof. rewrite /pass_fn => /compiler_success_fmap_success. naive_solver. Qed.
+
+Lemma pass_fn_statics fn fn' :
+  pass_fn fn = CSuccess fn' →
+  lfd_static_vars fn' = sfd_static_vars fn.
+Proof. rewrite /pass_fn => /compiler_success_fmap_success. naive_solver. Qed.
 
 Lemma pass_fn_vars fn fn' :
   pass_fn fn = CSuccess fn' →
   lfd_vars fn' = sfd_vars fn.
-Proof. rewrite /pass_fn => /(compiler_success_fmap_success _ _ _ _ _ _). naive_solver. Qed.
+Proof. rewrite /pass_fn => /compiler_success_fmap_success. naive_solver. Qed.
 
 Lemma pass_fn_correct f fn fn' :
   pass_fn fn = CSuccess fn' →
-  NoDup (sfd_args fn ++ (sfd_vars fn).*1 ++ assigned_vars (static_expr_to_expr (sfd_body fn))) →
-  (∀ n, tmp_var n ∉ sfd_args fn ++ (sfd_vars fn).*1 ++ assigned_vars (static_expr_to_expr (sfd_body fn))) →
+  NoDup (sfd_args fn ++ (sfd_static_vars fn).*1 ++ (sfd_vars fn).*1 ++ assigned_vars (static_expr_to_expr (sfd_body fn))) →
+  (∀ n, tmp_var n ∉ sfd_args fn ++ (sfd_static_vars fn).*1 ++ (sfd_vars fn).*1 ++ assigned_vars (static_expr_to_expr (sfd_body fn))) →
   trefines (linear_rec_mod (<[f := fn']> ∅)) (rec_static_mod (<[f := fn]> ∅)).
 Proof.
   destruct (crun 0%N (pass (sfd_body fn))) as [?? res] eqn: Hsucc.
   unfold pass_fn. rewrite Hsucc => /= /(compiler_success_fmap_success _ _ _ _ _ _)[?[??]]. subst.
-  move => // /NoDup_app[?[?/NoDup_app[?[??]]]]?.
+  move => // /NoDup_app[?[?/NoDup_app[?[?/NoDup_app[?[??]]]]]]?.
   apply rec_proof. { move => ?. rewrite !lookup_fmap !fmap_None !lookup_insert_None. naive_solver. }
   move => ???????. rewrite !fmap_insert !fmap_empty /=.
   move => /lookup_insert_Some[[??]|[??]]; simplify_map_eq. split!.
@@ -420,14 +428,15 @@ Proof.
   tstep_both => ???.
   tstep_s. split!; [done|] => ?. tend. split!.
   opose proof* heap_alloc_list_length as Hl; [done|]. rewrite fmap_length in Hl.
-  rewrite !subst_l_subst_map; [|rewrite ?fmap_length; lia..]. rewrite -!subst_map_subst_map.
+  rewrite /subst_static !subst_l_subst_map; [|rewrite ?fmap_length ?imap_length; lia..].
+  rewrite -!subst_map_subst_map.
   apply tsim_mono_b_false.
   have ->: ∀ K ls e, expr_fill K (FreeA ls e) = expr_fill (FreeACtx ls :: K) e by [].
   apply: pass_correct; [done|done|done|done|set_solver|..].
-  { move => ?. rewrite lookup_union_is_Some !list_to_map_lookup_is_Some.
-    move => [|] [? /(elem_of_zip_l _ _ _)]; set_solver. }
-  { move => ?. rewrite lookup_union_is_Some !list_to_map_lookup_is_Some.
-    move => [|] [? /(elem_of_zip_l _ _ _)]; set_solver. }
+  { move => ?. rewrite !lookup_union_is_Some !list_to_map_lookup_is_Some.
+    move => [|[|]] [? /(elem_of_zip_l _ _ _)]; set_solver. }
+  { move => ?. rewrite !lookup_union_is_Some !list_to_map_lookup_is_Some.
+    move => [|[|]] [? /(elem_of_zip_l _ _ _)]; set_solver. }
   move => /= ???????. erewrite lookup_var_val_to_expr; [|done].
   tstep_s => ??. tstep_i. split!; [done|]. by apply Hret.
 Qed.

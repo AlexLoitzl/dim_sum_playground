@@ -109,12 +109,17 @@ Definition pass_fn (f : lfndef) : lfndef :=
   let (e, vars) := pass_body f.(lfd_body) f.(lfd_vars) in
   {|
      lfd_args := f.(lfd_args);
+     lfd_static_vars := f.(lfd_static_vars);
      lfd_vars := vars;
      lfd_body := e;
   |}.
 
 Lemma pass_fn_args f :
   lfd_args (pass_fn f) = lfd_args f.
+Proof. rewrite /pass_fn. by repeat case_match. Qed.
+
+Lemma pass_fn_statics f :
+  lfd_static_vars (pass_fn f) = lfd_static_vars f.
 Proof. rewrite /pass_fn. by repeat case_match. Qed.
 
 (** * Tests *)
@@ -126,6 +131,7 @@ Definition test_opt_fn (f: fndef) :=
 
 Definition test_fn_1 : fndef := {|
   fd_args := ["y"];
+  fd_static_vars := [("static", 42%Z)];
   fd_vars := [("x", 4%Z)];
   fd_body := (LetE "_" (Store (Var "x") (Val 1)) (Load (Var "x")));
   fd_static := I;
@@ -135,6 +141,7 @@ Lemma test_1 :
   CSuccess
     {|
       lfd_args := ["y"];
+      lfd_static_vars := [("static", 42%Z)];
       lfd_vars := [];
       lfd_body :=
         LLetE "x" (LVarVal (VVal (StaticValNum 0)))
@@ -146,6 +153,7 @@ Proof. vm_compute. match goal with |- ?x = ?x => exact: eq_refl end. Abort.
 
 Definition test_fn_2 : fndef := {|
   fd_args := ["y"];
+  fd_static_vars := [("static", 42%Z)];
   fd_vars := [("x", 4%Z); ("z", 4%Z)];
   fd_body := (LetE "_" (Store (Var "x") (Val 1))
              (LetE "_" (Store (Var "z") (Val 1))
@@ -158,6 +166,7 @@ Lemma test_2 :
   CSuccess
     {|
       lfd_args := ["y"];
+      lfd_static_vars := [("static", 42%Z)];
       lfd_vars := [("z", 4%Z)];
       lfd_body :=
         LLetE "x" (LVarVal (VVal (StaticValNum 0)))
@@ -175,6 +184,7 @@ Proof. vm_compute. match goal with |- ?x = ?x => exact: eq_refl end. Abort.
 (* TODO: this is kind of a corner case, since the expression has UB, which results in *)
 Definition test_fn_3 : fndef := {|
   fd_args := ["y"];
+  fd_static_vars := [("static", 42%Z)];
   fd_vars := [("x", 4%Z)];
   fd_body := (BinOp (BinOp (Var "y") OffsetOp (Val 2)) AddOp (Call (Val (ValFn "f")) [Load (Var "x"); Val 1]));
   fd_static := I;
@@ -185,6 +195,7 @@ Lemma test_3 :
   CSuccess
     {|
       lfd_args := ["y"];
+      lfd_static_vars := [("static", 42%Z)];
       lfd_vars := [];
       lfd_body :=
         LLetE "x" (LVarVal (VVal (StaticValNum 0)))
@@ -197,6 +208,7 @@ Proof. vm_compute. match goal with |- ?x = ?x => exact: eq_refl end. Abort.
 
 Definition test_fn_4 : fndef := {|
   fd_args := ["x"];
+  fd_static_vars := [("static", 42%Z)];
   fd_vars := [("y", 1%Z)];
   fd_body := (LetE "_" (Store (Var "y") (Var "x"))
              ((BinOp (Load (Var "y")) AddOp (Load (Var "y")))));
@@ -208,6 +220,7 @@ Lemma test_4 :
   CSuccess
     {|
       lfd_args := ["x"];
+      lfd_static_vars := [("static", 42%Z)];
       lfd_vars := [];
       lfd_body :=
         LLetE "y" (LVarVal (VVal (StaticValNum 0)))
@@ -296,17 +309,18 @@ Local Hint Resolve rec_heap_bij_call_mono : core.
 Local Hint Resolve rec_heap_bij_return_mono : core.
 
 
-Lemma pass_lexpr_op_correct ei' Ki ei Ks es es' x k (l: loc) n hi hs fns1 fns2 vsi vss wi ws r rf (f: option var_val → option var_val)
+Lemma pass_lexpr_op_correct ei' Ki ei Ks es es' x k (l: loc) n hi hs fns1 fns2 INV vsi vss wi ws r rf (f: option var_val → option var_val)
   `{Hfill1: !RecExprFill es Ks (subst_map vss (lexpr_op_to_expr es'))}
   `{Hfill2: !RecExprFill ei Ki (subst_map vsi (lexpr_op_to_expr ei'))}:
-    rec_heap_bij_call n fns1 fns2 →
+    rec_heap_bij_call n fns1 fns2 INV →
     (∀ (w1 w2: val),
        default (Val wi) (subst_map vsi <$> (var_val_to_expr <$> (f None))) = Val w1 →
       rec_heap_bij_return n fns1 fns2 Ki Ks
-        (r ∗ heap_bij_const_s l.1 (<[0%Z := w2]> (zero_block l k)) ∗ val_in_bij w1 w2)) →
+        (r ∗ heap_bij_const_s l.1 (<[0%Z := w2]> (zero_block l k)) ∗ val_in_bij w1 w2) INV) →
     satisfiable (([∗ map] v1;v2 ∈ (delete x vsi);(delete x vss), val_in_bij v1 v2) ∗
                    heap_bij_inv hi hs ∗ val_in_bij wi ws ∗
-                   heap_bij_const_s l.1 (<[0%Z := ws]> (zero_block l k)) ∗ r ∗ rf) →
+                   heap_bij_const_s l.1 (<[0%Z := ws]> (zero_block l k)) ∗
+                   INV ∗ r ∗ rf) →
     vss !! x = Some (ValLoc l) →
     vsi !! x = Some wi →
     dom vss ⊆ dom vsi →
@@ -323,14 +337,14 @@ Proof.
     apply: lexpr_tsim_var_val; eauto; clear Hsat.
     intros v1 v2 _ _ Hsat; simpl.
     eapply Hcont; [done..|].
-    iSatMono. iIntros "(_ & $ & $ & $ & $ & $ & $)".
+    iSatMono. iIntros "(_ & $ & $ & $ & $ & $ & $ & $)".
   - simplify_crun_eq.
     apply: lexpr_tsim_var_val; eauto; clear Hsat.
     intros v1' w1' _ _ Hsat; simpl.
     apply: lexpr_tsim_var_val; eauto; clear Hsat.
     intros v2' w2' _ _ Hsat; simpl.
     tstep_s. intros w' Heval.
-    iSatStart. iIntros "(Hvals & H1 & H2 & Hbij & Hval & Hl & r & rf)".
+    iSatStart. iIntros "(Hvals & H1 & H2 & Hbij & Hval & Hl & Hs & r & rf)".
     iDestruct (eval_binop_bij with "H2 H1") as "[%v' [%Heval2 Hw]]"; first done.
     iSatStop. tstep_i. split!.
     eapply Hcont; [done..|].
@@ -342,7 +356,7 @@ Proof.
       tstep_s. intros ??; injection 1 as <-; intros Heq.
       eapply Hcont; [done..|].
       iSatMono.
-      iIntros "(Hvals & Hbij & #Hval & Hl & $ & $)".
+      iIntros "(Hvals & Hbij & #Hval & Hl & Hs & $ & $)".
       iDestruct (heap_bij_inv_lookup_s with "Hbij Hl") as "%Heq'".
       rewrite Heq in Heq'. rewrite Hl in Heq'.
       rewrite lookup_insert in Heq'. simplify_eq. iFrame.
@@ -350,7 +364,7 @@ Proof.
     + apply: lexpr_tsim_var_val; eauto; clear Hsat.
       intros v1 v2 _ _ Hsat; simpl.
       tstep_s. intros l' v' -> Hlook'.
-      iSatStart. iIntros "(Hvals & Hbij & Hinv & Hval & Hl & r & rf)".
+      iSatStart. iIntros "(Hvals & Hbij & Hinv & Hval & Hl & Hs & r & rf)".
       destruct v1 as [| |l''|]; simpl; try done.
       iDestruct (heap_bij_inv_lookup with "Hinv Hbij") as "[%w [%Heq' #Hval']]"; first done.
       iSatStop. tstep_i. split!. eapply Hcont; [done..|].
@@ -361,7 +375,7 @@ Proof.
       intros w1 w2 ? ? Hsat; simpl.
       tstep_s. intros l' Heq Halive; injection Heq as <-.
       eapply Hcont; [done..|].
-      iSatMonoBupd. iIntros "(Hvals & #Hbij & Hinv & #Hval & Hl & r & rf)".
+      iSatMonoBupd. iIntros "(Hvals & #Hbij & Hinv & #Hval & Hl & Hs & r & rf)".
       iMod (heap_bij_inv_update_s with "Hinv Hl") as "[Hinv Hl]".
       iFrame "∗#". iModIntro.
       have -> : h_block (heap_update hs l w2) l.1 = <[0%Z:=w2]> (zero_block l k); [|done].
@@ -375,7 +389,7 @@ Proof.
       apply: (lexpr_tsim_var_val); eauto; clear Hsat.
       intros u1 u2 _ _ Hsat; simpl.
       tstep_s. intros l' Heq Halive; subst w2.
-      iSatStart. iIntros "(Hvals & #Hu & Hw & Hinv & Hval & Hl & r & rf)".
+      iSatStart. iIntros "(Hvals & #Hu & Hw & Hinv & Hval & Hl & Hs & r & rf)".
       destruct w1 as [| |l''|]; simpl; try done.
       iDestruct (heap_bij_inv_alive with "Hinv Hw") as "%"; first done.
       iDestruct (heap_bij_inv_update with "Hinv Hw Hu") as "Hheap".
@@ -395,7 +409,7 @@ Proof.
     { iSatMono. iFrame. iAccu. }
     iSatClear. intros v1'' v2'' h1'' h2'' rf'' Hsat; simpl.
     eapply Hcont; [done..|].
-    iSatMono. iIntros "($ & $ & (_ & $ & $ & $) & $)".
+    iSatMono. iIntros!. iFrame.
 Qed.
 
 
@@ -419,17 +433,18 @@ Proof.
     rewrite insert_id //.
 Qed.
 
-Lemma pass_correct  r rf ei' Ki ei Ks es es' x (l: loc) n k h h' fns1 fns2 vsi vss vi vs r_p
+Lemma pass_correct  r rf ei' Ki ei Ks es es' x (l: loc) n k h h' fns1 fns2 INV vsi vss vi vs r_p
   `{Hfill1: !RecExprFill es Ks (subst_map vss (lexpr_to_expr es'))}
   `{Hfill2: !RecExprFill ei Ki (subst_map vsi (lexpr_to_expr ei'))}:
     l.2 = 0 →
-    rec_heap_bij_call n fns1 fns2 →
-    (∀ w, rec_heap_bij_return n fns1 fns2 Ki Ks (r ∗ heap_bij_const_s l.1 (<[0%Z := w]> (zero_block l k)))) →
+    rec_heap_bij_call n fns1 fns2 INV →
+    (∀ w, rec_heap_bij_return n fns1 fns2 Ki Ks (r ∗ heap_bij_const_s l.1 (<[0%Z := w]> (zero_block l k))) INV) →
     vss !! x = Some (ValLoc l) →
     vsi !! x = Some vi →
     dom vss ⊆ dom vsi →
     satisfiable (heap_bij_inv h h' ∗ heap_bij_const_s l.1 (<[0%Z := vs]> (zero_block l k)) ∗
-                val_in_bij vi vs ∗ ([∗ map] v1;v2 ∈ (delete x vsi);(delete x vss), val_in_bij v1 v2) ∗ r ∗ rf) →
+                val_in_bij vi vs ∗ ([∗ map] v1;v2 ∈ (delete x vsi);(delete x vss), val_in_bij v1 v2) ∗
+                INV ∗ r ∗ rf) →
     crun () (pass x es') = CResult () r_p (CSuccess ei') →
     Rec ei h fns1
       ⪯{rec_trans, rec_heap_bij_trans rec_trans, n, true}
@@ -443,21 +458,21 @@ Proof.
   - rewrite bool_decide_decide in Hrun.
     destruct decide; simplify_crun_eq.
     + apply: pass_lexpr_op_correct; eauto; last first.
-      { iSatMono. iIntros "($ & $ & $ & #Hm & r & $)". iFrame "Hm". iCombine "Hm r" as "r". iExact "r". }
+      { iSatMono. iIntros "($ & $ & $ & #Hm & $ & r & $)". iFrame "Hm". iCombine "Hm r" as "r". iExact "r". }
       simpl. clear Hsat. intros w1 w2 Hdef. intros n' v1 v2 h1' h2' rf' b Hsub Hsat.
       simpl. tstep_s. tstep_i.
       rewrite -!subst_subst_map_delete.
       apply: rec_heap_bij_sim_refl_static; simpl; eauto.
       { set_solver. }
       { eapply lexpr_is_static. }
-      iSatMono. iIntros "($ & Hv & ([Hm $] & $ & _) & $)".
+      iSatMono. iIntros!. iFrame.
       rewrite big_sepM2_insert_delete. iFrame.
     + (* FIXME: the next step should be automatic *)
       destruct x0, x2.
       simplify_crun_eq.
 
       apply: pass_lexpr_op_correct; eauto; last first.
-      { iSatMono. iIntros "($ & $ & $ & #H & r & $)". iFrame "H". iCombine "H r" as "r". iExact "r". }
+      { iSatMono. iIntros "($ & $ & $ & #H & $ & r & $)". iFrame "H". iCombine "H r" as "r". iExact "r". }
       simpl. clear Hsat. intros w1 w2 Hdef. intros n' v1 v2 h1' h2' rf' b Hsub Hsat.
       simpl. tstep_s. tstep_i.
       rewrite -!subst_subst_map_delete.
@@ -469,10 +484,9 @@ Proof.
         destruct (decide (z = y)); subst; first naive_solver.
         rewrite lookup_insert_ne //. }
       eapply IH; eauto using rec_heap_bij_call_mono; first last.
-      { iSatMono. iIntros "($ & Hv & ([Hall r] & $ & $) & $)".
+      { iSatMono. iIntros "(? & Hv & ?)". iDestruct!. iFrame.
         rewrite delete_insert_delete. rewrite !delete_insert_ne //.
-        iSplitR "r"; last iExact "r".
-        iApply (big_sepM2_insert_2 with "[Hv] Hall"); simpl.
+        iApply (big_sepM2_insert_2 with "[Hv] [$]"); simpl.
         iFrame. }
       { set_solver. }
       { rewrite lookup_insert //. }
@@ -484,7 +498,7 @@ Proof.
     destruct x0.
 
     apply: pass_lexpr_op_correct; eauto; last first.
-    { iSatMono. iIntros "($ & $ & $ & #H & r & $)". iFrame "H". iCombine "H r" as "r". iExact "r". }
+    { iSatMono. iIntros "($ & $ & $ & #H & $ & r & $)". iFrame "H". iCombine "H r" as "r". iExact "r". }
     simpl. clear Hsat. intros w1 w2 Hdef. intros n' v1 v2 h1' h2' rf' b Hsub Hsat.
     simpl. tstep_s. intros bb ->.
     assert (v1 = ValBool bb) as ->.
@@ -493,12 +507,12 @@ Proof.
     tstep_i.
     destruct bb; eapply LLetM_sim; eauto.
     + eapply IH1; eauto using rec_heap_bij_call_mono; first last.
-      { iSatMono. iIntros "($ & Hv & ([Hall r] & $ & $) & $)".
+      { iSatMono. iIntros!. iFrame.
         rewrite delete_insert_delete. iFrame. }
       { set_solver. }
       { rewrite lookup_insert //. }
     + eapply IH2; eauto using rec_heap_bij_call_mono; first last.
-      { iSatMono. iIntros "($ & Hv & ([Hall r] & $ & $) & $)".
+      { iSatMono. iIntros!. iFrame.
         rewrite delete_insert_delete. iFrame. }
       { set_solver. }
       { rewrite lookup_insert //. }
@@ -507,7 +521,7 @@ Proof.
     { iSatMono. iIntros "($ & $ & $ & $ & r & $)". iExact "r". }
     simpl. clear Hsat. intros w1 w2 Hdef. intros n' v1 v2 h1' h2' rf' b Hsub Hsat.
     simpl. eapply Hcont; eauto.
-    iSatMono. iIntros "($ & $ & ($ & $ & ?) & $)".
+    iSatMono. iIntros!. iFrame.
 Qed.
 
 Lemma pass_lookup_singleton (f g: string) fn fn':
@@ -584,70 +598,45 @@ Lemma heap_bij_free_elim lis lss hi hs hs' w l k i:
 Proof.
   induction lss as [|[l' k'] lss IH] in i, lis, hi, hs, hs' |-*; first by naive_solver.
   destruct i; simpl.
-  - intros [Hr Hfree] ? Heq. simplify_eq. simpl in *.
+  - intros [Hb [Hr Hfree]] ? Heq. simplify_eq. simpl in *.
     iIntros "Hbij Hl Hlocs".
-    iMod (heap_bij_inv_free_s with "Hbij Hl") as "Hbij".
+    iMod (heap_bij_inv_free_s with "Hbij Hl") as "Hbij"; [done|].
     iDestruct (heap_bij_inv_free_list with "Hbij Hlocs") as "?"; eauto.
-  - intros [Hr Hfree] ? Heq. destruct lis as [|[l'' k''] lis]; first naive_solver.
+  - intros [Hb [Hr Hfree]] ? Heq. destruct lis as [|[l'' k''] lis]; first naive_solver.
     simpl in Heq. simplify_eq. simpl.
     iIntros "Hbij Hl [Hl' Hlocs]".
+    iDestruct (loc_in_bij_same_prov_kind with "Hl'") as "%Hkind".
     iDestruct (heap_bij_inv_range with "Hbij Hl'") as "%"; first done.
-    iDestruct (heap_bij_inv_free with "Hbij Hl'") as "Hbij".
+    iDestruct (heap_bij_inv_free with "Hbij Hl'") as "Hbij"; first done.
     iMod (IH with "Hbij Hl Hlocs") as "[%hi' [% Hbij]]"; eauto.
+    iExists _. iFrame. iModIntro. iSplit!. by erewrite same_prov_kind_is_ProvBlock_iff.
 Qed.
 
-Lemma big_sepM2_delete_val_bij li ls i (x: string) (vars: list string):
-  vars !! i = Some x →
-  length ls = length vars →
-  ([∗ list] l1;l2 ∈ li;delete i ls, loc_in_bij l1 l2) -∗
-  ([∗ map] v1;v2 ∈ delete x (list_to_map (zip (delete i vars) (ValLoc <$> li))); delete x (list_to_map (zip vars (ValLoc <$> ls))), val_in_bij v1 v2).
-Proof.
-  induction vars as [|v vars IH] in i, li, ls |-*; first by naive_solver.
-  destruct i as [|i].
-  - simpl; intros ? Hlen; simplify_eq.
-    destruct ls; try discriminate; simpl.
-    rewrite delete_insert_delete.
-    simpl in Hlen. simplify_eq. clear IH.
-    induction li as [|l' li IH'] in vars, ls, Hlen |-*;
-      iIntros "Hlocs"; destruct ls; try done; destruct vars as [|s vars]; try discriminate.
-    + simpl. rewrite delete_empty //.
-    + simpl in *. simplify_eq. iDestruct "Hlocs" as "[Hl Hlocs]".
-      destruct (decide (x = s)); subst.
-      * rewrite !delete_insert_delete. iApply IH'; first done. iFrame.
-      * rewrite !delete_insert_ne //.
-        iApply (big_sepM2_insert_2 with "[Hl]"); first by iFrame.
-        iApply IH'; done.
-  - destruct ls; try discriminate; simpl.
-    intros Hlook Hlen; simplify_eq.
-    iIntros "Hlocs". destruct li; simpl; try done.
-    iDestruct ("Hlocs") as "[Hl Hlocs]".
-    iPoseProof (IH with "Hlocs") as "Hbij"; eauto.
-    destruct (decide (x = v)); subst.
-    + rewrite !delete_insert_delete. iFrame.
-    + rewrite !delete_insert_ne //.
-      iApply (big_sepM2_insert_2 with "[Hl]"); by iFrame.
-Qed.
-
-Lemma pass_correct_refines f x args vars exprs i k cont expri:
+Lemma pass_correct_refines f x args static_vars vars exprs i k cont expri:
   vars !! i = Some (x, k) →
-  (NoDup (args ++ (vars.*1))) →
+  (NoDup (args ++ static_vars.*1 ++ (vars.*1))) →
   crun () (pass x exprs) = CResult () cont (CSuccess expri) →
   trefines
     (linear_rec_mod (<[f:={|
                     lfd_args := args;
+                    lfd_static_vars := static_vars;
                     lfd_vars := delete i vars;
                     lfd_body := LLetE x (LVarVal (VVal (StaticValNum 0))) expri
                   |}]> ∅))
-    (rec_heap_bij (linear_rec_mod (<[f:={| lfd_args := args; lfd_vars := vars; lfd_body := exprs |}]> ∅))).
+    (let fns := (<[f:={| lfd_args := args; lfd_static_vars := static_vars; lfd_vars := vars; lfd_body := exprs |}]> ∅) in
+      rec_heap_bij (fd_init_heap f static_vars) (linear_rec_mod fns)).
 Proof.
-  intros Heq Hnodup Hrun. apply: rec_heap_bij_proof.
+  intros Heq Hnodup Hrun.
+  pose (INV := ([∗ list] l ∈ static_locs f static_vars, loc_in_bij l l)%I).
+  apply: (rec_heap_bij_proof INV).
   - set_solver.
   - move => ??. intros [-> ->]%pass_lookup_singleton.
     eexists. split; simpl.
     { rewrite lookup_fmap. eapply fmap_Some_2, lookup_insert.  }
     { done. }
+  - iIntros. iApply (heap_bij_inv_share_init with "[$] [$]").
   - intros n K1 K2 g fn1 fn2 vs1 vs2 h1 h2 r rf.
-    intros [-> ->]%pass_lookup_singleton.
+    intros [-> <-]%pass_lookup_singleton.
     intros [-> _]%pass_lookup_singleton.
     rewrite /= !fmap_insert !fmap_empty /=.
     intros Hlen1 Hlen2 Hsat Hcalls Hcont.
@@ -666,11 +655,13 @@ Proof.
       intros ??. by erewrite IH. }
 
     (* we clean up the substitutions *)
-    rewrite !subst_l_subst_map; first last.
+    rewrite /subst_static !subst_l_subst_map; first last.
     { eapply heap_alloc_list_length in Halloc.
       revert Halloc. rewrite !fmap_length //.  }
+    { by rewrite ?fmap_length ?imap_length. }
     { done. }
     { rewrite !fmap_length -Hlen !fmap_length //. }
+    { by rewrite ?fmap_length ?imap_length. }
     { done. }
     rewrite -!subst_map_subst_map.
     rewrite -!list_to_map_app /=.
@@ -701,7 +692,7 @@ Proof.
     + done.
     + iSatClear. simpl. intros w n' v1 v2 h1' h2' rf' b Hle Hsat. simpl.
       tstep_s. intros h2'' Hfree. tstep_i.
-      iSatStartBupd. iIntros "(Hbij & Hv & [[r Hlocs] Hloc] & Hl)".
+      iSatStartBupd. iIntros "(Hbij & Hv & HINV & [[r Hlocs] Hloc] & Hl)".
       rewrite list_fmap_delete in Hlen3.
       iPoseProof ((heap_bij_free_elim (zip li (delete i vars.*2))) with "Hbij") as "Hw".
       { done. }
@@ -715,29 +706,25 @@ Proof.
       eapply Hcont; first done.
       iSatMono. iFrame.
     + eapply elem_of_list_to_map_1.
-      { rewrite fmap_app fst_zip ?Hlen2 //.
-        rewrite fst_zip ?fmap_length -?Hlen4 ?fmap_length //. }
-      eapply elem_of_app. right. eapply (elem_of_list_lookup_2 _ i).
+      { rewrite !fmap_app !fst_zip ?Hlen2 ?fmap_length -?Hlen4 ?imap_length ?fmap_length //. }
+      do 2 (eapply elem_of_app; right). eapply (elem_of_list_lookup_2 _ i).
       eapply lookup_zip_with_Some. split!.
       { rewrite list_lookup_fmap Hl //. }
     + rewrite lookup_insert //.
     + rewrite dom_insert_L !dom_list_to_map_L.
       rewrite !fmap_app !list_to_set_app.
-      rewrite fst_zip ?Hlen2 //.
-      rewrite fst_zip ?fmap_length -?Hlen4 ?fmap_length //.
-      rewrite fst_zip ?Hlen1 //.
-      rewrite fst_zip ?fmap_length -?Hlen3 ?fmap_length //.
+      rewrite !fst_zip ?Hlen2 ?fmap_length ?Hlen1 -?Hlen4 -?Hlen3 ?imap_length ?fmap_length //.
       rewrite list_fmap_delete.
       rewrite {1}(delete_Permutation vars.*1); last done.
-      simpl. set_solver.
-    + rewrite (zero_block_insert_zero l k); last first.
+      simpl. clear. set_solver.
+    + erewrite (zero_block_insert_zero l k); last first.
       { eapply Forall_lookup_1 in Hall; eauto. lia. }
       { by eapply heap_alloc_list_offset_zero. }
-      iSatMonoBupd. iIntros "(Hbij & Hvals & r & rf)".
+      iSatMonoBupd. iIntros "(Hbij & Hvals & #Hs & r & rf)".
       iFrame "rf r".
       iMod (heap_bij_alloc_elim with "Hbij") as "(Hbij & Hconst & #Hlocs)"; eauto.
       { rewrite -list_fmap_delete //. }
-      iFrame "Hbij Hconst Hlocs".
+      iFrame "Hbij Hconst Hlocs Hs".
       rewrite delete_insert_delete.
       iModIntro. iSplit; first done.
 
@@ -745,34 +732,47 @@ Proof.
       assert (x ∉ args) as Hx.
       { eapply NoDup_app in Hnodup as (_ & Hnd & _).
         intros ?. eapply Hnd; first done.
+        apply elem_of_app; right.
         by eapply elem_of_list_lookup_2. }
       fold ls. clear -Hx Heq Hlen Hlen1 Hlen2. revert Hlen.
-      generalize ls. clear ls; intros ls. intros Hlen.
+      generalize ls. clear ls; intros ls. rewrite fmap_length. intros Hlen.
 
-      iInduction args as [|a args] "IH" forall (vs1 vs2 Hlen Hlen1 Hlen2).
-      * destruct vs1, vs2; try discriminate.
-        simpl. iClear "Hvals".
-        rewrite list_fmap_delete.
-        iApply (big_sepM2_delete_val_bij with "[]"); last done.
-        { rewrite list_lookup_fmap Heq //. }
-        { rewrite -Hlen !fmap_length //. }
-      * destruct vs1, vs2; try discriminate.
-        simpl in Hlen1, Hlen2. simplify_eq.
-        simpl. assert (x ≠ a) as Hne by set_solver.
-        rewrite !delete_insert_ne //.
-        iDestruct "Hvals" as "[Hv Hvals]".
-        iApply (big_sepM2_insert_2 with "[Hv]"); first by iFrame.
-        iApply ("IH"); [iPureIntro; set_solver|done|done|done|iFrame].
+      rewrite !list_to_map_app !delete_union.
+      rewrite !(delete_notin (list_to_map (zip args _))).
+      2,3: apply not_elem_of_list_to_map; rewrite fst_zip //; lia.
+      iDestruct "Hvals" as "#Hvals".
+      repeat iApply big_sepM2_union.
+      * iApply big_sepM2_list_to_map_2; [rewrite !fst_zip //; lia|].
+        rewrite !snd_zip //; lia.
+      * iApply big_sepM2_delete_2. iApply big_sepM2_list_to_map_2 => //=.
+        rewrite !snd_zip ?fmap_length ?static_provs_length //.
+        iApply big_sepL_sepL2_diag. by iApply big_sepL_fmap => /=.
+      * rewrite !list_fmap_delete. iClear "Hs Hvals".
+        iDestruct "Hlocs" as "-#Hlocs".
+        iInduction vars as [|v vars] "IH" forall (i ls li Hlen Heq); csimpl => //.
+        destruct ls => //; simplify_eq/=. destruct i; simplify_eq/=.
+        -- rewrite delete_insert_delete. iApply big_sepM2_delete_2.
+           iDestruct (big_sepL2_length with "Hlocs") as %?.
+           iApply big_sepM2_list_to_map_2; [rewrite !fst_zip ?fmap_length //; lia|].
+           rewrite !snd_zip ?fmap_length //; [|lia..].
+           by rewrite big_sepL2_fmap_l big_sepL2_fmap_r.
+        -- iDestruct (big_sepL2_cons_inv_r with "Hlocs") as (???) "[Hloc ?]".
+           simplify_eq/=. destruct (decide (x = v.1)); simplify_eq.
+           ++ rewrite !delete_insert_delete. iApply ("IH" with "[//] [//] [$]").
+           ++ rewrite !delete_insert_ne//.
+              iApply (big_sepM2_insert_2 with "[Hloc]"); [done|].
+              iApply ("IH" with "[//] [//] [$]").
 Qed.
 
 
 
-Lemma pass_single_var_correct f x args exprs varss expri varsi :
-  (NoDup (args ++ (varss.*1))) →
+Lemma pass_single_var_correct f x args static_vars exprs varss expri varsi :
+  (NoDup (args ++ static_vars.*1 ++ (varss.*1))) →
   pass_single_var x exprs varss = (expri, varsi) →
   trefines
-  (linear_rec_mod (<[f:={| lfd_args := args; lfd_vars := varsi; lfd_body := expri |}]> ∅))
-  (rec_heap_bij (linear_rec_mod (<[f:={| lfd_args := args; lfd_vars := varss; lfd_body := exprs |}]> ∅))).
+  (linear_rec_mod (<[f:={| lfd_args := args; lfd_static_vars := static_vars; lfd_vars := varsi; lfd_body := expri |}]> ∅))
+  (let fns := (<[f:={| lfd_args := args; lfd_static_vars := static_vars; lfd_vars := varss; lfd_body := exprs |}]> ∅) in
+    rec_heap_bij (fds_init_heap (fd_static_vars <$> (lfndef_to_fndef <$> fns))) (linear_rec_mod fns)).
 Proof.
   intros Hnd. rewrite /pass_single_var.
   destruct list_find as [[i [y n]]|] eqn: Hfind;
@@ -783,6 +783,7 @@ Proof.
   - injection 1 as ??; subst.
     eapply list_find_Some in Hfind as (Hlook & Hdec & _).
     eapply bool_decide_unpack in Hdec. subst.
+    rewrite !fmap_insert fmap_empty fds_init_heap_insert //= fds_init_heap_empty right_id_L.
     by eapply pass_correct_refines.
 Qed.
 
@@ -839,12 +840,13 @@ Qed.
 
 
 
-Lemma pass_body_correct f args varss exprs expri varsi:
+Lemma pass_body_correct f args static_vars varss exprs expri varsi :
   pass_body exprs varss = (expri, varsi) →
-  NoDup (args ++ varss.*1) →
+  NoDup (args ++ static_vars.*1 ++ varss.*1) →
   trefines
-    (linear_rec_mod (<[f:={| lfd_args := args; lfd_vars := varsi; lfd_body := expri |}]> ∅))
-    (rec_heap_bij_N (length varss) (linear_rec_mod (<[f:={| lfd_args := args; lfd_vars := varss; lfd_body := exprs |}]> ∅))).
+    (linear_rec_mod (<[f:={| lfd_args := args; lfd_static_vars := static_vars; lfd_vars := varsi; lfd_body := expri |}]> ∅))
+    (let fns := (<[f:={| lfd_args := args; lfd_static_vars := static_vars; lfd_vars := varss; lfd_body := exprs |}]> ∅) in
+     rec_heap_bij_N (length varss) (fd_init_heap f static_vars) (linear_rec_mod fns)).
 Proof.
   rewrite /pass_body. remember varss as L. rewrite {1 3 5}HeqL. clear HeqL.
   induction L as [|[x n] L IH] in varss, varsi, exprs, expri |-*; simpl.
@@ -855,36 +857,46 @@ Proof.
     eapply IH in Hbody as Hx; last done.
     eapply rec_heap_bij_trefines in Hx; last apply rec_vis_no_all.
     eapply pass_single_var_correct in Hsingle; last first.
-    + eapply NoDup_app. eapply NoDup_app in Hnd as [Hnd [Hinter Hvarss]].
+    + rewrite app_assoc. rewrite app_assoc in Hnd.
+      eapply NoDup_app. eapply NoDup_app in Hnd as [Hnd [Hinter Hvarss]].
       split; first apply Hnd. split.
       { set_solver. }
       { by eapply foldr_pass_single_nodup. }
-    + etrans; done.
+    + simpl in *. etrans; [apply Hsingle|]. etrans; [apply Hx|].
+      rewrite !fmap_insert fmap_empty fds_init_heap_insert // fds_init_heap_empty right_id_L.
+      done.
 Qed.
 
 Lemma pass_fn_vars f :
   lfd_vars (pass_fn f) ⊆ lfd_vars f.
 Proof. rewrite /pass_fn. case_match => /=. by apply: foldr_pass_single_vars. Qed.
 
+Lemma pass_fn_static_vars f :
+  lfd_static_vars (pass_fn f) = lfd_static_vars f.
+Proof. rewrite /pass_fn. by case_match => /=. Qed.
+
 Lemma NoDup_pass_fn f :
-  NoDup (lfd_args f ++ (lfd_vars f).*1) →
-  NoDup (lfd_args (pass_fn f) ++ (lfd_vars (pass_fn f)).*1).
+  NoDup (lfd_args f ++ (lfd_static_vars f).*1 ++ (lfd_vars f).*1) →
+  NoDup (lfd_args (pass_fn f) ++ (lfd_static_vars (pass_fn f)).*1 ++ (lfd_vars (pass_fn f)).*1).
 Proof.
-  rewrite pass_fn_args => Hnd.
+  rewrite !NoDup_app.
+  rewrite pass_fn_args => [[Hnd1 [H1 [Hnd2 [Hnd3 H2]]]]].
   have ? := pass_fn_vars f.
-  eapply NoDup_app. eapply NoDup_app in Hnd as [Hnd [Hinter Hvarss]].
-  split; first apply Hnd. split.
-  - set_solver.
+  have Hstatic := pass_fn_static_vars f.
+  split!.
+  - rewrite Hstatic. set_solver.
+  - by rewrite Hstatic.
+  - rewrite Hstatic. set_solver.
   - rewrite /pass_fn. case_match => /=. by eapply foldr_pass_single_nodup.
 Qed.
 
 Lemma pass_fn_correct f fn :
-  NoDup (fn.(lfd_args) ++ fn.(lfd_vars).*1) →
+  NoDup (fn.(lfd_args) ++ fn.(lfd_static_vars).*1 ++ fn.(lfd_vars).*1) →
   trefines (linear_rec_mod (<[f := pass_fn fn]> ∅))
-           (rec_heap_bij_N (length fn.(lfd_vars)) (linear_rec_mod (<[f := fn]> ∅))).
+           (rec_heap_bij_N (length fn.(lfd_vars)) (fd_init_heap f (fn.(lfd_static_vars))) (linear_rec_mod (<[f := fn]> ∅))).
 Proof.
   rewrite /pass_fn. destruct pass_body as [expri varsi] eqn: Hpass.
-  revert Hpass. destruct fn as [args varss exprs]; simpl.
+  revert Hpass. destruct fn as [args static_varss varss exprs]; simpl.
   intros Heq Hnd. by eapply pass_body_correct.
 Qed.
 
