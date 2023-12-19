@@ -84,7 +84,7 @@ Local Ltac go_i :=
 
 Lemma int_to_ptr_asm_refines_spec :
   trefines (asm_mod int_to_ptr_asm)
-           (rec_to_asm (dom int_to_ptr_asm) int_to_ptr_fns int_to_ptr_f2i ∅
+           (rec_to_asm (dom int_to_ptr_asm) int_to_ptr_f2i ∅
               (itree_mod int_to_ptr_spec ∅)).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
@@ -96,8 +96,8 @@ Proof.
     σr2a.(r2a_calls) = [] ∧
     σf = SMFilter ∧
     pp = PPOutside ∧
-    (rP ⊢ [∗ map] p↦z∈ps, r2a_heap_shared p z)). }
-  { exists false. split!. iIntros!. by rewrite big_sepM_empty. } { done. }
+    (rP ⊢ r2a_f2i_incl int_to_ptr_f2i (dom int_to_ptr_asm) ∗ [∗ map] p↦z∈ps, r2a_heap_shared p z)). }
+  { exists false. split!. iIntros!. iFrame "#". by rewrite big_sepM_empty. } { done. }
   move => n _ Hloop [????] [[?[? ps]][[??]?]] ?. destruct!/=.
   tstep_i => ????? Hi. tstep_s. split!.
   tstep_i => ??. simplify_map_eq.
@@ -106,6 +106,8 @@ Proof.
   go_s. split!. go.
   revert select (_ ⊢ _) => HP.
   revert select (_ ∉ dom _) => /not_elem_of_dom?.
+  iSatStart. rewrite HP. iIntros!. iDestruct select (r2a_f2i_incl int_to_ptr_f2i _) as "Hf2i".
+  iDestruct (r2a_f2i_incl_in_ins with "Hf2i [$]") as %?; [done|]. iSatStop.
   unfold int_to_ptr_asm in Hi. unfold int_to_ptr_f2i in *. (repeat case_bool_decide); simplify_map_eq'.
   - tstep_i.
     go_s => ?. go.
@@ -115,8 +117,7 @@ Proof.
     iSatStart. iIntros!.
     iDestruct (r2a_args_intro with "[$]") as "?"; [done|].
     rewrite r2a_args_cons ?r2a_args_nil; [|done]. iDestruct!.
-    iDestruct (HP with "[$]") as "HP".
-    iDestruct (big_sepM_lookup with "HP") as "#?"; [done|].
+    iDestruct (big_sepM_lookup with "[$]") as "#?"; [done|].
     iSatStop.
     tstep_i => ??. simplify_map_eq'.
     go_s. go_s. split!.
@@ -126,17 +127,16 @@ Proof.
     }
     { apply map_scramble_insert_r_in; [compute_done|done]. }
     { iSatMono. simplify_map_eq'. iIntros!. iFrame. iSplitL; [iAccu|]. iSplit!; [|done]. lia. }
-    apply Hloop; [done|]. exists true. split!.
+    apply Hloop; [done|]. exists true. split!. iIntros!. iFrame "#".
   - tstep_i.
     go_s => l. go.
     go_s => ?. go.
     iSatStart. iIntros!.
     iDestruct (r2a_args_intro with "[$]") as "?"; [done|].
     rewrite r2a_args_cons ?r2a_args_nil; [|done]. iDestruct!.
-    iDestruct (HP with "[$]") as "HP".
     iAssert ⌜z = default z (ps !! l.1)⌝%I as %Hz.
     { destruct (ps !! l.1) as [z'|] eqn:Hp => //=.
-      iDestruct (big_sepM_lookup with "HP") as "?"; [done|].
+      iDestruct (big_sepM_lookup with "[$]") as "?"; [done|].
       iAssert ⌜z' = z⌝%I as %?; [|done].
       by iApply (r2a_heap_shared_ag with "[$]"). }
     iSatStop.
@@ -153,8 +153,7 @@ Proof.
       rewrite -Hz. done.
     }
     apply Hloop; [done|]. exists true.
-    split!.
-    iIntros "[#? #?]". rewrite -Hz.
+    split!. iIntros!. iFrame "#". rewrite -Hz.
     by iApply big_sepM_insert_2.
 Qed.
 
@@ -175,10 +174,10 @@ Definition main_rec : fndef := {|
   fd_args := [];
   fd_vars := [("l", 1)];
   fd_body := LetE "_" (Store (Var "l") (Val 1)) $
-             LetE "z" (rec.Call "cast_ptr_to_int" [(Var "l")]) $
+             LetE "z" (rec.Call (Val (ValFn "cast_ptr_to_int")) [(Var "l")]) $
              LetE "z'" (BinOp (BinOp (Var "z") AddOp (Val (-1))) AddOp (Val 1)) $
-             LetE "l'" (rec.Call "cast_int_to_ptr" [(Var "z")]) $
-             rec.Call "exit" [(Load (Var "l'"))];
+             LetE "l'" (rec.Call (Val (ValFn "cast_int_to_ptr")) [(Var "z")]) $
+             rec.Call (Val (ValFn "exit")) [(Load (Var "l'"))];
   fd_static := I
 |}.
 
@@ -269,7 +268,7 @@ Definition main_asm_dom : gset Z := locked dom main_asm.
 
 Lemma main_asm_refines_rec :
   trefines (asm_mod main_asm)
-           (rec_to_asm (dom main_asm) {["main"]} main_f2i ∅ (rec_mod main_rec_prog)).
+           (rec_to_asm (dom main_asm) main_f2i ∅ (rec_mod main_rec_prog)).
 Proof. apply: compile_correct; [|done|..]; compute_done. Qed.
 
 (* https://thog.github.io/syscalls-table-aarch64/latest.html *)
@@ -374,9 +373,7 @@ Definition top_level_spec : itree (moduleE asm_event unit) void :=
 
 Lemma top_level_refines_spec :
   trefines (asm_link (main_asm_dom ∪ dom int_to_ptr_asm) (dom exit_asm)
-              (rec_to_asm (main_asm_dom ∪ dom int_to_ptr_asm)
-                 (dom main_rec_prog ∪ int_to_ptr_fns)
-                 main_f2i ∅
+              (rec_to_asm (main_asm_dom ∪ dom int_to_ptr_asm) main_f2i ∅
                  (itree_mod main_spec tt)) (itree_mod exit_spec tt))
     (itree_mod top_level_spec tt).
 Proof.
@@ -391,10 +388,15 @@ Proof.
   go_i => ??. simplify_eq.
   go_i. eexists true => /=. split; [done|]. eexists ∅, _, [], [], "main".
   split!.
-  { by simplify_map_eq'. }
-  { apply: satisfiable_mono; [by eapply (r2a_res_init mem)|].
-    iIntros!. rewrite /r2a_mem_map big_sepM_empty. iFrame. iSplitL; [|iAccu].
-    iApply r2a_mem_stack_init. by iApply big_sepM_subseteq. }
+  { simplify_map_eq'. rewrite/main_asm_dom. unlock. compute_done. }
+  { apply: satisfiable_mono; [by eapply (r2a_res_init mem main_f2i)|].
+    iIntros!. rewrite /r2a_mem_map big_sepM_empty. iFrame.
+    iDestruct select (r2a_f2i_full _) as "#Hf2i".
+    iSplit!. 2: iSplitL; iSplit!.
+    - unfold r2a_f2i_incl. iExists _. iFrame "#". iSplit!.
+    - iApply r2a_mem_stack_init. by iApply big_sepM_subseteq.
+    - iApply (r2a_f2i_full_to_singleton with "[$]"). by simplify_map_eq'.
+    - iExact "Hf2i". }
   go_i => -[[??]?]. go.
   go_i => ?. go. simplify_eq.
   go_i. split!. go.
@@ -402,7 +404,8 @@ Proof.
   go_i => ?. go.
   go_i.
   go_i. move => *. unfold main_f2i in *. destruct!; simplify_map_eq'.
-  rewrite bool_decide_false; [|unfold main_asm_dom;unlock;compute_done].
+  iSatStart. iIntros!. iDestruct (r2a_f2i_full_singleton with "[$] [$]") as %?. simplify_map_eq'. iSatStop.
+  rewrite bool_decide_false; [|done].
   rewrite bool_decide_true; [|compute_done].
   go_i => -[??]. go.
   go_i => ?. go. simplify_eq.
@@ -455,7 +458,7 @@ Proof.
         - apply int_to_ptr_asm_refines_spec.
       }
       etrans. {
-        apply rec_to_asm_combine; [apply _|apply _|..]; compute_done.
+        apply (rec_to_asm_combine _ _ (dom main_rec_prog) int_to_ptr_fns); [apply _|apply _|..]; compute_done.
       }
       etrans. {
         apply rec_to_asm_trefines; [apply _|].
