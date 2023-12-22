@@ -1,4 +1,4 @@
-From iris.algebra.lib Require Import gmap_view dfrac_agree.
+From iris.algebra.lib Require Import gmap_view.
 From dimsum.core Require Export proof_techniques prepost.
 From dimsum.core Require Import link.
 From dimsum.examples Require Import rec asm.
@@ -189,28 +189,28 @@ Canonical Structure rec_to_asm_elemO := leibnizO rec_to_asm_elem.
 
 Definition rec_to_asmUR : ucmra :=
   prodUR (prodUR
-   (gmap_viewUR prov rec_to_asm_elemO)
-   (gmap_viewUR Z (optionO ZO)))
+   (gmap_viewUR prov (agreeR rec_to_asm_elemO))
+   (gmap_viewUR Z (agreeR (optionO ZO))))
    (optionUR (agreeR (leibnizO (gmap string Z)))).
 
 Global Instance rec_to_asmUR_shrink : Shrink rec_to_asmUR.
 Proof. solve_shrink. Qed.
 
-Definition r2a_heap_inj (r : (gmap_viewUR prov rec_to_asm_elemO)) : rec_to_asmUR := (r, ε, ε).
-Definition r2a_mem_inj (r : (gmap_viewUR Z (optionO ZO))) : rec_to_asmUR := (ε, r, ε).
+Definition r2a_heap_inj (r : (gmap_viewUR prov (agreeR rec_to_asm_elemO))) : rec_to_asmUR := (r, ε, ε).
+Definition r2a_mem_inj (r : (gmap_viewUR Z (agreeR $ optionO ZO))) : rec_to_asmUR := (ε, r, ε).
 Definition r2a_f2i_inj (f2i : gmap string Z) : rec_to_asmUR := (ε, ε, Some (to_agree (f2i : leibnizO (gmap string Z)))).
 
 Definition r2a_heap_auth (h : gmap prov rec_to_asm_elemO) : uPred rec_to_asmUR :=
-  uPred_ownM (r2a_heap_inj (gmap_view_auth (DfracOwn 1) h)).
+  uPred_ownM (r2a_heap_inj (gmap_view_auth (DfracOwn 1) (to_agree <$> h))).
 Definition r2a_heap_shared (p : prov) (a : Z) : uPred rec_to_asmUR :=
-  uPred_ownM (r2a_heap_inj (gmap_view_frag p DfracDiscarded (R2AShared a))).
+  uPred_ownM (r2a_heap_inj (gmap_view_frag p DfracDiscarded (to_agree $ R2AShared a))).
 Definition r2a_heap_constant (p : prov) (b : gmap Z val) : uPred rec_to_asmUR :=
-  uPred_ownM (r2a_heap_inj (gmap_view_frag p (DfracOwn 1) (R2AConstant b))).
+  uPred_ownM (r2a_heap_inj (gmap_view_frag p (DfracOwn 1) (to_agree $ R2AConstant b))).
 
 Definition r2a_mem_auth (amem : gmap Z (option Z)) : uPred rec_to_asmUR :=
-  uPred_ownM (r2a_mem_inj (gmap_view_auth (DfracOwn 1) amem)).
+  uPred_ownM (r2a_mem_inj (gmap_view_auth (DfracOwn 1) (to_agree <$> amem))).
 Definition r2a_mem_constant (a : Z) (v : option Z) : uPred rec_to_asmUR :=
-  uPred_ownM (r2a_mem_inj (gmap_view_frag a (DfracOwn 1) v)).
+  uPred_ownM (r2a_mem_inj (gmap_view_frag a (DfracOwn 1) (to_agree v))).
 
 Definition r2a_mem_map (m : gmap Z (option Z)) : uPred rec_to_asmUR :=
   ([∗ map] a↦v ∈ m, r2a_mem_constant a v).
@@ -266,8 +266,8 @@ Lemma r2a_heap_alloc' rh p b:
 Proof.
   move => ?.
   rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update. rewrite -pair_op_1.
-  apply prod_update; [|done]. apply prod_update; [|done].
-  by apply gmap_view_alloc.
+  apply prod_update; [|done]. apply prod_update; [|done]. rewrite fmap_insert.
+  apply gmap_view_alloc; [|done..]. by rewrite lookup_fmap fmap_None.
 Qed.
 
 Lemma r2a_heap_alloc_big' rh rh' :
@@ -289,9 +289,10 @@ Lemma r2a_heap_to_shared' p h rh a:
 Proof.
   rewrite -!uPred.ownM_op. apply uPred.bupd_ownM_update. rewrite -!pair_op_1.
   apply prod_update; [|done]. apply prod_update; [|done].
-  etrans; [by apply gmap_view_update|].
-  apply cmra_update_op; [done|].
-  apply gmap_view_frag_persist.
+  etrans.
+  - by apply (gmap_view_replace _ _ _ (to_agree (R2AShared a))).
+  - apply cmra_update_op; [by rewrite fmap_insert|].
+    apply gmap_view_frag_persist.
 Qed.
 
 Lemma r2a_heap_alloc_shared' rh p a:
@@ -321,15 +322,15 @@ Lemma r2a_heap_update' p h h' rh :
   r2a_heap_auth rh ∗ r2a_heap_constant p h ⊢ |==> r2a_heap_auth (<[p := R2AConstant h']> rh) ∗ r2a_heap_constant p h'.
 Proof.
   rewrite -!uPred.ownM_op. apply uPred.bupd_ownM_update. rewrite -!pair_op_1.
-  apply prod_update; [|done]. apply prod_update; [|done].
-  by apply gmap_view_update.
+  apply prod_update; [|done]. apply prod_update; [|done]. rewrite fmap_insert.
+  by apply gmap_view_replace.
 Qed.
 
 Lemma r2a_heap_free' h p h' :
   r2a_heap_auth h ∗ r2a_heap_constant p h' ⊢ |==> r2a_heap_auth (delete p h).
 Proof.
   rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update. rewrite -pair_op_1.
-  apply prod_update; [|done]. apply prod_update; [|done].
+  apply prod_update; [|done]. apply prod_update; [|done]. rewrite fmap_delete.
   by apply gmap_view_delete.
 Qed.
 
@@ -351,8 +352,10 @@ Lemma r2a_heap_lookup' h p h' :
   ⌜h !! p = Some (R2AConstant h')⌝.
 Proof.
   apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id. rewrite -uPred.ownM_op.
-  etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [[/gmap_view_both_valid_L??]?].
-  naive_solver.
+  etrans; [apply uPred.ownM_valid|]. iPureIntro.
+  move => [[/(gmap_view_both_dfrac_valid_discrete_total _ _ _)+ _]_].
+  move => [? [_ [_ [/lookup_fmap_Some[?[??]] [? +]]]]]. subst.
+  move => /to_agree_included_L. naive_solver.
 Qed.
 
 Lemma r2a_heap_shared_lookup' h p a :
@@ -361,8 +364,10 @@ Lemma r2a_heap_shared_lookup' h p a :
   ⌜h !! p = Some (R2AShared a)⌝.
 Proof.
   apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id. rewrite -uPred.ownM_op.
-  etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [[/gmap_view_both_valid_L??]?].
-  naive_solver.
+  etrans; [apply uPred.ownM_valid|]. iPureIntro.
+  move => [[/(gmap_view_both_dfrac_valid_discrete_total _ _ _)+ _]_].
+  move => [? [_ [_ [/lookup_fmap_Some[?[??]] [? +]]]]]. subst.
+  move => /to_agree_included_L. naive_solver.
 Qed.
 
 Lemma r2a_heap_lookup_big' m h :
@@ -397,7 +402,7 @@ Lemma r2a_heap_shared_ag p a1 a2 :
   ⌜a1 = a2⌝.
 Proof.
   apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id. rewrite -uPred.ownM_op.
-  etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [[/=/gmap_view_frag_op_valid[??]?]?].
+  etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [[/=/gmap_view_frag_op_valid[?/to_agree_op_valid ?]?]?].
   naive_solver.
 Qed.
 
@@ -420,8 +425,8 @@ Proof.
   move => ?.
   rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
   rewrite -!pair_op_1. rewrite -pair_op_2.
-  apply prod_update; [|done]. apply prod_update; [done|].
-  by apply gmap_view_alloc.
+  apply prod_update; [|done]. apply prod_update; [done|]. rewrite fmap_insert.
+  apply gmap_view_alloc; [|done..]. by rewrite lookup_fmap fmap_None.
 Qed.
 
 Lemma r2a_mem_alloc_big' mem mem' :
@@ -441,8 +446,8 @@ Lemma r2a_mem_update' v' a v amem :
 Proof.
   rewrite -!uPred.ownM_op. apply uPred.bupd_ownM_update.
   rewrite -!pair_op_1. rewrite -!pair_op_2.
-  apply prod_update; [|done]. apply prod_update; [done|].
-  by apply gmap_view_update.
+  apply prod_update; [|done]. apply prod_update; [done|]. rewrite fmap_insert.
+  by apply gmap_view_replace.
 Qed.
 
 Lemma r2a_mem_delete' a v amem :
@@ -450,7 +455,7 @@ Lemma r2a_mem_delete' a v amem :
 Proof.
   rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
   rewrite -!pair_op_1. rewrite -!pair_op_2.
-  apply prod_update; [|done]. apply prod_update; [done|].
+  apply prod_update; [|done]. apply prod_update; [done|]. rewrite fmap_delete.
   by apply gmap_view_delete.
 Qed.
 
@@ -470,8 +475,10 @@ Lemma r2a_mem_lookup' a v amem :
   ⌜amem !! a = Some v⌝.
 Proof.
   apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id -uPred.ownM_op.
-  etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [[?/gmap_view_both_valid_L?]?].
-  naive_solver.
+  etrans; [apply uPred.ownM_valid|]. iPureIntro.
+  move => [[_ /(gmap_view_both_dfrac_valid_discrete_total _ _ _)+]_].
+  move => [? [_ [_ [/lookup_fmap_Some[?[??]] [? +]]]]]. subst.
+  move => /to_agree_included_L. naive_solver.
 Qed.
 
 Lemma r2a_mem_lookup_big' m mem :
@@ -1206,8 +1213,8 @@ Lemma r2a_res_init mem f2i:
   satisfiable (r2a_mem_auth mem ∗ ([∗ map] a↦v∈mem, r2a_mem_constant a v) ∗ r2a_heap_inv ∅
                  ∗ r2a_f2i_full f2i).
 Proof.
-  apply: (satisfiable_init (r2a_mem_inj (gmap_view_auth (DfracOwn 1) ∅) ⋅
-                            r2a_heap_inj (gmap_view_auth (DfracOwn 1) ∅) ⋅
+  apply: (satisfiable_init (r2a_mem_inj (gmap_view_auth (DfracOwn 1) (to_agree <$> ∅)) ⋅
+                            r2a_heap_inj (gmap_view_auth (DfracOwn 1) (to_agree <$> ∅)) ⋅
                             r2a_f2i_inj f2i)). {
     split; [split|] => /=.
     1,2: rewrite ?left_id ?right_id; apply gmap_view_auth_valid.

@@ -183,7 +183,7 @@ Proof.
   - eapply core_cancelableN_total; try apply _; done.
 Qed.
 
-Global Instance gmap_view_core_cancelable {A} `{Countable K} (x : gmap_viewR K A) :
+Global Instance gmap_view_core_cancelable {A} `{Countable K} (x : gmap_viewR K (agreeR A)) :
   CoreCancelable x.
 Proof. apply _. Abort.
 

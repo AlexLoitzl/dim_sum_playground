@@ -18,13 +18,13 @@ Inductive heap_bij_priv_elem := HBIConstant (h : gmap Z val).
 Canonical Structure heap_bij_priv_elemO := leibnizO heap_bij_priv_elem.
 
 Definition heap_bijUR : ucmra :=
-  prodUR (gmap_viewUR prov heap_bij_elemO) (gmap_viewUR prov heap_bij_priv_elemO).
+  prodUR (gmap_viewUR prov (agreeR heap_bij_elemO)) (gmap_viewUR prov (agreeR heap_bij_priv_elemO)).
 
 Global Instance heap_bijUR_shrink : Shrink heap_bijUR.
 Proof. solve_shrink. Qed.
 
-Definition heap_bijUR_s_inj (r : (gmap_viewUR prov heap_bij_elemO)) : heap_bijUR := (r, ε).
-Definition heap_bijUR_i_inj (r : (gmap_viewUR prov heap_bij_priv_elemO)) : heap_bijUR := (ε, r).
+Definition heap_bijUR_s_inj (r : (gmap_viewUR prov (agreeR heap_bij_elemO))) : heap_bijUR := (r, ε).
+Definition heap_bijUR_i_inj (r : (gmap_viewUR prov (agreeR heap_bij_priv_elemO))) : heap_bijUR := (ε, r).
 
 
 (** * heap_bij *)
@@ -308,21 +308,21 @@ Proof. done. Qed.
 (** * ghost theory *)
 (** ** Ghost state definitions *)
 Definition heap_bij_auth_bij (m : gmap prov heap_bij_elem) : uPred heap_bijUR :=
-  uPred_ownM (heap_bijUR_s_inj $ gmap_view_auth (DfracOwn 1) m).
+  uPred_ownM (heap_bijUR_s_inj $ gmap_view_auth (DfracOwn 1) (to_agree <$> m)).
 Definition heap_bij_auth_priv_i (m : gmap prov (gmap Z val)) : uPred heap_bijUR :=
-  uPred_ownM (heap_bijUR_i_inj $ gmap_view_auth (DfracOwn 1) (HBIConstant <$> m)).
+  uPred_ownM (heap_bijUR_i_inj $ gmap_view_auth (DfracOwn 1) (to_agree ∘ HBIConstant <$> m)).
 
 Definition heap_bij_auth (bij : heap_bij) : uPred heap_bijUR :=
   heap_bij_auth_bij (hb_bij bij) ∗ heap_bij_auth_priv_i (hb_priv_i bij).
 
 Definition heap_bij_shared (p1 p2 : prov) : uPred (heap_bijUR) :=
-  uPred_ownM (heap_bijUR_s_inj $ gmap_view_frag p2 DfracDiscarded (HBShared p1)).
+  uPred_ownM (heap_bijUR_s_inj $ gmap_view_frag p2 DfracDiscarded (to_agree $ HBShared p1)).
 
 Definition heap_bij_const_s (p : prov) (h : gmap Z val) : uPred (heap_bijUR) :=
-  uPred_ownM (heap_bijUR_s_inj $ gmap_view_frag p (DfracOwn 1) (HBConstant h)).
+  uPred_ownM (heap_bijUR_s_inj $ gmap_view_frag p (DfracOwn 1) (to_agree $ HBConstant h)).
 
 Definition heap_bij_const_i (p : prov) (h : gmap Z val) : uPred (heap_bijUR) :=
-  uPred_ownM (heap_bijUR_i_inj $ gmap_view_frag p (DfracOwn 1) (HBIConstant h)).
+  uPred_ownM (heap_bijUR_i_inj $ gmap_view_frag p (DfracOwn 1) (to_agree $ HBIConstant h)).
 
 (** ** Ghost state lemmas *)
 Lemma heap_bij_alloc_shared1 m p1 p2:
@@ -330,8 +330,8 @@ Lemma heap_bij_alloc_shared1 m p1 p2:
   heap_bij_auth_bij m ==∗ heap_bij_auth_bij (<[p2:=HBShared p1]> m) ∗ heap_bij_shared p1 p2.
 Proof.
   iIntros (?) "?". iStopProof. rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
-  rewrite -pair_op_1. apply prod_update; [|done].
-  apply gmap_view_alloc; [|done]. by apply not_elem_of_dom.
+  rewrite -pair_op_1. apply prod_update; [|done]. rewrite fmap_insert.
+  apply gmap_view_alloc; [|done..]. rewrite lookup_fmap fmap_None. by apply not_elem_of_dom.
 Qed.
 
 Lemma heap_bij_alloc_shared bij p1 p2 H:
@@ -366,7 +366,10 @@ Lemma heap_bij_shared_lookup p1 p2 bij :
 Proof.
   iIntros "[? _]". iStopProof.
   apply bi.wand_intro_r. rewrite -uPred.ownM_op -pair_op_1.
-  etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [/gmap_view_both_valid_L? ?]. naive_solver.
+  etrans; [apply uPred.ownM_valid|]. iPureIntro.
+  move => [/(gmap_view_both_dfrac_valid_discrete_total _ _ _)+ _].
+  move => [? [_ [_ [/lookup_fmap_Some[?[??]] [? +]]]]]. subst.
+  move => /to_agree_included_L. naive_solver.
 Qed.
 
 Lemma heap_bij_shared_lookup_big m bij :
@@ -387,8 +390,8 @@ Lemma heap_bij_alloc_const_s bij p h:
   heap_bij_auth bij ==∗ heap_bij_auth (hb_update_const_s p h bij) ∗ heap_bij_const_s p h.
 Proof.
   iIntros (?) "[? $]". iStopProof. rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
-  rewrite -pair_op_1. apply prod_update; [|done].
-  apply gmap_view_alloc; [|done]. by apply not_elem_of_dom.
+  rewrite -pair_op_1. apply prod_update; [|done]. rewrite fmap_insert.
+  apply gmap_view_alloc; [|done..]. rewrite lookup_fmap fmap_None. by apply not_elem_of_dom.
 Qed.
 
 Lemma heap_bij_alloc_const_s_big s bij :
@@ -418,8 +421,7 @@ Lemma heap_bij_alloc_const_i bij p h
 Proof.
   iIntros (Hin) "[$ ?]". iStopProof. rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
   rewrite /= fmap_insert.
-  rewrite -pair_op_2. apply prod_update; [done|].
-  apply gmap_view_alloc; [|done].
+  rewrite -pair_op_2. apply prod_update; [done|]. apply gmap_view_alloc; [|done..].
   move: Hin => /elem_of_hb_provs_i Hin. rewrite lookup_fmap fmap_None. apply eq_None_not_Some => -[??].
   naive_solver.
 Qed.
@@ -428,7 +430,7 @@ Lemma heap_bij_free_const_s bij p h:
   heap_bij_auth bij ∗ heap_bij_const_s p h ==∗ heap_bij_auth (hb_delete_s p bij).
 Proof.
   iIntros "[[? $] ?]". iStopProof. rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
-  rewrite -pair_op_1. apply prod_update; [|done].
+  rewrite -pair_op_1. apply prod_update; [|done]. rewrite fmap_delete.
   by apply gmap_view_delete.
 Qed.
 
@@ -453,7 +455,10 @@ Lemma heap_bij_const_s_lookup p f bij :
 Proof.
   iIntros "[? _]". iStopProof.
   apply bi.wand_intro_r. rewrite -uPred.ownM_op.
-  etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [/gmap_view_both_valid_L??]. naive_solver.
+  etrans; [apply uPred.ownM_valid|]. iPureIntro.
+  move => [/(gmap_view_both_dfrac_valid_discrete_total _ _ _)+ _].
+  move => [? [_ [_ [/lookup_fmap_Some[?[??]] [? +]]]]]. subst.
+  move => /to_agree_included_L. naive_solver.
 Qed.
 
 Lemma heap_bij_const_s_lookup_big m bij :
@@ -475,8 +480,8 @@ Lemma heap_bij_update_const_s bij p f h:
 Proof.
   iIntros "[[? $] ?]". iStopProof.
   rewrite -!uPred.ownM_op. apply uPred.bupd_ownM_update.
-  rewrite -!pair_op_1. apply prod_update; [|done].
-  apply gmap_view_update.
+  rewrite -!pair_op_1. apply prod_update; [|done]. rewrite fmap_insert.
+  by apply gmap_view_replace.
 Qed.
 
 Lemma heap_bij_update_all bij' bij ho :
