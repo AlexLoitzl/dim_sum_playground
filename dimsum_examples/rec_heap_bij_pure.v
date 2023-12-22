@@ -364,6 +364,7 @@ Definition val_in_bij (bij : heap_bij) (v1 v2 : val) : Prop :=
   match v1, v2 with
   | ValNum n1, ValNum n2 => n1 = n2
   | ValBool b1, ValBool b2 => b1 = b2
+  | ValFn f1, ValFn f2 => f1 = f2
   | ValLoc l1, ValLoc l2 => hb_bij bij !! l2.1 = Some (HBShared l1.1) /\ l1.2 = l2.2
   | _, _ => False
   end.
@@ -379,7 +380,8 @@ Lemma val_in_bij_merge bija bijb vii vs :
       val_in_bij bija vii vi ∧ val_in_bij bijb vi vs.
 Proof.
    split.
-   - destruct vii, vs => //=. { by eexists (ValNum _). } { by eexists (ValBool _). }
+   - destruct vii, vs => //=.
+     { by eexists (ValNum _). } { by eexists (ValBool _). } { by eexists (ValFn _). }
      move => [/heap_bij_merge_shared[?[??]] ?].
      eexists (ValLoc (_, _)) => /=. naive_solver.
    - move => [vi [??]]. destruct vii, vi, vs => //; simplify_eq/= => //.

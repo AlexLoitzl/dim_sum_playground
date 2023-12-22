@@ -547,7 +547,7 @@ Section lifting.
     ((∀ f fn vs h' σ, ⌜fns !! f = Some fn⌝ -∗
          (rec_mapsto_auth (h_heap h') -∗
           rec_alloc_auth (dom (h_heap h')) -∗
-          σ ⤇ₜ λ Π', TGT ReturnExt b (Call f (Val <$> vs)) [{ Π' }] {{ Φ }}) -∗
+          σ ⤇ₜ λ Π', TGT ReturnExt b (Call (Val (ValFn f)) (Val <$> vs)) [{ Π' }] {{ Φ }}) -∗
         ▷ₒ Π (Some (Incoming, ERCall f vs h')) σ) ∧
       ∀ v h' σ, ⌜b⌝ -∗
           (rec_mapsto_auth (h_heap h') -∗
@@ -592,7 +592,7 @@ Section lifting.
     length vs = length (fd_args fn) →
     f ↪ Some fn -∗
     (▷ₒ TGT AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body)) [{ Π }] {{ Φ }}) -∗
-    TGT Call f es [{ Π }] {{ Φ }}.
+    TGT Call (Val (ValFn f)) es [{ Π }] {{ Φ }}.
   Proof.
     destruct AsVals0. iIntros (?) "Hfn HΦ".
     iApply sim_tgt_expr_step_None => /=. iIntros (? [e h fns] ?? ? Hp) "[Hfns [Hh Ha]]". simplify_eq/=.
@@ -613,7 +613,7 @@ Section lifting.
       rec_alloc_auth (dom (h_heap h)) -∗
       (σ ⤇ₜ λ Π', TGT Waiting true @ h [{ Π' }] {{ Φ }}) -∗
       ▷ₒ Π (Some (Outgoing, ERCall f vs h)) σ) -∗
-    TGT Call f es [{ Π }] {{ Φ }}.
+    TGT Call (Val (ValFn f)) es [{ Π }] {{ Φ }}.
   Proof.
     destruct AsVals0. iIntros "Hfn HΦ".
     iApply sim_tgt_expr_step => /=. iIntros (? [e h0 fns0] ?? ? Hp) "[Hfns' [Hh Ha]]". simplify_eq/=.
@@ -753,7 +753,7 @@ Section memmove.
     ([∗ map] l↦v∈array s' hvss ∪ array d' hvsd, l ↦ v) -∗
     (([∗ map] l↦v∈array d' hvss ∪ array s' hvss, l ↦ v) -∗
      Φ (Val 0) None Π) -∗
-    TGT Call "memcpy" [Val (ValLoc d); Val $ ValLoc s; Val $ ValNum n; Val $ ValNum o] [{ Π }] {{ Φ }}.
+    TGT Call (Val (ValFn "memcpy")) [Val (ValLoc d); Val $ ValLoc s; Val $ ValNum n; Val $ ValNum o] [{ Π }] {{ Φ }}.
   Proof.
     iIntros (Hn Hlen Ho Hd' Hs' Hle) "#Hf Hm HΦ".
     iApply sim_gen_expr_ctx. iIntros "#?".
@@ -885,10 +885,10 @@ Section memmove.
     "memcpy" ↪ Some memcpy_rec -∗
     □ (∀ l1 l2 Φ,
         (∀ b, ⌜l1.1 = l2.1 → b = bool_decide (l1.2 ≤ l2.2)⌝ -∗ Φ (Val (ValBool b)) None Π) -∗
-          TGT Call "locle" [Val (ValLoc l1); Val $ ValLoc l2] [{ Π }] {{ Φ }}) -∗
+          TGT Call (Val (ValFn "locle")) [Val (ValLoc l1); Val $ ValLoc l2] [{ Π }] {{ Φ }}) -∗
     ([∗ map] l↦v∈array s hvss ∪ array d hvsd, l ↦ v) -∗
     (([∗ map] l↦v∈array d hvss ∪ array s hvss, l ↦ v) -∗ Φ (Val 0) None Π) -∗
-    TGT Call "memmove" [Val (ValLoc d); Val $ ValLoc s; Val $ ValNum n] [{ Π }] {{ Φ }}.
+    TGT Call (Val (ValFn "memmove")) [Val (ValLoc d); Val $ ValLoc s; Val $ ValNum n] [{ Π }] {{ Φ }}.
   Proof.
     iIntros (-> ?) "#Hmemmove #Hmemcpy #Hlocle Hs HΦ".
     iApply (sim_gen_expr_bind _ []).
@@ -930,7 +930,7 @@ Section memmove.
     rec_fn_auth fns -∗
     "locle" ↪ None -∗
     (∀ b, ⌜l1.1 = l2.1 → b = bool_decide (l1.2 ≤ l2.2)⌝ -∗ Φ (Val (ValBool b)) None Π) -∗
-    TGT Call "locle" [Val (ValLoc l1); Val $ ValLoc l2] [{ Π }] {{ Φ }}.
+    TGT Call (Val (ValFn "locle")) [Val (ValLoc l1); Val $ ValLoc l2] [{ Π }] {{ Φ }}.
   Proof.
     iIntros (Π) "#Hfns #Hf HΦ".
     iApply (sim_tgt_rec_Call_external with "[$]"). iIntros (? σ') "?? Hσ' !>".

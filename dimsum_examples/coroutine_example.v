@@ -13,8 +13,8 @@ Definition main_addr: Z := 800.
 Definition stream_rec: fndef := {|
   fd_args := [("n")];
   fd_vars := [];
-  fd_body := LetE "_" (rec.Call "yield" [Var "n"]) $
-             (rec.Call "stream" [BinOp (Var "n") AddOp (Val $ ValNum 1)]);
+  fd_body := LetE "_" (rec.Call (Val (ValFn "yield")) [Var "n"]) $
+             (rec.Call (Val (ValFn "stream")) [BinOp (Var "n") AddOp (Val $ ValNum 1)]);
   fd_static := I
 |}.
 Definition stream_prog : gmap string fndef :=
@@ -23,11 +23,11 @@ Definition stream_prog : gmap string fndef :=
 Definition main_rec: fndef := {|
   fd_args := [];
   fd_vars := [];
-  fd_body := LetE "x" (rec.Call "yield" [Val $ ValNum 0]) $
-             LetE "_" (rec.Call "print" [(Var "x")]) $
-             LetE "y" (rec.Call "yield" [Val $ ValNum 0]) $
-             LetE "_" (rec.Call "print" [(Var "y")]) $
-             (rec.Call "yield" [Val $ ValNum 0]);
+  fd_body := LetE "x" (rec.Call (Val (ValFn "yield")) [Val $ ValNum 0]) $
+             LetE "_" (rec.Call (Val (ValFn "print")) [(Var "x")]) $
+             LetE "y" (rec.Call (Val (ValFn "yield")) [Val $ ValNum 0]) $
+             LetE "_" (rec.Call (Val (ValFn "print")) [(Var "y")]) $
+             (rec.Call (Val (ValFn "yield")) [Val $ ValNum 0]);
   fd_static := I
 |}.
 Definition main_prog : gmap string fndef :=
@@ -51,12 +51,12 @@ Definition main_asm_dom : gset Z := locked dom main_asm.
 
 Lemma stream_asm_refines_rec :
   trefines (asm_mod stream_asm)
-           (rec_to_asm (dom stream_asm) {["stream"]} all_f2i ∅ (rec_mod (<["stream" := stream_rec]> ∅))).
+           (rec_to_asm (dom stream_asm) all_f2i ∅ (rec_mod (<["stream" := stream_rec]> ∅))).
 Proof. apply: compile_correct; [|done|..]; compute_done. Qed.
 
 Lemma main_asm_refines_rec :
   trefines (asm_mod main_asm)
-           (rec_to_asm (dom main_asm) {["main"]} all_f2i ∅ (rec_mod (<["main" := main_rec]> ∅))).
+           (rec_to_asm (dom main_asm) all_f2i ∅ (rec_mod (<["main" := main_rec]> ∅))).
 Proof. apply: compile_correct; [|done|..]; compute_done. Qed.
 
 Definition main_spec : spec rec_event unit void :=
@@ -181,7 +181,7 @@ Definition top_level_spec : spec asm_event unit void :=
 Lemma top_level_refines_spec :
   trefines (asm_link (yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom) (dom print_asm)
               (rec_to_asm (yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom)
-                {["yield"; "main"; "stream"]} all_f2i
+                all_f2i
                 (r2a_mem_stack_mem (stream_regs_init !!! "SP") stream_ssz ∪ coro_regs_mem stream_regs_init)
                 (spec_mod main_spec tt)) (spec_mod print_spec tt))
            (spec_mod top_level_spec tt).
@@ -196,13 +196,17 @@ Proof.
   rewrite bool_decide_true. 2: unfold yield_asm_dom, yield_asm, main_asm_dom, stream_asm_dom; unlock; by vm_compute.
   tstep_i => ??. simplify_eq.
   tstep_i. eexists true. split; [done|] => /=. eexists ∅, _, [], [], "main". split!.
-  { simplify_map_eq'. done. } { rewrite !not_elem_of_union. naive_solver. }
-  { apply: satisfiable_mono; [by eapply r2a_res_init|].
+  { simplify_map_eq'. unfold yield_asm_dom, yield_asm, main_asm_dom, stream_asm_dom; unlock; compute_done. } { rewrite !not_elem_of_union. naive_solver. }
+  { apply: satisfiable_mono; [by eapply (r2a_res_init _ all_f2i)|].
     iIntros!. iDestruct select (r2a_mem_auth _) as "$". iFrame.
     iDestruct (big_sepM_subseteq with "[$]") as "?"; [done|].
     rewrite big_sepM_union; [|done]. iDestruct!. iFrame.
-    iSplitL; [|iAccu]. by iApply r2a_mem_stack_init. }
-
+    iDestruct select (r2a_f2i_full _) as "#Hf2i".
+    iSplit!. 2: iSplitL; iSplit!.
+    - unfold r2a_f2i_incl. iExists _. iFrame "#". iSplit!.
+    - iApply r2a_mem_stack_init. by iApply big_sepM_subseteq.
+    - iApply (r2a_f2i_full_to_singleton with "[$]"). by simplify_map_eq'.
+    - iExact "Hf2i". }
   go_i => -[[??]?]. go.
   go_i => ?. go. simplify_eq.
   go_i. split!. go.
@@ -210,10 +214,11 @@ Proof.
   go_i.
   go_i => *. destruct!.
   iSatStart. iIntros!.
+  iDestruct (r2a_f2i_full_singleton with "[$] [$]") as %Hf2i.
   iDestruct (r2a_args_intro with "[$]") as "?"; [done|]. rewrite r2a_args_cons ?r2a_args_nil; [|done].
   iDestruct!. iSatStop.
 
-  rename select (all_f2i !! _ = Some _) into Hf2i. unfold all_f2i in Hf2i. simplify_map_eq'.
+  unfold all_f2i in Hf2i. simplify_map_eq'.
   rewrite bool_decide_false. 2: unfold yield_asm_dom, yield_asm, main_asm_dom, stream_asm_dom; unlock; by vm_compute.
   rewrite bool_decide_true. 2: compute_done.
   go_i.
@@ -261,9 +266,10 @@ Proof.
   go_i => *. destruct!.
   iSatStart. iIntros!.
   iDestruct (r2a_args_intro with "[$]") as "?"; [done|]. rewrite r2a_args_cons ?r2a_args_nil; [|done].
+  iDestruct (r2a_f2i_full_singleton _ _ (_ !!! _) with "[$] [$]") as %Hf2i2.
   iDestruct!. iSatStop.
 
-  rename select (all_f2i !! _ = Some _) into Hf2i2. unfold all_f2i in Hf2i2. simplify_map_eq'.
+  unfold all_f2i in Hf2i2. simplify_map_eq'.
   rewrite bool_decide_false. 2: unfold yield_asm_dom, yield_asm, main_asm_dom, stream_asm_dom; unlock; by vm_compute.
   rewrite bool_decide_true. 2: compute_done.
   tstep_i. rewrite -/print_spec. go.
@@ -349,7 +355,7 @@ Proof.
       etrans. {
         rewrite dom_union_L.
         have ->: dom yield_asm = yield_asm_dom by rewrite /yield_asm_dom; unlock.
-        apply (coro_spec "stream" stream_regs_init stream_ssz).
+        apply (coro_spec "stream" stream_regs_init stream_ssz {["main"]} {["stream"]}).
         1, 2: apply _.
         all: unfold yield_asm_dom, yield_asm, r2a_mem_stack_mem; unlock.
         all: compute_done.

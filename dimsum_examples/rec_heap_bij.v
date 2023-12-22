@@ -571,6 +571,7 @@ Definition val_in_bij (v1 v2 : val) : uPred heap_bijUR :=
   match v1, v2 with
   | ValNum n1, ValNum n2 => ⌜n1 = n2⌝
   | ValBool b1, ValBool b2 => ⌜b1 = b2⌝
+  | ValFn f1, ValFn f2 => ⌜f1 = f2⌝
   | ValLoc l1, ValLoc l2 => loc_in_bij l1 l2
   | _, _ => False
   end.
@@ -982,8 +983,8 @@ Proof. elim: n => //= ??. apply _. Qed.
 (** * Proof techniques for [rec_heap_bij] *)
 Definition rec_heap_bij_call (n : ordinal) (fns1 fns2 : gmap string fndef) :=
   (∀ n' f es1' es2' K1' K2' es1 es2 vs1' vs2' h1' h2' b r rf',
-      RecExprFill es1' K1' (Call f es1) →
-      RecExprFill es2' K2' (Call f es2) →
+      RecExprFill es1' K1' (Call (Val (ValFn f)) es1) →
+      RecExprFill es2' K2' (Call (Val (ValFn f)) es2) →
       n' ⊆ n →
       Forall2 (λ e v, e = Val v) es1 vs1' →
       Forall2 (λ e v, e = Val v) es2 vs2' →
@@ -1149,18 +1150,18 @@ Proof.
 Qed.
 
 (** ** Reflexivity *)
-Lemma rec_heap_bij_sim_call_bind args vs' ws' es ei Ks Ki vss vsi n b hi hs fns1 fns2 rf f r
-  `{Hfill2: !RecExprFill ei Ki (Call f ((Val <$> vs') ++ (subst_map vsi <$> args)))}
-  `{Hfill1: !RecExprFill es Ks (Call f ((Val <$> ws') ++ (subst_map vss <$> args)))}:
-    satisfiable (heap_bij_inv hi hs ∗ ([∗ map] vi;vs ∈ vsi; vss, val_in_bij vi vs) ∗ ([∗ list] v; w ∈ vs'; ws', val_in_bij v w) ∗ r ∗ rf) →
+Lemma rec_heap_bij_sim_call_bind args vs' ws' es ei Ks Ki vss vsi vfi vfs n b hi hs fns1 fns2 rf r
+  `{Hfill2: !RecExprFill ei Ki (Call (Val vfi) ((Val <$> vs') ++ (subst_map vsi <$> args)))}
+  `{Hfill1: !RecExprFill es Ks (Call (Val vfs) ((Val <$> ws') ++ (subst_map vss <$> args)))}:
+    satisfiable (heap_bij_inv hi hs ∗ ([∗ map] vi;vs ∈ vsi; vss, val_in_bij vi vs) ∗ ([∗ list] v; w ∈ vs'; ws', val_in_bij v w) ∗ val_in_bij vfi vfs ∗ r ∗ rf) →
     dom vss ⊆ dom vsi →
     rec_heap_bij_call n fns1 fns2 →
-    (∀ vs ws hi' hs' b' n' rf',
+    (∀ vs ws hi' hs' b' n' rf' f,
       n' ⊆ n →
       satisfiable (heap_bij_inv hi' hs' ∗ ([∗ map] vi;vs ∈ vsi; vss, val_in_bij vi vs) ∗ ([∗ list] v; w ∈ vs' ++ vs; ws' ++ ws, val_in_bij v w) ∗ r ∗ rf') →
-      Rec (expr_fill Ki (Call f (Val <$> (vs' ++ vs)))) hi' fns1
+      Rec (expr_fill Ki (Call (Val (ValFn f)) (Val <$> (vs' ++ vs)))) hi' fns1
         ⪯{rec_trans, rec_heap_bij_trans rec_trans, n', b'}
-      (SMProg, Rec (expr_fill Ks (Call f (Val <$> (ws' ++ ws)))) hs' fns2, (PPInside, (), uPred_shrink rf'))
+      (SMProg, Rec (expr_fill Ks (Call (Val (ValFn f)) (Val <$> (ws' ++ ws)))) hs' fns2, (PPInside, (), uPred_shrink rf'))
     ) →
     Forall
     (λ e : expr,
@@ -1183,24 +1184,25 @@ Proof.
   intros Hsat Hdom Hfuns Hcont Hargs; destruct Hfill1 as [->], Hfill2 as [->].
   induction args as [|e args IH] in n, b, vs', ws', hs, hi, Hsat, Hcont, Hargs, Hfuns, rf |-*; simpl.
  - specialize (Hcont [] []). rewrite !app_nil_r in Hcont.
-   rewrite !app_nil_r. eapply Hcont, Hsat. done.
+   rewrite !app_nil_r. tstep_s => ??. simplify_eq/=.
+   iSatStart. iIntros!. destruct vfi => //=. iDestruct!. iSatStop.
+   eapply Hcont; [done|]. iSatMono. iFrame.
  - eapply Forall_cons_1 in Hargs as [Harg Hall].
    apply: Harg.
   + eapply rec_expr_fill_expr_fill, (rec_expr_fill_expr_fill _ [CallCtx _ _ _]), rec_expr_fill_end.
   + eapply rec_expr_fill_expr_fill, (rec_expr_fill_expr_fill _ [CallCtx _ _ _]), rec_expr_fill_end.
   + done.
-  + iSatMono. iIntros "(Hbij & #Hvals & #Hvals' & r & rf)". iFrame.
-    iFrame "Hvals". iCombine "Hvals Hvals' r" as "r". iExact "r".
-  + simpl. clear Hsat. intros n' v w h1' h2' rf' b' Hsub Hsat'. simpl.
+  + iSatMono. iIntros "(Hbij & #Hvals & #Hvals' & Hf & r & rf)". iFrame.
+    iFrame "Hvals". iCombine "Hvals Hvals' Hf r" as "r". iExact "r".
+  + simpl. iSatClear. intros n' v w h1' h2' rf' b' Hsub Hsat'. simpl.
     rewrite !cons_middle !app_assoc. change ([Val v]) with (Val <$> [v]).
     change ([Val w]) with (Val <$> [w]). rewrite -!fmap_app.
     specialize (IH (vs' ++ [v]) (ws' ++ [w]) n' b' h1' h2' rf').
     eapply IH; eauto.
-    * iSatMono. iIntros "($ & $ & ($ & $ & $) & $)". done.
+    * iSatMono. iIntros "($ & $ & ($ & $ & $ & $) & $)". done.
     * by apply: rec_heap_bij_call_mono.
     * intros vs ws hi' hs' b'' n'' rf'' Hsub' Hsat. rewrite -!app_assoc.
       clear IH Hall Hsat'. eapply Hcont; first by etrans.
-      rewrite !app_assoc //.
 Qed.
 
 Lemma rec_heap_bij_sim_refl_static vss vsi e es ei hi hs n b Ki Ks fns1 fns2 r rf
@@ -1292,17 +1294,24 @@ Proof.
     { by apply: rec_heap_bij_return_mono. }
     iSatMono. iIntros "(Hinv & Hv & (Hsub & r) & rf)". iFrame.
     iApply (big_sepM2_insert_2 with "[Hv]"); by iFrame.
-  - simpl. apply: (rec_heap_bij_sim_call_bind args nil nil);simpl; eauto.
-    + iSatMono. iIntros "($ & $ & $)".
-    + clear Hsat. intros vs ws hi' hs' b' n' rf' Hn' Hsat'.
+  - simpl. simpl in Hstatic. eapply andb_True in Hstatic as [Hstatic1 Hstatic2].
+    apply: IH; simpl; [eauto..|]; last first.
+    { iSatMono. iIntros "($ & #Hm & r & $)". iFrame "Hm". iCombine "Hm r" as "r". iExact "r". }
+    iSatClear. intros n' vi vs hi' hs' rf' b' Hn' Hsat; simpl.
+    apply: (rec_heap_bij_sim_call_bind args nil nil); simpl; eauto.
+    + iSatMono. iIntros!. iFrame. iAccu.
+    + by apply: rec_heap_bij_call_mono.
+    + clear Hsat vs hi' hs' b' rf'. intros vs ws hi' hs' b' n'' rf' f' Hn'' Hsat'.
       apply: Hcall; simpl; eauto.
-      { by eapply Forall2_fmap_l, Forall_Forall2_diag, Forall_forall. }
-      { by eapply Forall2_fmap_l, Forall_Forall2_diag, Forall_forall. }
-      iSatMono. iIntros "($ & ? & $ & $)".
+      * by etrans.
+      * by eapply Forall2_fmap_l, Forall_Forall2_diag, Forall_forall.
+      * by eapply Forall2_fmap_l, Forall_Forall2_diag, Forall_forall.
+      * iSatMono. iIntros "($ & ? & $ & $)".
+      * move => *. apply Hcont; [by etrans|done].
     + eapply Forall_forall. intros x Hx.
-      eapply Forall_forall in IH; last done.
-      intros ???????????????. eapply IH; eauto.
-      simpl in Hstatic. by eapply forallb_True, Forall_forall in Hstatic.
+      eapply Forall_forall in H; last done.
+      intros ???????????????. eapply H; eauto.
+      simpl in Hstatic2. by eapply forallb_True, Forall_forall in Hstatic2.
   - done.
   - done.
   - done.
@@ -1441,7 +1450,7 @@ Definition bij_alloc : fndef := {|
   fd_args := [];
   fd_vars := [("tmp", 1)];
   fd_body := (LetE "_" (Store (Var "tmp") (Val 1))
-             (LetE "_" (Call "ext" [])
+             (LetE "_" (Call (Val (ValFn "ext")) [])
              (Load (Var "tmp"))));
   fd_static := I;
 |}.
@@ -1449,7 +1458,7 @@ Definition bij_alloc : fndef := {|
 Definition bij_alloc_opt : fndef := {|
   fd_args := [];
   fd_vars := [];
-  fd_body := (LetE "_" (Call "ext" [])
+  fd_body := (LetE "_" (Call (Val (ValFn "ext")) [])
              (Val 1));
   fd_static := I;
 |}.

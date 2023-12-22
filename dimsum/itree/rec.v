@@ -60,8 +60,10 @@ Definition rec_expr_itree (e : expr) : itree (callE expr val +' moduleE rec_even
       assume (heap_free_list (zip ls xs.*2) he he');;
       set_rec_heap he';;
       Ret v
-  | Call f es =>
+  | Call e es =>
+      v ← call e;
       vs ← ITree.flat_map call es;
+      f ← val_to_fn v?;
       fns ← get_rec_fns;
       if fns !! f is Some fn then
         assume (length vs = length fn.(fd_args));;
@@ -80,7 +82,7 @@ Definition rec_expr_itree (e : expr) : itree (callE expr val +' moduleE rec_even
         fn ← (fns !! f)!;
         set_rec_heap h;;
         visible (Incoming, ERCall f vs h);;
-        v ← call (Call f (Val <$> vs));
+        v ← call (Call (Val (ValFn f)) (Val <$> vs));
         h ← get_rec_heap;
         visible (Outgoing, ERReturn v h);;
         call (Waiting b)
@@ -121,7 +123,7 @@ Local Fixpoint rec_itree_expr_inv (e : expr) : bool :=
   | Store e1 e2 => rec_itree_expr_inv e1 && rec_itree_expr_inv e2
   | If e e1 e2 => rec_itree_expr_inv e && rec_itree_expr_inv e1 && rec_itree_expr_inv e2
   | LetE v e1 e2 => rec_itree_expr_inv e1 && rec_itree_expr_inv e2
-  | Call f args => forallb rec_itree_expr_inv args
+  | Call e args => rec_itree_expr_inv e && forallb rec_itree_expr_inv args
   | AllocA _ e => rec_itree_expr_inv e
   | FreeA _ e => false
   | ReturnExt can_return_further e => false
@@ -139,7 +141,8 @@ Proof.
   elim: e => //= *; try naive_solver.
   - by case_bool_decide.
   - case_bool_decide; naive_solver.
-  - apply forallb_True, Forall_forall => ? /elem_of_list_fmap[?[??]]. subst.
+  - destruct_and!. split_and?; [naive_solver|].
+    apply forallb_True, Forall_forall => ? /elem_of_list_fmap[?[??]]. subst.
     revert select (Forall _ _) => /Forall_forall.
     revert select (Is_true (forallb _ _)) => /forallb_True/Forall_forall. naive_solver.
 Qed.
@@ -158,12 +161,13 @@ Local Lemma is_static_expr_rec_itree_expr_inv e:
   rec_itree_expr_inv e.
 Proof.
   elim: e => //=; try naive_solver.
-  move => ?? IH /forallb_True.
-  elim: IH => // *. decompose_Forall_hyps; naive_solver.
+  move => ?? IHe IH /andb_True[?] /forallb_True Hargs.
+  split_and?; [naive_solver|].
+  elim: IH Hargs => // *. decompose_Forall_hyps; naive_solver.
 Qed.
 
 (** ** equivalence proof *)
-Lemma rec_itree_refines_rec_call t e h fns k K f args b n:
+Lemma rec_itree_refines_rec_call t e h fns k K vf args b n:
   t ⊒ ↓ᵢ (ITree.bind (interp (recursive' rec_expr_itree) (ITree.flat_map call args)) k) →
   (∀ t' e' h' K' a k,
       a ∈ args →
@@ -177,9 +181,9 @@ Lemma rec_itree_refines_rec_call t e h fns k K f args b n:
   (∀ t' e' h' argsv,
       t' ⊒ ↓ᵢ (k argsv) →
       (t', Rec e' h' fns) ⪯{itree_trans rec_event rec_state, rec_trans, n, b}
-        Rec (expr_fill K (Call f (Val <$> argsv))) h' fns) →
+        Rec (expr_fill K (Call (Val vf) (Val <$> argsv))) h' fns) →
   (t, Rec e h fns) ⪯{itree_trans rec_event rec_state, rec_trans, n, b}
-    Rec (expr_fill K (Call f args)) h fns.
+    Rec (expr_fill K (Call (Val vf) args)) h fns.
 Proof.
   move => Ht Hargs Hret. move: Ht Hargs.
   change args with ((Val <$> []) ++ args) at 3.
@@ -188,7 +192,7 @@ Proof.
   elim: args argsv h e t.
   { move => argsv h e t /= Ht ?. go. move: Ht. rewrite !app_nil_r. naive_solver. }
   move => /= arg args IH argsv h e t Ht Ha.
-  go_i. change (Call _ _) with (expr_fill ([CallCtx f argsv args]) arg).
+  go_i. change (Call _ _) with (expr_fill ([CallCtx vf argsv args]) arg).
   rewrite -expr_fill_app. eapply Ha; [set_solver|done|].
   move => ??? /=??. rewrite cons_middle app_assoc -fmap_snoc.
   apply IH; [|set_solver].
@@ -253,13 +257,16 @@ Proof.
     go_i. go_i.
     apply Hloop; [done|].
     split!; [done|apply _|apply rec_itree_expr_inv_subst; naive_solver|done].
-  - go. revert select (Is_true (forallb _ _)) => /forallb_True/Forall_forall?.
+  - go. destruct_and!. revert select (Is_true (forallb _ _)) => /forallb_True/Forall_forall?.
+    go_i. go_i. apply Hloop; [done|]. split!; [done|apply _|naive_solver|].
+    move => /= *. go. apply tsim_mono_b_false.
     apply: rec_itree_refines_rec_call; [done|..]. {
       move => ???????? Hret2. go_i. apply Hloop; [done|].
       split!; [done|apply _|naive_solver| ].
-      move => /= *. apply tsim_mono_b_false. naive_solver.
+      move => /= *. apply tsim_mono_b_false. by apply Hret2.
     }
-    move => /= ?????. go_i.
+    move => /= ?????. tstep_s => ??. simplify_eq. go_i. split!. go.
+    go_i.
     case_match.
     + go_s. split!. move => ?. go_i. split!. go. go_i. go_i.
       apply Hloop; [done|].
@@ -303,7 +310,7 @@ Proof.
       by apply Hret.
 Qed.
 
-Lemma rec_refines_rec_itree_call t e h fns k K f args b n:
+Lemma rec_refines_rec_itree_call t e h fns k K vf args b n:
   t ⊒ ↓ᵢ (ITree.bind (interp (recursive' rec_expr_itree) (ITree.flat_map call args)) k) →
   (∀ t' e' h' K' a k,
       a ∈ args →
@@ -316,10 +323,10 @@ Lemma rec_refines_rec_itree_call t e h fns k K f args b n:
         (t', Rec e' h' fns)) →
   (∀ t' e' h' argsv,
       t' ⊒ ↓ᵢ (k argsv) →
-      (Rec (expr_fill K (Call f (Val <$> argsv))) h' fns)
+      (Rec (expr_fill K (Call (Val vf) (Val <$> argsv))) h' fns)
         ⪯{rec_trans, itree_trans rec_event rec_state, n, b}
         (t', Rec e' h' fns)) →
-  (Rec (expr_fill K (Call f args)) h fns) ⪯{rec_trans, itree_trans rec_event rec_state, n, b}
+  (Rec (expr_fill K (Call (Val vf) args)) h fns) ⪯{rec_trans, itree_trans rec_event rec_state, n, b}
     (t, Rec e h fns).
 Proof.
   move => Ht Hargs Hret. move: Ht Hargs.
@@ -329,7 +336,7 @@ Proof.
   elim: args argsv h e t.
   { move => argsv h e t /= Ht ?. go. move: Ht. rewrite !app_nil_r. naive_solver. }
   move => /= arg args IH argsv h e t Ht Ha.
-  go_s. change (Call _ _) with (expr_fill ([CallCtx f argsv args]) arg).
+  go_s. change (Call _ _) with (expr_fill ([CallCtx vf argsv args]) arg).
   rewrite -expr_fill_app. eapply Ha; [set_solver|done|].
   move => ??? /=??. rewrite cons_middle app_assoc -fmap_snoc.
   apply IH; [|set_solver].
@@ -393,15 +400,18 @@ Proof.
     eapply IHe; [|split!; [done|apply _| |done]].
     + rewrite rec_expr_depth_subst. lia.
     + apply rec_itree_expr_inv_subst. naive_solver.
-  - revert select (Is_true (forallb _ _)) => /forallb_True/Forall_forall?.
-    go_s. apply: rec_refines_rec_itree_call; [done|..]. {
+  - destruct_and!. revert select (Is_true (forallb _ _)) => /forallb_True/Forall_forall?.
+    go_s. go_s. go_s. eapply IHe; [|split!; [done|apply _|naive_solver|]]; [lia|].
+    move => /= vf *. go_s. apply tsim_mono_b_false.
+    apply: rec_refines_rec_itree_call; [done|..]. {
       move => ???? a ??? Hret2. go_s.
       eapply IHe; [|split!; [done|apply _|naive_solver|]].
       { exploit (max_list_elem_of_le (rec_expr_depth a) (rec_expr_depth <$> args)); [|lia].
         apply elem_of_list_fmap. naive_solver. }
       move => /= *. apply tsim_mono_b_false. naive_solver.
     }
-    move => /= *. go_s. tstep_both. split => *; simplify_option_eq.
+    move => /= *. go_s => ??. go. destruct vf; simplify_eq/=.
+    go_s. tstep_both. split => *; simplify_option_eq.
     + go_s => ?. go. tend. split!. go_s. go_s.
       apply Hloop; [done|]. split!; [done|apply _| |done].
       cbn. apply rec_itree_expr_inv_subst_l.

@@ -518,7 +518,7 @@ Lemma coro_link_trefines m1 m1' m2 m2' fns1 fns2 finit `{!VisNoAng m1.(m_trans)}
 Proof. move => ??. by apply link_mod_trefines. Qed.
 
 (** * Main Theorem: Yield library refines coroutine linking *)
-Theorem coro_spec finit regs_init ssz_init m1 m2 ins1 ins2 fns1 fns2 f2i1 f2i2
+Theorem coro_spec finit regs_init ssz_init fns1 fns2 m1 m2 ins1 ins2 f2i1 f2i2
   `{!VisNoAng m1.(m_trans)} `{!VisNoAng m2.(m_trans)}:
   let fns := {["yield"]} ∪ fns1 ∪ fns2 in
   let ins := yield_asm_dom ∪ ins1 ∪ ins2 in
@@ -532,41 +532,22 @@ Theorem coro_spec finit regs_init ssz_init m1 m2 ins1 ins2 fns1 fns2 f2i1 f2i2
   yield_asm_dom ## ins1 ∪ ins2 →
   f2i1 !! "yield" = Some yield_addr →
   f2i2 !! "yield" = Some yield_addr →
-  set_Forall (λ f, Is_true (if f2i1 !! f is Some i then bool_decide (i ∈ ins1) else false)) fns1 →
-  set_Forall (λ f, Is_true (if f2i2 !! f is Some i then bool_decide (i ∈ ins2) else false)) fns2 →
-  map_Forall (λ f i1, Is_true (if f2i2 !! f is Some i2 then bool_decide (i1 = i2) else true)) f2i1 →
-  map_Forall (λ f i, f ∈ fns2 ∨ i ∉ ins2) f2i →
-  map_Forall (λ f i, f ∈ fns1 ∨ i ∉ ins1) f2i →
+  f2i_fns_ins_wf f2i1 fns1 ins1 →
+  f2i_fns_ins_wf f2i2 fns2 ins2 →
+  map_agree f2i1 f2i2 →
+  map_Forall (λ f i, i ∉ ins2 ∨ f2i2 !! f = Some i) f2i1 →
+  map_Forall (λ f i, i ∉ ins1 ∨ f2i1 !! f = Some i) f2i2 →
   map_Forall (λ f i, f = "yield" ∨ i ∉ yield_asm_dom) f2i →
   r2a_mem_stack_mem (regs_init !!! "SP") ssz_init ##ₘ coro_regs_mem regs_init →
   trefines
     (asm_link yield_asm_dom (ins1 ∪ ins2) (asm_mod yield_asm)
-       (asm_link ins1 ins2 (rec_to_asm ins1 fns1 f2i1 ∅ m1) (rec_to_asm ins2 fns2 f2i2 ∅ m2)))
-    (rec_to_asm ins fns f2i mo (coro_link fns1 fns2 finit m1 m2))
+       (asm_link ins1 ins2 (rec_to_asm ins1 f2i1 ∅ m1) (rec_to_asm ins2 f2i2 ∅ m2)))
+    (rec_to_asm ins f2i mo (coro_link fns1 fns2 finit m1 m2))
 .
 Proof.
-  move => fns ins f2i mo Hinit Hfinit Hyf Hidisj Hfdisj Hydisj Hy1 Hy2 Hi1 Hi2 Hag Hf1 Hf2 Hfy Hmo.
+  move => fns ins f2i mo Hinit Hfinit Hyf Hidisj Hfdisj Hydisj Hy1 Hy2 Hwf1 Hwf2 Hag Hf1 Hf2 Hfy Hmo.
   destruct m1 as [m1 σ1], m2 as [m2 σ2] => /=.
-  have {}Hi1 : (∀ f, f ∈ fns1 → ∃ i, i ∈ ins1 ∧ f2i1 !! f = Some i). {
-    move => ? /Hi1. case_match => // /bool_decide_unpack. naive_solver.
-  }
-  have {}Hi2 : (∀ f, f ∈ fns2 → ∃ i, i ∈ ins2 ∧ f2i2 !! f = Some i). {
-    move => ? /Hi2. case_match => // /bool_decide_unpack. naive_solver.
-  }
-  have {}Hag : (∀ f i1 i2, f2i1 !! f = Some i1 → f2i2 !! f = Some i2 → i1 = i2). {
-    move => ??? /Hag Hs?. simplify_map_eq. rewrite bool_decide_spec in Hs. done.
-  }
-  have {}Hf1 : (∀ f i, f2i !! f = Some i → i ∈ ins2 → f ∈ fns2). {
-    move => ?? /Hf1. naive_solver.
-  }
-  have {}Hf2 : (∀ f i, f2i !! f = Some i → i ∈ ins1 → f ∈ fns1). {
-    move => ?? /Hf2. naive_solver.
-  }
-  have {}Hfy : (∀ f i, f2i !! f = Some i → i ∈ yield_asm_dom → f = "yield"). {
-    move => ?? /Hfy. naive_solver.
-  }
-  have Hf1in : ∀ f i1 i2, f2i1 !! f  = Some i1 → f2i !! f = Some i2 → i1 = i2.
-  { move => ???. rewrite /f2i lookup_union_Some_raw. naive_solver. }
+  have : regs_init !!! "PC" ∈ ins2. { by apply: f2i_fns_ins_wf_in_fns_pure. }
   etrans. {
     apply: asm_link_trefines; [|done]. apply (yield_asm_refines_spec regs_init).
     fast_set_solver.
@@ -577,16 +558,39 @@ Proof.
   tstep_s. move => -[] //= ? h ssz vs avs f *.
   tstep_s. split!.
   tstep_s => ?.
-  have ? : regs !!! "PC" ∈ ins1. { exploit Hi1; [done|]. naive_solver. }
+  iSatStart. iIntros!.
+  rewrite r2a_f2i_incl_union; [ |done| | ]. 2: {
+   move => i f' /elem_of_union[?|?] ?.
+   - exploit Hfy.
+     rewrite /f2i map_union_comm_agree; [by apply lookup_union_Some_l|done].
+     naive_solver.
+   - move => *. unfold map_Forall in *. naive_solver. } 2:{
+   move => *. unfold map_Forall in *. naive_solver. }
+  have {1} -> : f2i1 = {["yield" := yield_addr]} ∪ f2i1. {
+    apply map_eq => f'. apply option_eq => ?.
+    rewrite lookup_union_Some_raw. rewrite lookup_singleton_Some. rewrite lookup_singleton_None.
+    destruct (decide (f' = "yield")); naive_solver.
+  }
+  rewrite r2a_f2i_incl_union. 2: {
+    apply map_agree_singleton_l. naive_solver. } 2: {
+    move => *. apply lookup_singleton_Some.
+    exploit Hfy; [by apply lookup_union_Some_l|]. naive_solver. } 2: {
+    move => ??? /lookup_singleton_Some[??]. subst. done. }
+  iDestruct!. iSatStop.
+  have ? : regs !!! "PC" ∈ ins1. {
+    iSatStart. iDestruct (f2i_fns_ins_wf_in_fns f2i1 with "[$] [$]") as %?; [done..|]. by iSatStop.
+  }
   rewrite bool_decide_false; [|fast_set_solver].
   rewrite bool_decide_true; [|fast_set_solver].
   tstep_i => *. case_match; destruct!/=.
   rewrite bool_decide_true; [|fast_set_solver].
   tstep_i => *. simplify_eq.
   tstep_i. eexists true. split; [done|]. eexists h, ssz, vs, avs, f.
-  split!. { naive_solver. } { fast_set_solver. }
-  { iSatMono. iIntros!. rewrite /r2a_mem_map/mo big_sepM_empty big_sepM_union //. iDestruct!. iFrame.
-    iDestruct (r2a_mem_stack_init with "[$]") as "?". iAccu. }
+  split!. { fast_set_solver. }
+  { iSatMono. iIntros!. rewrite /r2a_mem_map/mo big_sepM_empty big_sepM_union //. iDestruct!.
+    iDestruct select (r2a_f2i_incl f2i1 _) as "#Hf2i1". iFrame "#∗".
+    iDestruct (r2a_mem_stack_init with "[$]") as "?".
+    iDestruct "Hf2i1" as "-#?". iAccu. }
   tsim_mirror m1 σ1. { tstep_s. by exists None. }
   move => *. subst.
   tstep_s. eexists (Some (Incoming, _)). split!. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
@@ -614,7 +618,9 @@ Proof.
            pp1 = PPInside ∧
            cs1 = csc ∧
            map_scramble touched_registers lrc lr1 ∧
-           (rx1 ⊣⊢ r2a_mem_stack (yregs !!! "SP") ssz ∗ r2a_mem_map (coro_regs_mem yregs) ∗ rx2 ∗ rxc)%I ∧
+           (rx1 ⊣⊢ r2a_f2i_incl {["yield" := yield_addr]} yield_asm_dom ∗
+                   r2a_f2i_incl f2i1 ins1 ∗ r2a_f2i_incl f2i2 ins2 ∗
+                   r2a_mem_stack (yregs !!! "SP") ssz ∗ r2a_mem_map (coro_regs_mem yregs) ∗ rx2 ∗ rxc)%I ∧
            σsm2 = SMFilter ∧
            pp2 = PPOutside ∧
            (if σc.2 is Some f then
@@ -634,7 +640,9 @@ Proof.
            cs1 = [R2AI true (yregs !!! "PC") regs1; R2AI false cret cregs] ∧
            map_preserved saved_registers regs1 yregs ∧
            map_scramble touched_registers lrc lr2 ∧
-           (rx2 ⊣⊢ r2a_mem_stack (yregs !!! "SP") ssz ∗ r2a_mem_map (coro_regs_mem yregs) ∗ rx1 ∗ rxc)%I ∧
+           (rx2 ⊣⊢ r2a_f2i_incl {["yield" := yield_addr]} yield_asm_dom ∗
+                   r2a_f2i_incl f2i1 ins1 ∗ r2a_f2i_incl f2i2 ins2 ∗
+                   r2a_mem_stack (yregs !!! "SP") ssz ∗ r2a_mem_map (coro_regs_mem yregs) ∗ rx1 ∗ rxc)%I ∧
            σsm2 = SMProg ∧
            pp2 = PPInside ∧
            cs2 = [R2AI false ret2 regs2] ∧
@@ -642,8 +650,10 @@ Proof.
            yregs !!! "PC" ∈ ins1
        | _ => False
        end). }
-  { split!. { iSplit; iIntros!; iFrame. by iApply big_sepM_empty. } naive_solver. } { done. }
-  clear -Hyf Hidisj Hfdisj Hydisj Hy1 Hy2 Hi1 Hi2 Hag Hf1 Hf2 Hfy Hf1in VisNoAng0 VisNoAng1.
+  { split!. {
+      iSplit; iIntros!; iDestruct select (r2a_f2i_incl f2i2 _) as "#?"; iFrame "#∗".
+      by iApply big_sepM_empty. } } { done. }
+  clear -Hyf Hidisj Hfdisj Hydisj Hy1 Hy2 Hwf1 Hwf2 Hag VisNoAng0 VisNoAng1.
   have ? : yield_addr ∈ yield_asm_dom by rewrite /yield_asm_dom /yield_asm; unlock; compute_done.
   move => n ? Hloop [[[σpy1 σpy2][yt yregs]][[[σpc1 σpc2][[σsm1 σ1][[pp1 [cs1 lr1]]x1]]][[σsm2 σ2][[pp2 [cs2 lr2]]x2]]]].
   move => [[σsm' [[[σlc σc] σ1'] σ2']][[ppc [csc lrc]] xc]] [state ?]. destruct!.
@@ -657,9 +667,12 @@ Proof.
     all: apply: steps_spec_step_end; [done|] => σ'' ?; assert (σ'' = σ') by naive_solver.
     + (* left to right *)
       tstep_s => ?.
-      tstep_i => *. destruct!; simplify_map_eq'.
+      tstep_i => *. setoid_subst. destruct!; simplify_map_eq'.
+      iSatStart. iIntros!.
+      iDestruct (r2a_f2i_incl_agree_f _ _ _ {[_:=_]} {[_:=_]} with "[$] [$]") as %?; [by apply lookup_singleton..|].
+      iSatStop. simplify_map_eq'.
       rewrite bool_decide_false. 2: fast_set_solver.
-      rewrite bool_decide_false. 2: fast_set_solver.
+      rewrite bool_decide_false. 2: { fast_set_solver. }
       move => /= *. destruct!; simplify_map_eq'.
       rewrite bool_decide_true; [|done].
       tstep_i. rewrite -/yield_spec. go.
@@ -668,7 +681,7 @@ Proof.
       go_i. split; [done|]. go.
       go_i. split; [fast_set_solver|]. go.
       go_i.
-      iSatStart. iIntros!. revert select (rx1 ⊣⊢ _) => ->. iDestruct!.
+      iSatStart.
       iDestruct select (r2a_mem_inv _ _ _) as "Hm".
       iDestruct (r2a_mem_lookup_big with "Hm [$]") as %?.
       iSatStop.
@@ -691,14 +704,17 @@ Proof.
         { apply: r2a_args_pure_mono; [|done].
           apply map_preserved_insert_r_not_in; [compute_done|].
           apply map_preserved_insert_r_not_in; [compute_done|].
-          apply coro_regs_regs_args_preserved. } { done. }
+          apply coro_regs_regs_args_preserved. }
         { simplify_map_eq'. rewrite (coro_regs_regs_lookup_in "PC"); [|compute_done]. done. }
         { simplify_map_eq'. rewrite (coro_regs_regs_lookup_not_in "R30"); [|compute_done]. fast_set_solver. }
         { iSatMonoBupd. iFrame. simplify_map_eq'.
           rewrite (coro_regs_regs_lookup_in "SP"); [|compute_done].
+          rewrite (coro_regs_regs_lookup_in "PC"); [|compute_done].
           iDestruct (r2a_mem_swap_stack with "Hm [$]") as "[Hm ?]".
           iMod (r2a_mem_update_big with "Hm [$]") as "[? $]"; [apply coro_regs_mem_dom|].
-          iModIntro. iAccu. }
+          iModIntro. iSplit.
+          - iSplit; [|done]. by iApply r2a_f2i_incl_single.
+          - iDestruct select (r2a_f2i_incl _ ∅) as "_". iAccu. }
         tsim_mirror m2 σ2. { tstep_s. by exists None. }
         move => *. subst.
         tstep_s. eexists (Some (Incoming, _)). split!. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
@@ -725,7 +741,7 @@ Proof.
           rewrite (coro_regs_regs_lookup_in "SP"); [|compute_done].
           iDestruct (r2a_mem_swap_stack with "Hm [$]") as "[Hm ?]".
           iMod (r2a_mem_update_big with "Hm [$]") as "[? $]"; [apply coro_regs_mem_dom|].
-          iModIntro. iAccu. }
+          iModIntro. iDestruct select (r2a_f2i_incl _ ∅) as "_". iAccu. }
         tsim_mirror m2 σ2. { tstep_s. by eexists None. }
         move => *. subst.
         tstep_s. eexists (Some (Incoming, _)). split!. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
@@ -744,18 +760,19 @@ Proof.
       rewrite bool_decide_true //=.
       tstep_i => ? rs *. destruct!.
       have ?: rs !!! "PC" ∉ ins. {
-        set_unfold => -[[?|?]|?].
-        - exploit Hfy; [apply lookup_union_Some_raw; naive_solver|done|done].
-        - exploit Hf2; [apply lookup_union_Some_raw; naive_solver|done|done].
-        - exploit Hf1; [apply lookup_union_Some_raw; naive_solver|done|done].
+        iSatStart. setoid_subst. iIntros!.
+        iDestruct (f2i_fns_ins_wf_not_in_fns f2i2 with "[$] [$]") as %?; [done..|].
+        iDestruct (f2i_fns_ins_wf_not_in_fns {["yield" := yield_addr]} {["yield"]} yield_asm_dom with "[$] [$]") as %?.
+        { unfold yield_asm_dom, yield_asm. unlock. compute_done. }
+        { fast_set_solver. }
+        iSatStop. fast_set_solver.
       }
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_false. 2: fast_set_solver.
       move => /= *. destruct!/=.
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_false. 2: fast_set_solver.
-      tstep_s. split!. { done. } { fast_set_solver. } { apply lookup_union_Some_raw. naive_solver. }
-      { fast_set_solver. } { by etrans. }
+      tstep_s. split!. { done. } { fast_set_solver. } { by etrans. }
       { iSatMono. setoid_subst. iIntros!. iFrame. iAccu. }
       iSatClear.
 
@@ -794,14 +811,17 @@ Proof.
       tstep_s => -[] //= ? h' ssz' vs' avs' f' *.
       tstep_s. split!.
       tstep_s => ?.
-      have ? : regs !!! "PC" ∈ ins1. { opose proof* Hi1; [done|]. destruct!. naive_solver. }
+      have ? : regs !!! "PC" ∈ ins1. {
+        iSatStart. iIntros!.
+        iDestruct (f2i_fns_ins_wf_in_fns f2i1 with "[$] [$]") as %?; [done..|].
+        by iSatStop. }
       rewrite bool_decide_false; [|fast_set_solver].
       rewrite bool_decide_true; [|fast_set_solver].
       tstep_i => *. case_match; destruct!/=.
       rewrite bool_decide_true; [|fast_set_solver].
       tstep_i => *. simplify_eq.
       tstep_i. eexists true. split; [done|]. eexists h', ssz', vs', avs', f'.
-      split!. { destruct (f2i1 !! f') eqn:?; naive_solver. } { fast_set_solver. }
+      split!. { fast_set_solver. }
       { iSatMono. iIntros!. iFrame. iAccu. }
       tsim_mirror m1 σ'. { tstep_s. by eexists None. }
       move => *. subst.
@@ -817,7 +837,10 @@ Proof.
     all: apply: steps_spec_step_end; [done|] => σ'' ?; assert (σ'' = σ') by naive_solver.
     + (* right to left *)
       tstep_s => ?.
-      tstep_i => *. destruct!; simplify_map_eq'.
+      tstep_i => *. setoid_subst. destruct!; simplify_map_eq'.
+      iSatStart. iIntros!.
+      iDestruct (r2a_f2i_incl_agree_f _ _ _ {[_:=_]} {[_:=_]} with "[$] [$]") as %?; [by apply lookup_singleton..|].
+      iSatStop. simplify_map_eq'.
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_false. 2: fast_set_solver.
       move => /= *. destruct!; simplify_map_eq'.
@@ -828,7 +851,7 @@ Proof.
       go_i. split; [done|]. go.
       go_i. split; [fast_set_solver|]. go.
       go_i.
-      iSatStart. iIntros!. revert select (rx2 ⊣⊢ _) => ->. iDestruct!.
+      iSatStart.
       iDestruct select (r2a_mem_inv _ _ _) as "Hm".
       iDestruct (r2a_mem_lookup_big with "Hm [$]") as %?.
       iSatStop.
@@ -858,7 +881,7 @@ Proof.
         rewrite (coro_regs_regs_lookup_in "SP"); [|compute_done].
         iDestruct (r2a_mem_swap_stack with "Hm [$]") as "[Hm ?]".
         iMod (r2a_mem_update_big with "Hm [$]") as "[? $]"; [apply coro_regs_mem_dom|].
-        iModIntro. iAccu. }
+        iModIntro. iDestruct select (r2a_f2i_incl _ ∅) as "_". iAccu. }
       tsim_mirror m1 σ1. { tstep_s. by eexists None. }
       move => *. subst.
       tstep_s. eexists (Some (Incoming, _)). split!. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
@@ -876,22 +899,20 @@ Proof.
       case_bool_decide; [by tstep_s|].
       rewrite bool_decide_true //=.
       tstep_i => ? rs *. destruct!.
-      have ? : f2i !! fn = Some (rs !!! "PC"). {
-        apply lookup_union_Some_raw.
-        destruct (f2i1 !! fn) eqn:?; naive_solver.
-      }
       have ?: rs !!! "PC" ∉ ins. {
-        set_unfold => -[[?|?]|?].
-        - exploit Hfy; [done|done|done].
-        - exploit Hf2; [done|done|done].
-        - exploit Hf1; [done|done|done].
+        iSatStart. setoid_subst. iIntros!.
+        iDestruct (f2i_fns_ins_wf_not_in_fns f2i1 with "[$] [$]") as %?; [done..|].
+        iDestruct (f2i_fns_ins_wf_not_in_fns {["yield" := yield_addr]} {["yield"]} yield_asm_dom with "[$] [$]") as %?.
+        { unfold yield_asm_dom, yield_asm. unlock. compute_done. }
+        { fast_set_solver. }
+        iSatStop. fast_set_solver.
       }
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_false. 2: fast_set_solver.
       move => /= *. destruct!/=.
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_false. 2: fast_set_solver.
-      tstep_s. split!. { done. } { fast_set_solver. } { fast_set_solver. } { by etrans. }
+      tstep_s. split!. { done. } { fast_set_solver. } { by etrans. }
       { iSatMono. setoid_subst. iIntros!. iFrame. iAccu. }
       iSatClear.
 

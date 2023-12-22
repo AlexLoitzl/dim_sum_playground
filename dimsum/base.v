@@ -497,6 +497,32 @@ Lemma map_difference_eq_dom_L {A} (m m1 m2 : M A) `{!LeibnizEquiv D}:
 Proof. unfold_leibniz. apply: map_difference_eq_dom. Qed.
 End theorems.
 
+(** ** Lemmas about map_agree *)
+Section theorems.
+Context `{FinMap K M}.
+Lemma map_union_comm_agree {A} (m1 m2 : M A) : map_agree m1 m2 → m1 ∪ m2 = m2 ∪ m1.
+Proof.
+  intros Hagree. apply (merge_comm (union_with (λ x _, Some x))).
+  intros i. specialize (Hagree i).
+  destruct (m1 !! i), (m2 !! i); compute; naive_solver.
+Qed.
+
+Lemma map_union_subseteq_agree_r {A} (m1 m2 : M A) : map_agree m1 m2 → m2 ⊆ m1 ∪ m2.
+Proof.
+  intros. rewrite map_union_comm_agree; [|done]. by apply map_union_subseteq_l.
+Qed.
+
+Lemma lookup_union_Some_agree {A} (m1 m2 : M A) i x :
+  map_agree m1 m2 → (m1 ∪ m2) !! i = Some x ↔ m1 !! i = Some x ∨ m2 !! i = Some x.
+Proof.
+  intros Hagree. rewrite lookup_union_Some_raw.
+  split; [naive_solver|].
+  destruct (m1 !! i) eqn:?; [|naive_solver].
+  move => [?|?]; [naive_solver|].
+  eapply map_agree_spec in Hagree; [|done..]. naive_solver.
+Qed.
+End theorems.
+
 (** ** Lemmas about [list_to_map] *)
 Section theorems.
 Context `{FinMap K M}.

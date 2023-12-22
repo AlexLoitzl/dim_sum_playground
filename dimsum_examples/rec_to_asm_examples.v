@@ -64,7 +64,7 @@ Definition rec_add_client : fndef := {|
   fd_vars := [("tmp", 1)];
   fd_body := (LetE "_" (Store (Var "tmp") (Val 1))
              (LetE "v" (Load (Var "tmp"))
-             (rec.Call "add" [Val 1; Var "v"])));
+             (rec.Call (Val (ValFn "add")) [Val 1; Var "v"])));
   fd_static := I
 |}.
 
@@ -84,9 +84,9 @@ Local Ltac go_s := tstep_s; go.
 
 Lemma asm_add_refines_rec_add :
   trefines (asm_mod asm_add)
-           (rec_to_asm (dom asm_add) (dom rec_add_prog) (<["add" := 100]> ∅) ∅ (rec_mod rec_add_prog)).
+           (rec_to_asm (dom asm_add) (<["add" := 100]> ∅) ∅ (rec_mod rec_add_prog)).
 Proof.
-  apply rec_to_asm_proof; [set_solver..|].
+  apply rec_to_asm_proof; [compute_done..|].
   move => n i rs mem K f fn vs h cs pc ssz rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? Hcall Hret.
   unfold rec_add_prog in Hf. unfold asm_add in Hi.
   move: Hf2i. rewrite !lookup_insert_Some => ?; destruct!; simplify_map_eq/=.
@@ -110,15 +110,15 @@ Qed.
 
 Lemma asm_add_client_refines_rec_add_client :
   trefines (asm_mod asm_add_client)
-           (rec_to_asm (dom asm_add_client) (dom rec_add_client_prog)
+           (rec_to_asm (dom asm_add_client)
               (<["add_client" := 200]> $ <["add" := 100]> ∅) ∅ (rec_mod rec_add_client_prog)).
 Proof.
-  apply rec_to_asm_proof; [set_solver..|].
+  apply rec_to_asm_proof; [compute_done..|].
   move => n i rs mem K f fn vs h cs pc ssz rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? Hcall Hret.
   unfold rec_add_client_prog in Hf. unfold asm_add_client in Hi.
   move: Hf2i. rewrite !lookup_insert_Some => ?; destruct!; simplify_map_eq/=.
   destruct vs as [|] => //=.
-  iSatStart. iIntros!. iSatStop.
+  iSatStart. iIntros!. iDestruct select (r2a_f2i_incl _ _) as "#Hf2i". iSatStop.
   tstep_i => ??. simplify_map_eq'.
   tstep_i.
   tstep_i; simplify_map_eq'.
@@ -141,17 +141,18 @@ Proof.
   tstep_s.
   tstep_s => ???. simplify_map_eq. rewrite heap_alloc_h_lookup; [|done|lia] => ?; simplify_map_eq.
   tstep_s.
-  change (FreeA [(heap_fresh ∅ h, 1)] (rec.Call "add" [Val 1; Val 1])) with (expr_fill [FreeACtx [(heap_fresh ∅ h, 1)]] (rec.Call "add" [Val 1; Val 1])).
-  apply: Hcall. { repeat econs. } { by simplify_map_eq. } { simplify_map_eq'. set_solver. } { by simplify_map_eq'. }
+  change (FreeA [(heap_fresh ∅ h, 1)] (rec.Call (Val (ValFn "add")) [Val 1; Val 1])) with (expr_fill [FreeACtx [(heap_fresh ∅ h, 1)]] (rec.Call (Val (ValFn "add")) [Val 1; Val 1])).
+  apply: Hcall. { repeat econs. } { by simplify_map_eq. }
   { iSatMonoBupd.
     iMod (r2a_mem_alloc with "[$]") as (?) "[? Hp]"; [done|done|].
     iDestruct "Hp" as "[[% ?] _]" => /=. rewrite Z.add_0_l.
     iMod (r2a_mem_update with "[$] [$]") as "[? ?]". simplify_map_eq'.
     iMod (r2a_heap_alloc _ (heap_fresh ∅ h) 1 with "[$]") as "[??]". { apply heap_fresh_is_fresh. }
     iMod (r2a_heap_update with "[$] [$]") as "[? ?]".
-    iModIntro. iFrame. iSplit; [|iAccu].
-    rewrite !r2a_args_cons ?r2a_args_nil; [|done..].
-    iSplit!; by simplify_map_eq'.
+    iModIntro. iFrame "∗#". iSplit; [|iSplit; [|iDestruct "Hf2i" as "-#Hf2i"; iAccu]].
+    - rewrite !r2a_args_cons ?r2a_args_nil; [|done..].
+      iSplit!; by simplify_map_eq'.
+    - iApply (r2a_f2i_incl_single with "[$]"). compute_done.
   }
   { split!; by simplify_map_eq'. }
   { by simplify_map_list. }
@@ -185,7 +186,7 @@ Qed.
 
 Lemma full_add_stack :
   trefines (asm_mod full_asm_add)
-           (rec_to_asm {[ 100; 101; 200; 201; 202; 203; 204; 205 ]} {[ "add"; "add_client" ]}
+           (rec_to_asm {[ 100; 101; 200; 201; 202; 203; 204; 205 ]}
               (<["add_client" := 200]> $ <["add" := 100]> ∅) ∅ (rec_mod full_rec_add_prog)).
 Proof.
   etrans. {
@@ -197,7 +198,7 @@ Proof.
     - apply asm_add_client_refines_rec_add_client.
   }
   etrans. {
-    apply: rec_to_asm_combine; compute_done.
+    apply: (rec_to_asm_combine _ _ {["add"]} {["add_client"]}); compute_done.
   }
   etrans. {
     apply: rec_to_asm_trefines.

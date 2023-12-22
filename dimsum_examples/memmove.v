@@ -49,7 +49,7 @@ Local Ltac go_i :=
 
 Lemma locle_asm_refines_spec_strong :
   trefines (asm_mod locle_asm)
-           (rec_to_asm (dom locle_asm) locle_fns locle_f2i ∅
+           (rec_to_asm (dom locle_asm) locle_f2i ∅
               (spec_mod locle_spec_strong ∅)).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
@@ -61,8 +61,8 @@ Proof.
     σr2a.(r2a_calls) = [] ∧
     σf = SMFilter ∧
     pp = PPOutside ∧
-    (rP ⊢ [∗ map] p↦z∈ps, r2a_heap_shared p z)). }
-  { split!. iIntros!. by rewrite big_sepM_empty. } { done. }
+    (rP ⊢ r2a_f2i_incl locle_f2i (dom locle_asm) ∗ [∗ map] p↦z∈ps, r2a_heap_shared p z)). }
+  { split!. iIntros!. iFrame "#". by rewrite big_sepM_empty. } { done. }
   move => n _ Hloop [????] [[?[? ps]][[??]?]] ?. destruct!/=.
   tstep_i => ????? Hi. tstep_s. split!.
   tstep_i => ??. simplify_map_eq'.
@@ -72,6 +72,8 @@ Proof.
   go_s => ?. go.
   revert select (_ ⊢ _) => HP.
   revert select (_ ∉ dom _) => /not_elem_of_dom?.
+  iSatStart. rewrite HP. iIntros!. iDestruct select (r2a_f2i_incl locle_f2i _) as "Hf2i".
+  iDestruct (r2a_f2i_incl_in_ins with "Hf2i [$]") as %?; [done|]. iSatStop.
   unfold locle_f2i in *. cbn in Hi. unfold Z.succ in Hi.
   simplify_map_eq'.
   tstep_i.
@@ -82,14 +84,13 @@ Proof.
   go_s => l2. go.
   go_s => ?. go. simplify_eq.
   iSatStart. iIntros!.
-  iDestruct (HP with "[$]") as "Hps".
   iDestruct (r2a_args_intro with "[$]") as "Hargs"; [done|]. rewrite !r2a_args_cons; [|done..].
   iDestruct "Hargs" as "([%z1 [% Hl1]] & [%z2 [% Hl2]] & ?)".
   iSatStop.
   go_s.
   go_s. eexists z1. go.
   go_s. split.
-  { iSatStart. iDestruct (r2a_heap_shared_ag_big with "Hps Hl1") as %?. iSatStop. done. }
+  { iSatStart. iDestruct (r2a_heap_shared_ag_big with "[$] Hl1") as %?. iSatStop. done. }
   go.
   go_s.
   iSatStart.
@@ -115,7 +116,7 @@ Proof.
     done.
   - iSatMono. simplify_map_eq'. iFrame. iSplit!. iDestruct "Hps'" as "-#Hps'". iAccu.
   - apply: Hloop; [done|]. split!.
-    iIntros!. by iApply (big_sepM_insert_2 with "[] [$]").
+    iIntros!. iFrame "#". by iApply (big_sepM_insert_2 with "[] [$]").
 Qed.
 
 Definition locle_spec : spec rec_event unit void :=
@@ -170,7 +171,7 @@ Qed.
 
 Lemma locle_asm_refines_spec :
   trefines (asm_mod locle_asm)
-           (rec_to_asm (dom locle_asm) locle_fns locle_f2i ∅ (spec_mod locle_spec tt)).
+           (rec_to_asm (dom locle_asm) locle_f2i ∅ (spec_mod locle_spec tt)).
 Proof.
   etrans; [apply locle_asm_refines_spec_strong|].
   apply rec_to_asm_trefines; [apply _|].
@@ -182,11 +183,12 @@ Qed.
 Definition memmove_rec : fndef := {|
   fd_args := ["d"; "s"; "n"];
   fd_vars := [];
-  fd_body := If (rec.Call "locle" [Var "d"; Var "s"])
-                (rec.Call "memcpy" [Var "d"; Var "s"; Var "n"; Val $ ValNum 1])
-                (rec.Call "memcpy" [BinOp (Var "d") OffsetOp (BinOp (Var "n") AddOp (Val $ ValNum (-1)));
-                                    BinOp (Var "s") OffsetOp (BinOp (Var "n") AddOp (Val $ ValNum (-1)));
-                                    Var "n"; Val $ ValNum (-1)]);
+  fd_body := If (rec.Call (Val (ValFn "locle")) [Var "d"; Var "s"])
+                (rec.Call (Val (ValFn "memcpy")) [Var "d"; Var "s"; Var "n"; Val $ ValNum 1])
+                (rec.Call (Val (ValFn "memcpy")) [
+                     BinOp (Var "d") OffsetOp (BinOp (Var "n") AddOp (Val $ ValNum (-1)));
+                     BinOp (Var "s") OffsetOp (BinOp (Var "n") AddOp (Val $ ValNum (-1)));
+                     Var "n"; Val $ ValNum (-1)]);
   fd_static := I
 |}.
 Definition memmove_prog : gmap string fndef :=
@@ -198,10 +200,11 @@ Definition memcpy_rec : fndef := {|
   fd_vars := [];
   fd_body := If (BinOp (Val $ ValNum 0) LtOp (Var "n"))
                (LetE "_" (Store (Var "d") (Load (Var "s"))) $
-                rec.Call "memcpy" [BinOp (Var "d") OffsetOp (Var "o");
-                                   BinOp (Var "s") OffsetOp (Var "o");
-                                   BinOp (Var "n") AddOp (Val $ ValNum (-1));
-                                   Var "o"])
+                rec.Call (Val (ValFn "memcpy")) [
+                  BinOp (Var "d") OffsetOp (Var "o");
+                  BinOp (Var "s") OffsetOp (Var "o");
+                  BinOp (Var "n") AddOp (Val $ ValNum (-1));
+                  Var "o"])
                (Val 0);
   fd_static := I
 |}.
@@ -215,11 +218,14 @@ Definition main_rec : fndef := {|
   fd_vars := [("x", 3)];
   fd_body := LetE "_" (Store (BinOp (Var "x") OffsetOp (Val $ ValNum 0)) (Val $ ValNum 1)) $
              LetE "_" (Store (BinOp (Var "x") OffsetOp (Val $ ValNum 1)) (Val $ ValNum 2)) $
-             LetE "_" (rec.Call "memmove" [BinOp (Var "x") OffsetOp (Val $ ValNum 1);
-                                           BinOp (Var "x") OffsetOp (Val $ ValNum 0);
-                                           (Val $ ValNum 2)]) $
-             LetE "_" (rec.Call "print" [Load (BinOp (Var "x") OffsetOp (Val $ ValNum 1))]) $
-             LetE "_" (rec.Call "print" [Load (BinOp (Var "x") OffsetOp (Val $ ValNum 2))]) $
+             LetE "_" (rec.Call (Val (ValFn "memmove")) [
+                           BinOp (Var "x") OffsetOp (Val $ ValNum 1);
+                           BinOp (Var "x") OffsetOp (Val $ ValNum 0);
+                           (Val $ ValNum 2)]) $
+             LetE "_" (rec.Call (Val (ValFn "print")) [
+                           Load (BinOp (Var "x") OffsetOp (Val $ ValNum 1))]) $
+             LetE "_" (rec.Call (Val (ValFn "print")) [
+                           Load (BinOp (Var "x") OffsetOp (Val $ ValNum 2))]) $
              (Val $ ValNum 0);
   fd_static := I
 |}.
@@ -248,7 +254,7 @@ Definition memcpy_asm_dom : gset Z := locked dom memcpy_asm.
 
 Lemma main_asm_refines_rec :
   trefines (asm_mod main_asm)
-           (rec_to_asm main_asm_dom {["main"]} main_f2i ∅ (rec_mod main_prog)).
+           (rec_to_asm main_asm_dom main_f2i ∅ (rec_mod main_prog)).
 Proof.
   unfold main_asm_dom; unlock.
   apply: compile_correct; [|done|..]; compute_done.
@@ -256,7 +262,7 @@ Qed.
 
 Lemma memmove_asm_refines_rec :
   trefines (asm_mod memmove_asm)
-           (rec_to_asm memmove_asm_dom {["memmove"]} main_f2i ∅ (rec_mod memmove_prog)).
+           (rec_to_asm memmove_asm_dom main_f2i ∅ (rec_mod memmove_prog)).
 Proof.
   unfold memmove_asm_dom; unlock.
   apply: compile_correct; [|done|..]; compute_done.
@@ -264,14 +270,14 @@ Qed.
 
 Lemma memcpy_asm_refines_rec :
   trefines (asm_mod memcpy_asm)
-           (rec_to_asm memcpy_asm_dom {["memcpy"]} main_f2i ∅ (rec_mod memcpy_prog)).
+           (rec_to_asm memcpy_asm_dom main_f2i ∅ (rec_mod memcpy_prog)).
 Proof.
   unfold memcpy_asm_dom; unlock.
   apply: compile_correct; [|done|..]; compute_done.
 Qed.
 
 Lemma memcpy_spec n0 d s d' s' n o K e h m σ1 σ2 b cs hvs `{!RecExprFill e K
-      (rec.Call "memcpy" [Val (ValLoc d); Val (ValLoc s); Val (ValNum n); Val o])}:
+      (rec.Call (Val (ValFn "memcpy")) [Val (ValLoc d); Val (ValLoc s); Val (ValNum n); Val o])}:
   n = Z.of_nat (length hvs) →
   o = 1 ∨ o = -1 →
   d' = (if bool_decide (o = 1) then d else d +ₗ (- n + 1)) →
@@ -605,7 +611,6 @@ Lemma top_level_refines_spec :
   trefines (asm_link (main_asm_dom ∪ memmove_asm_dom ∪ memcpy_asm_dom ∪ dom locle_asm)
               (dom print_asm)
               (rec_to_asm (main_asm_dom ∪ memmove_asm_dom ∪ memcpy_asm_dom ∪ dom locle_asm)
-                 {["main"; "memmove"; "memcpy"; "locle"]}
                  main_f2i ∅ (spec_mod main_spec tt)) (spec_mod print_spec tt))
            (spec_mod top_level_spec tt).
 Proof.
@@ -619,10 +624,15 @@ Proof.
   rewrite bool_decide_true. 2: unfold main_asm_dom, memmove_asm_dom, memcpy_asm_dom; unlock; by vm_compute.
   tstep_i => ??. simplify_eq.
   tstep_i. eexists true. split; [done|] => /=. eexists ∅, _, [], [], "main". split!.
-  { simplify_map_eq'. done. }
-  { apply: satisfiable_mono; [by eapply (r2a_res_init mem)|].
-    iIntros!. rewrite /r2a_mem_map big_sepM_empty. iFrame. iSplitL; [|iAccu].
-    iApply r2a_mem_stack_init. by iApply big_sepM_subseteq. }
+  { simplify_map_eq'. unfold main_asm_dom, memmove_asm_dom, memcpy_asm_dom. unlock. compute_done. }
+  { apply: satisfiable_mono; [by eapply (r2a_res_init mem main_f2i)|].
+    iIntros!. rewrite /r2a_mem_map big_sepM_empty. iFrame.
+    iDestruct select (r2a_f2i_full _) as "#Hf2i".
+    iSplit!. 2: iSplitL; iSplit!.
+    - unfold r2a_f2i_incl. iExists _. iFrame "#". iSplit!.
+    - iApply r2a_mem_stack_init. by iApply big_sepM_subseteq.
+    - iApply (r2a_f2i_full_to_singleton with "[$]"). by simplify_map_eq'.
+    - iExact "Hf2i". }
   go_i => -[[??]?]. go.
   go_i => ?. go. simplify_eq.
   go_i. split!. go.
@@ -632,10 +642,11 @@ Proof.
   go_i => *. destruct!.
   iSatStart. iIntros!.
   iDestruct (r2a_args_intro with "[$]") as "?"; [done|]. rewrite r2a_args_cons ?r2a_args_nil; [|done].
+  iDestruct (r2a_f2i_full_singleton with "[$] [$]") as %Hf2i.
   iDestruct!. iSatStop.
 
-  rename select (main_f2i !! _ = Some _) into Hf2i. unfold main_f2i in Hf2i. simplify_map_eq'.
-  rewrite bool_decide_false. 2: unfold main_asm_dom, memmove_asm_dom, memcpy_asm_dom; unlock; by vm_compute.
+  unfold main_f2i in Hf2i. simplify_map_eq'.
+  rewrite bool_decide_false. 2: done.
   rewrite bool_decide_true. 2: compute_done.
   tstep_i. rewrite -/print_spec. go.
   go_i => -[??]. go.
@@ -681,10 +692,11 @@ Proof.
   go_i => *. destruct!.
   iSatStart. iIntros!.
   iDestruct (r2a_args_intro with "[$]") as "?"; [done|]. rewrite r2a_args_cons ?r2a_args_nil; [|done].
+  iDestruct (r2a_f2i_full_singleton _ _ (_ !!! _) with "[$] [$]") as %Hf2i2.
   iDestruct!. iSatStop.
 
-  rename select (main_f2i !! _ = Some _) into Hf2i2. unfold main_f2i in Hf2i2. simplify_map_eq'.
-  rewrite bool_decide_false. 2: unfold main_asm_dom, memmove_asm_dom, memcpy_asm_dom; unlock; by vm_compute.
+  unfold main_f2i in Hf2i2. simplify_map_eq'.
+  rewrite bool_decide_false. 2: done.
   rewrite bool_decide_true. 2: compute_done.
   tstep_i. rewrite -/print_spec. go.
   go_i => -[??]. go.
@@ -767,20 +779,20 @@ Proof.
       apply: asm_link_trefines; [done|].
       apply: asm_link_trefines; [|done].
       rewrite /memmove_asm_dom /memcpy_asm_dom. unlock.
-      apply rec_to_asm_combine; [apply _|apply _|..]; compute_done.
+      apply (rec_to_asm_combine _ _ {["memmove"]} {["memcpy"]}); [apply _|apply _|..]; compute_done.
     }
     rewrite idemp.
     etrans. {
       apply: asm_link_trefines; [|done].
       apply: asm_link_trefines; [done|].
       rewrite idemp -dom_union_L.
-      apply rec_to_asm_combine; [apply _|apply _|..]; compute_done.
+      apply (rec_to_asm_combine _ _ {["memmove"; "memcpy"]} {["locle"]}); [apply _|apply _|..]; compute_done.
     }
     rewrite idemp -dom_union_L.
     etrans. {
       apply: asm_link_trefines; [|done].
       rewrite /main_asm_dom. unlock.
-      apply rec_to_asm_combine; [apply _|apply _|..]; compute_done.
+      apply (rec_to_asm_combine _ _ {["main"]} ({["memmove"; "memcpy"; "locle"]})); [apply _|apply _|..]; compute_done.
     }
     done.
   }
@@ -811,7 +823,7 @@ Proof.
   etrans. {
     etrans; [|apply top_level_refines_spec].
     rewrite /main_asm_dom/memmove_asm_dom/memcpy_asm_dom/locle_fns. unlock.
-    rewrite -4!dom_union_L 5!assoc_L idemp_L.
+    rewrite -4!dom_union_L !assoc_L idemp_L.
     have -> : (main_f2i ∪ locle_f2i) = main_f2i by compute_done.
     assert ((∅ ∪ ∅) = ∅) as ->. by rewrite !left_id_L.
     done.
