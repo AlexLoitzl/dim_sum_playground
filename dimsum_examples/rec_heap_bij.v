@@ -1053,8 +1053,10 @@ Proof.
   pose (R := λ (b : bool) (s1 s2 : (unit * uPred heap_bijUR)), if b then s1.2 ≡ s2.2 else True).
   apply: (rec_prepost_proof R); unfold R in *.
   { destruct b.
-    - constructor => ? // ?? -> //.
-    - by constructor => ?. }
+    - move => ??? -> //.
+    - done. }
+  { done. }
+  { done. }
   { move => ????. naive_solver. }
   move => n K1 K2 f fn1 vs1 h1 [] r1 _ Hfn1 /= vs2 h2 rf Hsat.
   iSatStart. iIntros!. iDestruct (big_sepL2_length with "[$]") as %?. iSatStop.

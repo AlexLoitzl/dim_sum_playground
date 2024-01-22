@@ -1613,8 +1613,10 @@ Proof.
   - move => *. subst. apply: tsim_mono; [|done]. apply tsim_mono_b_false. naive_solver.
 Qed.
 
-Lemma rec_prepost_proof {S} {M : ucmra} `{!Shrink M} R `{!∀ b, PreOrder (R b)} i o fns1 fns2 (s0 : S) (r0 : uPred M):
+Lemma rec_prepost_proof {S} {M : ucmra} `{!Shrink M} R `{!∀ b, Transitive (R b)} i o fns1 fns2 (s0 : S) (r0 : uPred M):
   (* R true: public transition relation, R false: private transition relation *)
+  R false (s0, r0) (s0, r0) →
+  (∀ s2 rr2, R false (s0, r0) (s2, rr2) → R true (s2, rr2) (s2, rr2)) →
   (∀ s r s' r', R true (s, r) (s', r') → R false (s, r) (s', r')) →
   (∀ n K1 K2 f fn1 vs1 h1 s1 r1,
       R false (s0, r0) (s1, r1) →
@@ -1658,7 +1660,7 @@ Lemma rec_prepost_proof {S} {M : ucmra} `{!Shrink M} R `{!∀ b, PreOrder (R b)}
           (SMProg, Rec (expr_fill K2 (AllocA fn2.(fd_vars) $  subst_l fn2.(fd_args) vs2 fn2.(fd_body))) h2 fns2, (PPInside, s2, uPred_shrink r2')))))) →
   trefines (rec_mod fns1) (prepost_mod i o (rec_mod fns2) s0 r0).
 Proof.
-  move => HR Hc.
+  move => ?? HR Hc.
   apply: tsim_implies_trefines => n0 /=.
   unshelve eapply tsim_remember_call.
   { simpl. exact (λ d b '((Rec ei1 hi1 fnsi1), (ips1, Rec es1 hs1 fnss1, (pp1, s1, r1)))
@@ -1722,7 +1724,7 @@ Proof.
       apply: Hstay; [done|]. split!; [done..|]. naive_solver.
   - tstep_s. split!.
     apply: Hret; [done|naive_solver| |].
-    + by split!.
+    + split! => //. naive_solver.
     + by split!.
 Qed.
 (** * closing *)
