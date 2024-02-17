@@ -1,4 +1,4 @@
-From dimsum.core Require Import product seq_product state_transform prepost.
+From dimsum.core Require Import product seq_product state_transform prepost link.
 From dimsum.core.iris Require Import sat.
 From dimsum.core.iris Require Export sim.
 Set Default Proof Using "Type".
@@ -532,3 +532,135 @@ Section prepost.
     iApply ("HΠ" with "[$]").
   Qed.
 End prepost.
+
+(** * link *)
+(* TODO: Add rules for src *)
+
+Section link.
+  Context {Σ : gFunctors} {EV : Type} {S : Type} `{!dimsumGS Σ}.
+  Implicit Types (R : seq_product_case → S → EV → seq_product_case → S → EV → bool → Prop).
+
+  Lemma sim_tgt_link_None R m1 m2 s σ1 σ2 Π :
+    ▷ₒ (∀ e p' s' e' ok,
+        ⌜R None s e p' s' e' ok⌝ -∗
+        Π (Some (Incoming, e')) (link_to_case ok p' e', s', σ1, σ2)) -∗
+    (MLFRun None, s, σ1, σ2) ≈{link_trans R m1 m2}≈>ₜ Π.
+  Proof.
+    iIntros "HΠ".
+    iApply sim_tgt_state_transform; [done|] => /=.
+    iApply (sim_tgt_map with "[-]").
+    iApply sim_tgt_seq_product_None. iIntros (p) "!>". iIntros (????).
+    inv_all @link_filter.
+    iIntros ([[[??]?]?] ?); simplify_eq/=. repeat (case_match; simplify_eq/=).
+    all: iApply ("HΠ" with "[//]").
+  Qed.
+
+  Definition link_tgt_leftP R {m1 m2 : mod_trans (io_event EV)}
+    (Π : option (io_event EV) → link_case EV * S * m_state m1 * m_state m2 → iProp Σ)
+    (s : S) (σ2 : m_state m2) : option (io_event EV) → m_state m1 → iProp Σ :=
+    λ κ σ1', match κ with
+             | None => Π None (MLFRun (Some SPLeft), s, σ1', σ2)
+             | Some e => ∀ p' s' e' ok, ⌜R (Some SPLeft) s e.2 p' s' e' ok⌝ -∗ ⌜e.1 = Outgoing⌝ -∗
+                 if p' is None then
+                   Π (Some (Outgoing, e')) (link_to_case ok p' e', s', σ1', σ2)
+                 else
+                   (link_to_case ok p' e', s', σ1', σ2) ≈{link_trans R m1 m2}≈>ₜ Π
+             end%I.
+
+  Lemma sim_tgt_link_left R m1 m2 s σ1 σ2 Π :
+    σ1 ≈{m1}≈>ₜ link_tgt_leftP R Π s σ2 -∗
+    (MLFRun (Some SPLeft), s, σ1, σ2) ≈{link_trans R m1 m2}≈>ₜ Π.
+  Proof.
+    iIntros "Hsim".
+    iApply (sim_gen_bind with "[-]").
+    iApply sim_tgt_state_transform; [done|] => /=.
+    iApply (sim_tgt_map with "[-]").
+    iApply sim_tgt_seq_product_left.
+    iApply (sim_gen_wand with "Hsim").
+    iIntros (κ ?) "Hsim". iIntros (??????). destruct κ; destruct!/=.
+    - inv_all @link_filter. iSpecialize ("Hsim" $! s'). case_match.
+      + iIntros ([[[??]?]?] ?). simplify_eq/=. iRight. iSplit!.
+        repeat case_match => //; simplify_eq/=.
+        all: iApply ("Hsim" with "[//] [//]").
+      + iIntros ([[[??]?]?] ?). simplify_eq/=. iLeft.
+        repeat case_match => //; simplify_eq/=.
+        all: iApply ("Hsim" with "[//] [//]").
+    - iIntros ([[[??]?]?] ?). simplify_eq/=. by iLeft.
+  Qed.
+
+  Lemma sim_tgt_link_left_recv R m1 m2 s σ1 σ2 Π e :
+    (σ1 ≈{m1}≈>ₜ λ κ σ1',
+      match κ with
+      | None => Π None (MLFRecv SPLeft e, s, σ1', σ2)
+      | Some e' => ⌜e' = (Incoming, e)⌝ -∗ (MLFRun (Some SPLeft), s, σ1', σ2) ≈{link_trans R m1 m2}≈>ₜ Π
+      end%I) -∗
+    (MLFRecv SPLeft e, s, σ1, σ2) ≈{link_trans R m1 m2}≈>ₜ Π.
+  Proof.
+    iIntros "Hsim".
+    iApply (sim_gen_bind with "[-]").
+    iApply sim_tgt_state_transform; [done|] => /=.
+    iApply (sim_tgt_map with "[-]").
+    iApply sim_tgt_seq_product_left.
+    iApply (sim_gen_wand with "Hsim").
+    iIntros (κ ?) "Hsim". iIntros (??????).
+    iIntros ([[[??]?]?]?). simplify_eq/=. destruct κ; destruct!/=.
+    - inv_all @link_filter. iRight. iSplit!. by iApply "Hsim".
+    - by iLeft.
+  Qed.
+
+  Definition link_tgt_rightP R {m1 m2 : mod_trans (io_event EV)}
+    (Π : option (io_event EV) → link_case EV * S * m_state m1 * m_state m2 → iProp Σ)
+    (s : S) (σ1 : m_state m1)
+    : option (io_event EV) → m_state m2 → iProp Σ :=
+    λ κ σ2',
+      match κ with
+      | None => Π None (MLFRun (Some SPRight), s, σ1, σ2')
+      | Some e => ∀ p' s' e' ok, ⌜R (Some SPRight) s e.2 p' s' e' ok⌝ -∗ ⌜e.1 = Outgoing⌝ -∗
+         if p' is None then
+           Π (Some (Outgoing, e')) (link_to_case ok p' e', s', σ1, σ2')
+         else
+           (link_to_case ok p' e', s', σ1, σ2') ≈{link_trans R m1 m2}≈>ₜ Π
+      end%I.
+
+  Lemma sim_tgt_link_right R m1 m2 s σ1 σ2 Π :
+    σ2 ≈{m2}≈>ₜ link_tgt_rightP R Π s σ1 -∗
+    (MLFRun (Some SPRight), s, σ1, σ2) ≈{link_trans R m1 m2}≈>ₜ Π.
+  Proof.
+    iIntros "Hsim".
+    iApply (sim_gen_bind with "[-]").
+    iApply sim_tgt_state_transform; [done|] => /=.
+    iApply (sim_tgt_map with "[-]").
+    iApply sim_tgt_seq_product_right.
+    iApply (sim_gen_wand with "Hsim").
+    iIntros (κ ?) "Hsim". iIntros (??????). destruct κ; destruct!/=.
+    - inv_all @link_filter. iSpecialize ("Hsim" $! s').
+      case_match.
+      + iIntros ([[[??]?]?] ?). simplify_eq/=. iRight. iSplit!.
+        repeat case_match => //; simplify_eq/=.
+        all: iApply ("Hsim" with "[//] [//]").
+      + iIntros ([[[??]?]?] ?). simplify_eq/=. iLeft.
+        repeat case_match => //; simplify_eq/=.
+        all: iApply ("Hsim" with "[//] [//]").
+    - iIntros ([[[??]?]?] ?). simplify_eq/=. by iLeft.
+  Qed.
+
+  Lemma sim_tgt_link_right_recv R m1 m2 s σ1 σ2 Π e :
+    (σ2 ≈{m2}≈>ₜ λ κ σ2',
+      match κ with
+      | None => Π None (MLFRecv SPRight e, s, σ1, σ2')
+      | Some e' => ⌜e' = (Incoming, e)⌝ -∗ (MLFRun (Some SPRight), s, σ1, σ2') ≈{link_trans R m1 m2}≈>ₜ Π
+      end%I) -∗
+    (MLFRecv SPRight e, s, σ1, σ2) ≈{link_trans R m1 m2}≈>ₜ Π.
+  Proof.
+    iIntros "Hsim".
+    iApply sim_gen_bind.
+    iApply sim_tgt_state_transform; [done|] => /=.
+    iApply (sim_tgt_map with "[-]").
+    iApply sim_tgt_seq_product_right.
+    iApply (sim_gen_wand with "Hsim").
+    iIntros (κ ?) "Hsim". iIntros (??????).
+    iIntros ([[[??]?]?]?). simplify_eq/=. destruct κ; destruct!/=.
+    - inv_all @link_filter. iRight. iSplit!. by iApply "Hsim".
+    - by iLeft.
+  Qed.
+End link.

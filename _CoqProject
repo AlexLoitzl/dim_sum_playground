@@ -52,11 +52,15 @@ dimsum/iris/mono_ord.v
 dimsum/iris/ord_later.v
 dimsum/iris/sim.v
 dimsum/iris/expr.v
+dimsum/iris/expr2.v
 dimsum/iris/spec.v
+dimsum/iris/spec2.v
 dimsum/iris/combinators.v
 # dimsum/iris/language.v
 dimsum/iris/iris.v
+dimsum_examples/iris/rec_basic.v
 dimsum_examples/iris/rec.v
+dimsum_examples/iris/rec2.v
 
 dimsum/itree/program_logic/language.v
 # dimsum/itree/program_logic/bi_weakestpre.v
