@@ -910,10 +910,7 @@ Proof.
       } iFrame "Hsh".
       iDestruct select (r2a_mem_map (mem ∖ _)) as "$". iFrame.
       iDestruct (r2a_mem_uninit_alt2 with "[$]") as "Huninit". rewrite Hvslen Z2Nat.id; [|lia].
-      iFrame "Huninit".
-      rewrite !bi.sep_exist_r. iExists _.
-      rewrite -!(assoc bi_sep).
-      iDestruct select (r2a_heap_auth _) as "$".
+      iFrame "Huninit". rewrite -!(assoc bi_sep).
 
       iSplit!. 3: iSplitL; [|iSplit].
       * rewrite dom_union_L. apply union_mono; [|done]. by rewrite dom_fmap_L.
@@ -973,47 +970,45 @@ Proof.
     + iSatMono HPb. iIntros!. rewrite heap_of_event_event_set_vals_heap vals_of_event_event_set_vals_heap.
       2: { rewrite fmap_length. destruct b; simplify_eq/=; destruct!/=; done. }
       iFrame "Hs". iFrame. iSplit!.
-      * iExists _. iFrame. repeat iSplit.
-        -- iPureIntro. by etrans.
-        -- iPureIntro. move => ? /elem_of_hb_provs_i[[? Hin]|[??]]; apply elem_of_union.
-           ++ right. revert select (hb_provs_i bijb ⊆ h_provs hprev). apply.
-              apply elem_of_hb_provs_i. rewrite Hpriveq. naive_solver.
-           ++ left. apply elem_of_hb_shared_i. naive_solver.
-        -- iPureIntro. apply: heap_preserved_mono; [done|]. rewrite Hihc.
-           apply map_subseteq_spec => ??. rewrite hb_priv_s_lookup_Some r2a_combine_priv_Some.
-           naive_solver.
-        -- iPureIntro. rewrite -Hpriveq.
-           move => [p o] ?? /=. rewrite lookup_union_r. 2: {
-             apply map_lookup_filter_None. left.
-             apply eq_None_not_Some => /heap_through_bij_is_Some[?[/hb_disj]].
-             rewrite -Hpriveq. naive_solver.
+      * by etrans.
+      * move => ? /elem_of_hb_provs_i[[? Hin]|[??]]; apply elem_of_union.
+        -- right. revert select (hb_provs_i bijb ⊆ h_provs hprev). apply.
+           apply elem_of_hb_provs_i. rewrite Hpriveq. naive_solver.
+        -- left. apply elem_of_hb_shared_i. naive_solver.
+      * apply: heap_preserved_mono; [done|]. rewrite Hihc.
+        apply map_subseteq_spec => ??. rewrite hb_priv_s_lookup_Some r2a_combine_priv_Some.
+        naive_solver.
+      * rewrite -Hpriveq.
+        move => [p o] ?? /=. rewrite lookup_union_r. 2: {
+           apply map_lookup_filter_None. left.
+           apply eq_None_not_Some => /heap_through_bij_is_Some[?[/hb_disj]].
+           rewrite -Hpriveq. naive_solver.
+         }
+         rewrite map_lookup_filter_true; [by apply Hprevb|].
+         move => ?? /=. right. move => /elem_of_hb_shared_i[??].
+         opose proof* hb_disj as HNone; [done|]. rewrite -Hpriveq in HNone. naive_solver.
+      * iIntros (p1 p2 o ?) => /=.
+        destruct (decide (p1 ∈ dom (rh' ∪ r2a_rh_shared rha))) as [Hin|].
+        -- rewrite lookup_union_l.
+           2: { apply map_lookup_filter_None. right => ?? /=. rewrite elem_of_hb_shared_i. naive_solver. }
+           rewrite map_lookup_filter_true; [|done].
+           iSplit; [iPureIntro; by apply heap_through_bij_is_Some1|].
+           iIntros (??[?[?[?[??]]]]%heap_through_bij_Some ?). simplify_bij.
+           have [|??]:= r2a_heap_shared_agree_pure_lookup _ _ _ _ _ _ ltac:(done) ltac:(done) => /=. {
+             move: Hin => /elem_of_dom[??]. rewrite Hihs. eexists _. apply r2a_combine_bij_lookup_Some.
+             naive_solver.
            }
-           rewrite map_lookup_filter_true; [by apply Hprevb|].
-           move => ?? /=. right. move => /elem_of_hb_shared_i[??].
-           opose proof* hb_disj as HNone; [done|]. rewrite -Hpriveq in HNone. naive_solver.
-        -- done.
-        -- iIntros (p1 p2 o ?) => /=.
-           destruct (decide (p1 ∈ dom (rh' ∪ r2a_rh_shared rha))) as [Hin|].
-           ++ rewrite lookup_union_l.
-              2: { apply map_lookup_filter_None. right => ?? /=. rewrite elem_of_hb_shared_i. naive_solver. }
-              rewrite map_lookup_filter_true; [|done].
-              iSplit; [iPureIntro; by apply heap_through_bij_is_Some1|].
-              iIntros (??[?[?[?[??]]]]%heap_through_bij_Some ?). simplify_bij.
-              have [|??]:= r2a_heap_shared_agree_pure_lookup _ _ _ _ _ _ ltac:(done) ltac:(done) => /=. {
-                move: Hin => /elem_of_dom[??]. rewrite Hihs. eexists _. apply r2a_combine_bij_lookup_Some.
-                naive_solver.
-              }
-              by iApply (val_in_through_bij with "[$]").
-           ++ rewrite lookup_union_r. 2: { apply map_lookup_filter_None. naive_solver. }
-              rewrite map_lookup_filter_true; [|naive_solver].
-              revert select (heap_preserved (r2a_rh_constant rh) h) => Hpre.
-              have -> : h_heap h !! (p2, o) = h_heap hb !! (p2, o). {
-                rewrite -(h_block_lookup hb). apply Hpre.
-                rewrite Hihc /=. apply: lookup_weaken; [|by apply map_union_subseteq_l].
-                apply r2a_combine_priv_shared_Some. split!. by apply not_elem_of_dom. }
-              iDestruct select (heap_in_bij _ _ _) as "Hbij".
-              iApply ("Hbij" $! p1 p2 o). iPureIntro.
-              naive_solver.
+           by iApply (val_in_through_bij with "[$]").
+        -- rewrite lookup_union_r. 2: { apply map_lookup_filter_None. naive_solver. }
+           rewrite map_lookup_filter_true; [|naive_solver].
+           revert select (heap_preserved (r2a_rh_constant rh) h) => Hpre.
+           have -> : h_heap h !! (p2, o) = h_heap hb !! (p2, o). {
+             rewrite -(h_block_lookup hb). apply Hpre.
+             rewrite Hihc /=. apply: lookup_weaken; [|by apply map_union_subseteq_l].
+             apply r2a_combine_priv_shared_Some. split!. by apply not_elem_of_dom. }
+           iDestruct select (heap_in_bij _ _ _) as "Hbij".
+           iApply ("Hbij" $! p1 p2 o). iPureIntro.
+           naive_solver.
       * rewrite big_sepL2_fmap_l. iApply big_sepL_sepL2_diag.
         iApply big_sepL_intro. iIntros "!>" (???).
         move: Hvs => /(Forall2_lookup_l _ _ _ _ _). move => /(_ _ _ ltac:(done))[?[??]].
@@ -1091,7 +1086,7 @@ Proof.
       iDestruct select ([∗ map] _↦_ ∈ _, r2a_heap_shared _ _)%I as "#Hsh". iFrame. iFrame "Hsh".
       iDestruct (r2a_mem_uninit_alt2 with "[$]") as "Hsp". rewrite Hvslen Z2Nat.id; [|lia]. iFrame "∗#".
       iSplitL; [iSplitL|].
-      * iExists _. iFrame. repeat iSplit.
+      * repeat iSplit.
         -- iPureIntro. etrans; [|done]. rewrite dom_union_L !dom_fmap_L. apply union_least.
            ++ move => ? /elem_of_dom[?/r2a_combine_bij_lookup_Some?]. apply elem_of_dom. naive_solver.
            ++ move => ? /elem_of_dom[?/r2a_combine_priv_Some?]. apply elem_of_dom. naive_solver.

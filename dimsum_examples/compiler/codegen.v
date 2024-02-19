@@ -910,7 +910,6 @@ Proof.
       iDestruct (cr2a_places_inv_mono_sz _ (s_stacksize s + 1)%N with "[$]") as "Hp"; [lia|].
       iDestruct "Hp" as "[? [$ [$ [$ %]]]]". iSplit.
       * iApply big_sepM_insert; [set_solver|]. iFrame.
-        simplify_map_eq. iExists _. iFrame.
       * iPureIntro. move => ??? /lookup_insert_Some? /lookup_insert_Some?. naive_solver.
     + iIntros (??????). iApply "Hcont"; iPureIntro.
       * etrans; [|done]. apply insert_subseteq. set_solver.
@@ -1359,7 +1358,7 @@ Proof.
     + apply: Hall. set_solver.
     + simplify_map_eq'. etrans; [|apply: Hrs; set_solver].
       rewrite lookup_total_insert_ne; [| set_solver]. by simplify_map_eq'.
-  - iFrame. iExists _. iFrame.
+  - iFrame.
 Qed.
 
 End proof.

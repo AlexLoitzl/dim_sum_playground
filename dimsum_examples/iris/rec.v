@@ -583,9 +583,7 @@ Section memmove.
     iApply ("Htgt" with "[$] [$]").
     iApply sim_gen_expr_stop2 => /=.
     iApply (sim_tgt_rec_LetE with "[-]"). iIntros "!>" => /=.
-    iApply sim_gen_expr_stop2 => /=. iSplit!.
-    iSplitL "Hl0 Hl1 Hl2".
-    { iSplit!. iSplitL "Hl0"; eauto with iFrame. iSplitL "Hl1"; eauto with iFrame. }
+    iApply sim_gen_expr_stop2 => /=. iSplit!. iFrame.
     iApply sim_tgt_rec_ReturnExt. iIntros (??) "Hh Ha ? !>".
     iIntros (??????). destruct!/=.
     iApply "Hsrc". iApply sim_src_TUb_end.

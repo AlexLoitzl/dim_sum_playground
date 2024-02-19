@@ -192,8 +192,8 @@ Section lemmas.
     ▷ₒ (P1 ∗ P2).
   Proof.
     unseal. iIntros "[HP1 HP2] #Hctx".
-    iDestruct ("HP1" with "[$]") as (n1) "[Hn1 HP1]".
-    iDestruct ("HP2" with "[$]") as (n2) "[Hn2 HP2]".
+    iDestruct ("HP1" with "Hctx") as (n1) "[Hn1 HP1]".
+    iDestruct ("HP2" with "Hctx") as (n2) "[Hn2 HP2]".
     iExists (o_min n1 n2).
     iCombine "Hn1 Hn2" as "Hn". rewrite mono_ord_ub_op. iFrame.
     iIntros (??) "#?".

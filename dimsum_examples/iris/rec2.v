@@ -716,9 +716,7 @@ Section memmove.
     iApply "HC". iSplit!. iFrame.
 
     iApply (sim_tgt_rec_LetE with "[-]"). iIntros "!>" => /=.
-    iApply sim_gen_expr_end => /=. iSplit!.
-    iSplitL "Hl0 Hl1 Hl2".
-    { iSplit!. iSplitL "Hl0"; eauto with iFrame. iSplitL "Hl1"; eauto with iFrame. }
+    iApply sim_gen_expr_end => /=. iSplit!. iFrame.
     iApply sim_tgt_rec_ReturnExt. iIntros (???) "Hfns''' Hh Ha !>".
     iApply (inMH_apply (sim_tgtMH _ _ _ _ _ _ _)). iIntros "HC". iRight. iRight. iSplit!.
     iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].

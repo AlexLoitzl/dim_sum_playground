@@ -838,8 +838,7 @@ Proof.
   { rewrite /r2a_mem_uninit /=. done. }
   rewrite /r2a_mem_map big_sepM_insert; [|apply lookup_map_seqZ_None; lia].
   iDestruct "Hvs" as "[??]". iDestruct ("IH" with "[$]") as "?".
-  rewrite /r2a_mem_uninit /= Nat2Z.inj_succ (seqZ_cons a) ?Z.pred_succ /=; [|lia]. iFrame.
-  by iExists _.
+  rewrite /r2a_mem_uninit /= Nat2Z.inj_succ (seqZ_cons a) ?Z.pred_succ /=; [|lia]. by iFrame.
 Qed.
 
 Lemma r2a_heap_shared_agree_union h1 h2 rh:
@@ -1198,7 +1197,7 @@ Proof.
   - apply heap_preserved_update; [done|].
     apply eq_None_ne_Some_2 => ?. rewrite r2a_rh_constant_Some. by rewrite Hl.
   - rewrite /r2a_heap_shared_agree/= (big_sepM_delete _ (alter (λ _, v) _ _) l); [|by simplify_map_eq].
-    simplify_map_eq. rewrite delete_alter. iFrame. iExists _. iFrame.
+    simplify_map_eq. rewrite delete_alter. by iFrame.
 Qed.
 
 Lemma r2a_heap_inv_add_provs h ps :
@@ -1222,8 +1221,7 @@ Proof.
     1: done. }
   rewrite uPred.ownM_op. iIntros "[[Hmem Hh] Hf2i]".
   iMod (r2a_mem_alloc_big' with "[$]") as "[? $]"; [solve_map_disjoint|]. rewrite right_id_L.
-  unfold r2a_f2i_full. iFrame.
-  iModIntro. iExists _. iFrame. iSplit!. by rewrite r2a_rh_shared_empty.
+  unfold r2a_f2i_full. iModIntro. iFrame. iSplit!. by rewrite r2a_rh_shared_empty.
 Qed.
 
 Definition r2a_mem_stack_mem (sp : Z) (ssz : N) : gmap Z (option Z) :=

@@ -260,7 +260,7 @@ Section lemmas.
       have [//|_ Hdom]:= Hin _ _ ltac:(done) (l.1, 0).
       apply Hn. apply (heap_wf _ (l.1, 0)). apply elem_of_dom. naive_solver lia.
     }
-    iModIntro. iFrame. iSplit!; [..|done].
+    iModIntro. iFrame. iSplit!.
     - move => ?? /lookup_insert_Some. naive_solver lia.
     - move => ?? /lookup_insert_Some[[??]|[??]] l' ?; simplify_eq.
       + rewrite dom_union_L elem_of_union dom_list_to_map_L.
@@ -374,8 +374,8 @@ Lemma recgs_alloc `{!recPreGS Σ} fns :
 Proof.
   iMod (own_alloc (to_fns fns)) as (γf) "#Hfns" => //.
   iMod (ghost_map_alloc (V:=val)) as (γh) "[??]".
-  iMod (ghost_map_alloc (V:=Z)) as (γa) "[??]".
+  iMod (ghost_map_alloc (V:=Z) ∅) as (γa) "[??]".
 
   iModIntro. iExists (RecGS _ _ _ _ γh γa γf). iFrame "#∗".
-  iExists ∅. iFrame. iPureIntro; split!.
+  iPureIntro; split!.
 Qed.
