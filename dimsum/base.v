@@ -221,7 +221,7 @@ Tactic Notation "iDestruct!" :=
      iMatchHyp (fun H P =>
         match P with
         | False%I => iDestruct H as %[]
-        | True%I => iDestruct H as %_
+        | True%I => iDestruct H as %(_)
         | emp%I => iDestruct H as "_"
         | ⌜_⌝%I => iDestruct H as %?
         | (_ ∗ _)%I => iDestruct H as "[??]"

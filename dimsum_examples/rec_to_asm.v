@@ -1780,7 +1780,7 @@ Proof.
         eapply Hret' => //.
         iSatMono. iIntros!. iFrame.
     + iSatClear. move => *.
-      apply: H14 => //.
+      apply: H15 => //.
       iSatMono. iIntros!. iFrame.
   - move => *.
     tstep_s. simplify_eq. destruct d; [exfalso; naive_solver|]. split!.

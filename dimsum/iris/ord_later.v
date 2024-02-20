@@ -277,14 +277,14 @@ Qed.
 
 Class MaybeIntoOrdLater `{!ord_laterGS Σ} (P : iProp Σ) (Q : iProp Σ) :=
   maybe_into_ord_later : P ⊢ ▷ₒ Q.
-Global Arguments MaybeIntoOrdLater {_ _} _%I _%I.
-Global Arguments maybe_into_ord_later {_ _} _%I _%I {_}.
+Global Arguments MaybeIntoOrdLater {_ _} _%_I _%_I.
+Global Arguments maybe_into_ord_later {_ _} _%_I _%_I {_}.
 Global Hint Mode MaybeIntoOrdLater + + ! -  : typeclass_instances.
 
 Class IntoOrdLater `{!ord_laterGS Σ} (P : iProp Σ) (Q : iProp Σ) :=
   into_ord_later :: MaybeIntoOrdLater P Q.
-Global Arguments IntoOrdLater {_ _} _%I _%I.
-Global Arguments into_ord_later {_ _} _%I _%I {_}.
+Global Arguments IntoOrdLater {_ _} _%_I _%_I.
+Global Arguments into_ord_later {_ _} _%_I _%_I {_}.
 Global Hint Mode IntoOrdLater + + ! -  : typeclass_instances.
 
 Global Instance maybe_into_ord_later_default `{!ord_laterGS Σ} (P : iProp Σ) :
