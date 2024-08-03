@@ -4,7 +4,7 @@ From dimsum.core Require Import universes.
 Import ITreeStdppNotations.
 
 (** * state events *)
-Inductive stateE (S : TypeBelowState) : TypeBelowState → TypeState :=
+Inductive stateE (S : Type) : Type → Type :=
 | EGetState : stateE S S
 | ESetState (x : S) : stateE S unit
 | EYield : stateE S unit.
@@ -40,13 +40,13 @@ Proof. intros Heq%TCEq_eq. apply ITreeToTranslate_trigger. by rewrite Heq. Qed.
 Global Typeclasses Opaque get_state set_state yield.
 
 (** * choice events *)
-Inductive choiceE : TypeBelowState → TypeState :=
+Inductive choiceE : Type → Type :=
 | EDemonic (X : TypeBelowState) : choiceE X
 | EAngelic (X : TypeBelowState) : choiceE X.
 
-Definition angelic {E} `{!choiceE -< E} R : itree E R :=
+Definition angelic {E} `{!choiceE -< E} (R : TypeBelowState) : itree E R :=
   (trigger (EAngelic R))%itree.
-Definition demonic {E} `{!choiceE -< E} R : itree E R :=
+Definition demonic {E} `{!choiceE -< E} (R : TypeBelowState) : itree E R :=
   (trigger (EDemonic R))%itree.
 
 Definition assume {E} `{!choiceE -< E} (P : Prop) : itree E unit :=
@@ -70,17 +70,17 @@ Notation "x !" := (assert_option x) (at level 10, format "x !") : itree_scope.
 (* This corresponds to the choice operator offered by traditional
 operational semantics. It corresponds to angelic choice, if [∀ x1 x2, P
 x1 → P x2 → x1 = x2]. *)
-Definition demonic_non_empty {E R} `{!choiceE -< E} (P : R → Prop) : itree E R :=
+Definition demonic_non_empty {E} {R : TypeBelowState} `{!choiceE -< E} (P : R → Prop) : itree E R :=
   (assume (∃ x, P x);; x ← demonic _; assert (P x);; Ret x)%itree.
 
 
-Global Instance ITreeToTranslate_angelic E1 E2 T
+Global Instance ITreeToTranslate_angelic E1 E2 (T : TypeBelowState)
   {HE1 : choiceE -< E1} (Hin : E1 -< E2) {HE2 : choiceE -< E2} :
   TCEq (HE2 T) (cat (@resum _ _ _ _ HE1) (@resum _ _ _ _ Hin) T) →
   ITreeToTranslate (angelic T) Hin (angelic T).
 Proof. intros Heq%TCEq_eq. apply ITreeToTranslate_trigger. by rewrite Heq. Qed.
 
-Global Instance ITreeToTranslate_demonic E1 E2 T
+Global Instance ITreeToTranslate_demonic E1 E2 (T : TypeBelowState)
   {HE1 : choiceE -< E1} (Hin : E1 -< E2) {HE2 : choiceE -< E2} :
   TCEq (HE2 T) (cat (@resum _ _ _ _ HE1) (@resum _ _ _ _ Hin) T) →
   ITreeToTranslate (demonic T) Hin (demonic T).
@@ -130,8 +130,30 @@ Proof. intros ?. apply _. Qed.
 
 Global Typeclasses Opaque angelic demonic assume assert UB NB assume_option assert_option demonic_non_empty.
 
+(** * big choice events *)
+Inductive choiceE_big : Type → Type :=
+| EDemonic_big (X : TypeOrdinal) : choiceE_big X
+| EAngelic_big (X : TypeOrdinal) : choiceE_big X.
+
+Definition angelic_big {E} `{!choiceE_big -< E} (R : TypeOrdinal) : itree E R :=
+  (trigger (EAngelic_big R))%itree.
+Definition demonic_big {E} `{!choiceE_big -< E} (R : TypeOrdinal) : itree E R :=
+  (trigger (EDemonic_big R))%itree.
+
+Global Instance ITreeToTranslate_angelic_big E1 E2 (T : TypeOrdinal)
+  {HE1 : choiceE_big -< E1} (Hin : E1 -< E2) {HE2 : choiceE_big -< E2} :
+  TCEq (HE2 T) (cat (@resum _ _ _ _ HE1) (@resum _ _ _ _ Hin) T) →
+  ITreeToTranslate (angelic_big T) Hin (angelic_big T).
+Proof. intros Heq%TCEq_eq. apply ITreeToTranslate_trigger. by rewrite Heq. Qed.
+
+Global Instance ITreeToTranslate_demonic_big E1 E2 (T : TypeOrdinal)
+  {HE1 : choiceE_big -< E1} (Hin : E1 -< E2) {HE2 : choiceE_big -< E2} :
+  TCEq (HE2 T) (cat (@resum _ _ _ _ HE1) (@resum _ _ _ _ Hin) T) →
+  ITreeToTranslate (demonic_big T) Hin (demonic_big T).
+Proof. intros Heq%TCEq_eq. apply ITreeToTranslate_trigger. by rewrite Heq. Qed.
+
 (** * visible events *)
-Inductive visibleE (EV : TypeState) : TypeBelowState → TypeState :=
+Inductive visibleE (EV : Type) : Type → Type :=
 | EVisible (e : EV) : visibleE EV unit.
 Arguments EVisible {_} _.
 
@@ -148,6 +170,7 @@ Global Typeclasses Opaque visible.
 
 (** * [moduleE] *)
 Notation moduleE EV S := (choiceE +' visibleE EV +' stateE S).
+Notation moduleE_big EV S := (choiceE_big +' moduleE EV S).
 
 Section moduleE_eq_itree_inv.
 
@@ -224,6 +247,88 @@ Section moduleE_eq_itree_inv.
   Qed.
 
 End moduleE_eq_itree_inv.
+(* This contraint is required, but not sure why and where
+moduleE_eq_itree_inv.u0 comes from. *)
+Constraint universes.BelowState < moduleE_eq_itree_inv.u0.
+
+(** * Shrinking of events *)
+Class ShrinkEvents (E : Type → Type) := MkShrinkEvents {
+  small_events : TypeBelowState → TypeState;
+  small_events_to_type T : E T → TypeBelowState;
+  small_events_to_event T : ∀ (e : E T), small_events (small_events_to_type T e);
+  small_events_to_back T : ∀ (e : E T), small_events_to_type T e → T;
+  small_events_from_event T : small_events T → E T;
+  small_events_eq {X Y Z} (f : ∀ (T : Type), E T → (T → Y) → Z) e (k : X → Y):
+    f (small_events_to_type X e) (small_events_from_event (small_events_to_type X e) (small_events_to_event X e))
+      (λ x, k (small_events_to_back X e x)) = f X e k;
+}.
+Arguments small_events _ {_}.
+
+Inductive stateE_shrink (S : TypeBelowState) : TypeBelowState → TypeState :=
+| EGetState_shrink : stateE_shrink S S
+| ESetState_shrink (x : S) : stateE_shrink S unit
+| EYield_shrink : stateE_shrink S unit.
+
+Global Instance shrink_stateE (S : TypeBelowState) : ShrinkEvents (stateE S).
+Proof.
+  unshelve eapply (MkShrinkEvents _ (stateE_shrink S)).
+  - intros ? e. destruct e. exact S. exact unit. exact unit.
+  - intros ? e. destruct e. apply EGetState_shrink. apply (ESetState_shrink _ x).
+    apply EYield_shrink.
+  - intros ? e. destruct e. all: exact (λ x, x).
+  - intros ? e. destruct e. apply EGetState. apply (ESetState x).
+    apply EYield.
+  - intros X Y Z f e k; simpl. by destruct e.
+Qed.
+
+Inductive choiceE_shrink : TypeBelowState → TypeState :=
+| EDemonic_shrink (X : TypeBelowState) : choiceE_shrink X
+| EAngelic_shrink (X : TypeBelowState) : choiceE_shrink X.
+
+Global Instance shrink_choiceE : ShrinkEvents choiceE.
+Proof.
+  unshelve eapply (MkShrinkEvents _ choiceE_shrink).
+  - intros ? e. destruct e as [X|X]; exact X.
+  - intros ? e. destruct e. exact (EDemonic_shrink _). exact (EAngelic_shrink _).
+  - intros ? e. destruct e; exact (λ x, x).
+  - intros ? e. destruct e. exact (EDemonic _). exact (EAngelic _).
+  - intros X Y Z f e k; simpl. by destruct e.
+Qed.
+
+Inductive visibleE_shrink (EV : TypeState) : TypeBelowState → TypeState :=
+| EVisible_shrink (e : EV) : visibleE_shrink EV unit.
+
+Global Instance shrink_visibleE (EV : TypeState) : ShrinkEvents (visibleE EV).
+Proof.
+  unshelve eapply (MkShrinkEvents _ (visibleE_shrink EV)).
+  - intros ? e. destruct e. exact unit.
+  - intros ? e. destruct e. by constructor.
+  - intros ? e. destruct e. exact (λ x, x).
+  - intros ? e. destruct e. by constructor.
+  - intros X Y Z f e k; simpl. by destruct e.
+Qed.
+
+Variant sum1_shrink (E1 E2 : TypeBelowState -> TypeState) (X : TypeBelowState) : TypeState :=
+| inl1_shrink (_ : E1 X)
+| inr1_shrink (_ : E2 X).
+Arguments inr1_shrink {E1 E2} [X].
+Arguments inl1_shrink {E1 E2} [X].
+
+Global Instance shrink_sumE E1 E2 `{!ShrinkEvents E1} `{!ShrinkEvents E2} : ShrinkEvents (E1 +' E2).
+Proof.
+  unshelve eapply (MkShrinkEvents _ (sum1_shrink (small_events E1) (small_events E2))).
+  - intros ? e. destruct e as [e|e]; apply (small_events_to_type _ e).
+  - intros ? e. destruct e as [e|e].
+    + apply inl1_shrink. apply small_events_to_event.
+    + apply inr1_shrink. apply small_events_to_event.
+  - intros ? e. destruct e as [e|e]; apply small_events_to_back.
+  - intros ? e. destruct e as [e|e].
+    + apply inl1. apply (small_events_from_event _ e).
+    + apply inr1. apply (small_events_from_event _ e).
+  - intros ??? f e ?; simpl. destruct e as [e|e].
+    + apply (small_events_eq (λ T e k, f T (inl1 e) k)).
+    + apply (small_events_eq (λ T e k, f T (inr1 e) k)).
+Qed.
 
 
 (** * tests *)

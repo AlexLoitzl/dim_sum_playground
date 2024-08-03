@@ -420,17 +420,17 @@ Proof.
 Qed.
 *)
 
-Definition itree_mod_rel {E R S} (P : SmallITree.itree E R * S → Prop) (t : SmallITree.itree E R * S) : Prop :=
+Definition itree_mod_rel {E R S} `{!ShrinkEvents E} (P : SmallITree.itree E R * S → Prop) (t : SmallITree.itree E R * S) : Prop :=
   ∀ t', t' ⊒ t.1 → P (t', t.2).
 
-Global Instance itree_mod_rel_proper EV R S P :
-  Proper ((prod_relation (flip (⊒)) (=) ==> impl)) (@itree_mod_rel EV R S P).
+Global Instance itree_mod_rel_proper EV `{!ShrinkEvents EV} R S P :
+  Proper ((prod_relation (flip (⊒)) (=) ==> impl)) (@itree_mod_rel EV R S _ P).
 Proof.
   move => [x ?] [y ?] [Heq ?]. simplify_eq/=. rewrite /itree_mod_rel /=.
   move => ??. rewrite Heq. naive_solver.
 Qed.
-Global Instance itree_mod_rel_proper_flip EV R S P :
-  Proper ((prod_relation (⊒) (=) ==> flip impl)) (@itree_mod_rel EV R S P).
+Global Instance itree_mod_rel_proper_flip EV `{!ShrinkEvents EV} R S P :
+  Proper ((prod_relation (⊒) (=) ==> flip impl)) (@itree_mod_rel EV R S _ P).
 Proof.
   move => [x ?] [y ?] [Heq ?]. simplify_eq/=. rewrite /itree_mod_rel /=.
   move => ??. rewrite Heq. naive_solver.
@@ -495,11 +495,11 @@ Qed.
 
 (** * tstep *)
 (** ** typeclasses and infrastructure *)
-Class ITreeModEq {E R} (t : SmallITree.itree E R) (t' : itree E R) := {
+Class ITreeModEq {E R} `{!ShrinkEvents E} (t : SmallITree.itree E R) (t' : itree E R) := {
   itree_mod_eq_proof : t ⊒ ↓ᵢ t'
 }.
-Global Hint Mode ITreeModEq + + ! - : typeclass_instances.
-Lemma ITreeModEq_refl {E R} (t : itree E R) :
+Global Hint Mode ITreeModEq + + + ! - : typeclass_instances.
+Lemma ITreeModEq_refl {E R} `{!ShrinkEvents E} (t : itree E R) :
   ITreeModEq (↓ᵢ t) t.
 Proof. done. Qed.
 
@@ -530,7 +530,7 @@ Lemma itree_step_s_itree_step_no_cont EV S t t' (s : S) `{!ITreeTStep false t t'
 Proof. constructor => ??. move: ITreeTStep0 => [->]. by apply steps_spec_end. Qed.
 Global Hint Resolve itree_step_s_itree_step_no_cont | 100 : typeclass_instances.
 
-Lemma itree_tstep_s {EV S} s t t' κ `{!ITreeModEq t t'} `{!ITreeTStepS t' s κ P}:
+Lemma itree_tstep_s {EV S} s t (t' : itree (moduleE _ _) _) κ `{!ITreeModEq t t'} `{!ITreeTStepS t' s κ P}:
   TStepS (itree_trans EV S) (t, s) (λ G, G κ (λ G', P (λ t'' s', itree_mod_rel G' (↓ᵢ t'', s')))).
 Proof.
   constructor => G HG. eexists _, _. split; [done|] => ? /= ?.
@@ -568,7 +568,7 @@ Proof.
 Qed.
 Global Hint Resolve itree_step_i_itree_step_no_cont | 100 : typeclass_instances.
 
-Lemma itree_tstep_i {EV S} s t t' `{!ITreeModEq t t'} `{!ITreeTStepI t' s P}:
+Lemma itree_tstep_i {EV S} s t (t' : itree (moduleE _ _) _) `{!ITreeModEq t t'} `{!ITreeTStepI t' s P}:
   TStepI (itree_trans EV S) (t, s) (λ G, P (λ b κ P', G b κ (λ G', P' (λ t'' s', itree_mod_rel G' (↓ᵢ t'', s'))))).
 Proof.
   constructor => ??. apply itree_mod_impl_rel_intro.
@@ -914,7 +914,7 @@ Qed.
 Global Hint Resolve itree_step_AssertOpt_i : typeclass_instances.
 
 (** * itree_step tactic *)
-Lemma tac_itree_step {E R} (t t' : itree E R) x:
+Lemma tac_itree_step {E R} `{!ShrinkEvents E} (t t' : itree E R) x:
   x ⊒ ↓ᵢ t →
   ITreeTStep true t t' →
   x ⊒ ↓ᵢ t'.

@@ -13,6 +13,7 @@ dimsum/module.v
 dimsum/trefines.v
 dimsum/srefines.v
 dimsum/lrefines.v
+dimsum/irefines.v
 dimsum/dem_module.v
 dimsum/refinement_examples.v
 dimsum/refines_meta.v
