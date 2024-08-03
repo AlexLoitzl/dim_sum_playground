@@ -84,7 +84,7 @@ Arguments prepost : clear implicits.
 
 (** * Shrinking of types *)
 Class Shrink (X : TypeOfe) := MkShrink {
-  small_car : TypeState;
+  small_car : TypeBelowState;
   type_to_small : X → small_car;
   small_to_type : small_car → X;
   type_to_small_bij x : type_to_small (small_to_type x) = x;
@@ -105,7 +105,7 @@ Global Instance unitUR_shrink : Shrink unitUR.
 Proof. solve_shrink. Qed.
 
 (** * [uPred_small] *)
-Record uPred_small (M : ucmra) `{!Shrink M} : TypeState := UPred_small {
+Record uPred_small (M : ucmra) `{!Shrink M} : TypeBelowState := UPred_small {
   uPred_small_holds : nat → (small_car M) → Prop;
 
   uPred_small_mono n1 n2 x1 x2 :
