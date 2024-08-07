@@ -24,6 +24,19 @@ Program Canonical Structure rec_mod_lang {Σ} `{!recGS Σ} := {|
 |}.
 Next Obligation. move => ?????/=. by rewrite expr_fill_app. Qed.
 
+Definition rec_fn_spec `{!dimsumGS Σ} `{!recGS Σ} (ts : tgt_src) (J : iModHandler Σ _ _)
+  (f : string) (C : list expr → (val → iProp Σ) → iProp Σ) : iProp Σ :=
+  (∀ es Φ, C es (λ v, Φ (Val v)) -∗ TGT Call (Val (ValFn f)) es @ J {{ Φ }}).
+
+Section fn_spec.
+  Context `{!dimsumGS Σ} `{!recGS Σ}.
+  Lemma rec_fn_spec_ctx ts J f C :
+    (ord_later_ctx -∗ rec_fn_spec ts J f C) -∗
+    rec_fn_spec ts J f C.
+  Proof. iIntros "Hc" (??) "?". iApply sim_gen_expr_ctx. iIntros "?". by iApply ("Hc" with "[$]"). Qed.
+End fn_spec.
+
+
 Section lifting.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
 
@@ -241,26 +254,22 @@ End lifting.
 Section memmove.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
 
-
-  (* TODO: create a version of the target triple where the Π stays unchanged *)
-  Lemma sim_memcpy J Φ d d' s' s n o hvss hvsd `{!inMH nopMH J}:
-    n = Z.of_nat (length hvss) →
-    length hvss = length hvsd →
-    o = 1 ∨ o = -1 →
-    d' = (if bool_decide (o = 1) then d else d +ₗ (- n + 1)) →
-    s' = (if bool_decide (o = 1) then s else s +ₗ (- n + 1)) →
-    (if bool_decide (o = 1) then d.1 = s.1 → d.2 ≤ s.2 else d.1 = s.1 → s.2 ≤ d.2) →
+  Lemma sim_memcpy J `{!inMH nopMH J}:
     "memcpy" ↪ Some memcpy_rec -∗
-    ([∗ map] l↦v∈array s' hvss ∪ array d' hvsd, l ↦ v) -∗
-    (([∗ map] l↦v∈array d' hvss ∪ array s' hvss, l ↦ v) -∗
-     Φ (Val 0)) -∗
-    TGT Call (Val (ValFn "memcpy")) [Val (ValLoc d); Val $ ValLoc s; Val $ ValNum n; Val $ ValNum o] @ J {{ Φ }}.
+    rec_fn_spec Tgt J "memcpy" (λ es Φ,
+      ∃ d s n o d' s' hvss hvsd, ⌜es = [Val $ ValLoc d; Val $ ValLoc s; Val $ ValNum n; Val $ ValNum o]⌝ ∗
+      ⌜n = Z.of_nat (length hvss)⌝ ∗
+      ⌜length hvss = length hvsd⌝ ∗
+      ⌜o = 1 ∨ o = -1⌝ ∗
+      ⌜d' = (if bool_decide (o = 1) then d else d +ₗ (- n + 1))⌝ ∗
+      ⌜s' = (if bool_decide (o = 1) then s else s +ₗ (- n + 1))⌝ ∗
+      ⌜(if bool_decide (o = 1) then d.1 = s.1 → d.2 ≤ s.2 else d.1 = s.1 → s.2 ≤ d.2)⌝ ∗
+      ([∗ map] l↦v∈array s' hvss ∪ array d' hvsd, l ↦ v) ∗
+      (([∗ map] l↦v∈array d' hvss ∪ array s' hvss, l ↦ v) -∗ Φ 0)).
   Proof.
-    iIntros (Hn Hlen Ho Hd' Hs' Hle) "#Hf Hm HΦ".
-    iApply sim_gen_expr_ctx. iIntros "#?".
-    iRevert (hvss hvsd d d' s s' n Φ Hn Hlen Hd' Hs' Hle) "Hm HΦ".
-    iApply ord_loeb; [done|].
-    iIntros "!> #IH" (hvss hvsd d d' s s' n Φ Hn Hlen Hd' Hs' Hle) "Hm HΦ". simplify_eq.
+    iIntros "#Hf". iApply rec_fn_spec_ctx. iIntros "#?".
+    iApply ord_loeb; [done|]. iIntros "!> #IH". iIntros (es Φ) "HΦ".
+    iDestruct "HΦ" as (d s n o d' s' hvss hvsd ? Hn Hlen Ho Hd' Hs' Hle) "[Hm HΦ]"; simplify_eq/=.
     iApply (sim_tgt_rec_Call_internal with "Hf"); [done|]. iModIntro => /=.
     iApply sim_tgt_rec_AllocA; [econs|] => /=. iIntros (?) "?". destruct ls => //. iModIntro.
     iApply (sim_gen_expr_bind _ [IfCtx _ _] _ with "[-]") => /=.
@@ -294,14 +303,14 @@ Section memmove.
         rewrite delete_union. rewrite delete_notin. 2: { apply array_lookup_None => /=. naive_solver lia. }
         destruct (decide (d = s)); simplify_eq.
         * rewrite delete_insert_delete delete_insert. 2: { apply array_lookup_None => /=. lia. }
-          iApply ("IH" with "[%] [%] [//] [//] [%] Hm"). { lia. } { done. } { simpl. lia. }
+          iApply "IH". iFrame. iSplit!. { lia. }
           iIntros "?". iSplit!. iApply ("HΦ" with "[-]").
           rewrite -insert_union_l -insert_union_r. 2: { apply array_lookup_None => /=. lia. }
           rewrite insert_insert. by iApply (big_sepM_insert_2 with "[Hdv]"); [done|].
         * rewrite delete_insert_ne // delete_insert. 2: { apply array_lookup_None => /=. lia. }
           have ?: d.2 ≠ s.2. { destruct d, s; naive_solver. }
           rewrite (array_insert s ( d+ₗ1)) //=; [|naive_solver lia].
-          iApply ("IH" with "[%] [%] [//] [//] [%] Hm"). { lia. } { rewrite insert_length. done. } { simpl. naive_solver lia. }
+          iApply "IH". iFrame. iSplit!. { lia. } { rewrite insert_length. done. } { simpl. naive_solver lia. }
           iIntros "?". iSplit!. iApply ("HΦ" with "[-]").
           rewrite -insert_union_l. iApply (big_sepM_insert_2 with "[Hdv]"); [done|].
           rewrite -insert_union_r_Some //. apply array_lookup_is_Some. split!; naive_solver lia.
@@ -315,7 +324,7 @@ Section memmove.
         rewrite delete_insert. 2: {
           apply lookup_union_None. rewrite !array_lookup_None => /=.
           destruct (decide (s.2 ≤ d.2 + length hvss)); naive_solver lia. }
-        iApply ("IH" with "[%] [%] [//] [//] [%] Hm"). { lia. } { done. } { simpl. naive_solver lia. }
+        iApply "IH". iFrame. iSplit!. { lia. } { simpl. naive_solver lia. }
         iIntros "?". iSplit!. iApply ("HΦ" with "[-]").
         rewrite -insert_union_r. 2: {
           apply array_lookup_None => /=.
@@ -354,8 +363,8 @@ Section memmove.
         rewrite delete_union. rewrite delete_notin. 2: { apply array_lookup_None => /=. naive_solver lia. }
         destruct (decide (d = s)); simplify_eq.
         * rewrite delete_insert_delete delete_insert. 2: { apply array_lookup_None => /=. lia. }
-          iApply ("IH" with "[%] [%] [%] [%] [%] Hm"). { lia. } { lia. }
-          { apply loc_eq; split!; lia. } { apply loc_eq; split!; lia. } { simpl. lia. }
+          iApply "IH". iFrame. iSplit!. { lia. } { lia. }
+          { apply loc_eq; split!; lia. } { apply loc_eq; split!; lia. }
           iIntros "?". iSplit!. iApply ("HΦ" with "[-]").
           rewrite -(insert_union_r _ ∅). 2: { apply array_lookup_None => /=. lia. }
           rewrite -insert_union_l right_id_L -insert_union_r. 2: { apply array_lookup_None => /=. lia. }
@@ -363,7 +372,7 @@ Section memmove.
         * rewrite delete_insert_ne // delete_insert. 2: { apply array_lookup_None => /=. lia. }
           have ?: d.2 ≠ s.2. { destruct d, s; naive_solver. }
           rewrite (array_insert s (d +ₗ - length hvss)) //=; [|naive_solver lia].
-          iApply ("IH" with "[%] [%] [%] [%] [%] Hm"). { lia. } { rewrite insert_length. lia. }
+          iApply "IH". iFrame. iSplit!. { lia. } { rewrite insert_length. lia. }
           { apply loc_eq; split!; lia. } { apply loc_eq; split!; lia. } { simpl. naive_solver lia. }
           iIntros "?". iSplit!. iApply ("HΦ" with "[-]").
           rewrite -(insert_union_r _ ∅). 2: { apply array_lookup_None => /=. lia. }
@@ -379,7 +388,7 @@ Section memmove.
         rewrite delete_insert. 2: {
           apply lookup_union_None. rewrite !array_lookup_None => /=.
           destruct (decide (d.2 ≤ s.2 + length hvss)); naive_solver lia. }
-        iApply ("IH" $! hvss hvsd with "[%] [%] [%] [%] [%] Hm"). { lia. } { lia. }
+        iApply "IH". iFrame. iSplit!. { lia. } { lia. }
         { apply loc_eq; split!; lia. } { apply loc_eq; split!; lia. } { simpl. naive_solver lia. }
         iIntros "?". iSplit!. iApply ("HΦ" with "[-]").
         rewrite -(insert_union_r _ _ d). 2: { apply array_lookup_None => /=. lia. }
@@ -391,29 +400,30 @@ Section memmove.
         done.
   Qed.
 
-  Lemma sim_memmove hvss hvsd J Φ d s n `{!inMH nopMH J}:
-    n = Z.of_nat (length hvss) →
-    length hvss = length hvsd →
+  Definition locle_fn_spec (es : list expr) (Φ : val → iProp Σ) : iProp Σ :=
+      ∃ l1 l2, ⌜es = [Val (ValLoc l1); Val $ ValLoc l2]⌝ ∗
+       (∀ b, ⌜l1.1 = l2.1 → b = bool_decide (l1.2 ≤ l2.2)⌝ -∗ Φ (ValBool b)).
+
+  Lemma sim_memmove J `{!inMH nopMH J}:
     "memmove" ↪ Some memmove_rec -∗
     "memcpy" ↪ Some memcpy_rec -∗
-    □ (∀ l1 l2 Φ,
-        (∀ b, ⌜l1.1 = l2.1 → b = bool_decide (l1.2 ≤ l2.2)⌝ -∗ Φ (Val (ValBool b))) -∗
-          TGT Call (Val (ValFn "locle")) [Val (ValLoc l1); Val $ ValLoc l2] @ J {{ Φ }}) -∗
-    ([∗ map] l↦v∈array s hvss ∪ array d hvsd, l ↦ v) -∗
-    (([∗ map] l↦v∈array d hvss ∪ array s hvss, l ↦ v) -∗ Φ (Val 0)) -∗
-    TGT Call (Val (ValFn "memmove")) [Val (ValLoc d); Val $ ValLoc s; Val $ ValNum n] @ J {{ Φ }}.
+    □ rec_fn_spec Tgt J "locle" locle_fn_spec -∗
+    rec_fn_spec Tgt J "memmove" (λ es Φ,
+      ∃ hvss hvsd d s n, ⌜es = [Val (ValLoc d); Val $ ValLoc s; Val $ ValNum n]⌝ ∗
+        ⌜n = Z.of_nat (length hvss)⌝ ∗
+        ⌜length hvss = length hvsd⌝ ∗
+        ([∗ map] l↦v∈array s hvss ∪ array d hvsd, l ↦ v) ∗
+        (([∗ map] l↦v∈array d hvss ∪ array s hvss, l ↦ v) -∗ Φ 0)).
   Proof.
-    iIntros (-> ?) "#Hmemmove #Hmemcpy #Hlocle Hs HΦ".
+    iIntros "#Hmemmove #Hmemcpy #Hlocle". iIntros (es Φ) "HΦ".
+    iDestruct "HΦ" as (hvss hvsd d s n -> -> ?) "[Hs HΦ]".
     iApply (sim_gen_expr_bind _ []).
     iApply (sim_tgt_rec_Call_internal with "Hmemmove"); [done|]. iModIntro => /=.
     iApply sim_tgt_rec_AllocA; [econs|] => /=. iIntros (?) "?". destruct ls => //. iModIntro.
     iApply (sim_gen_expr_bind _ [IfCtx _ _] with "[-]") => /=.
-    iApply "Hlocle". iIntros (b Hb) => /=.
+    iApply "Hlocle". iExists _, _. iSplit!. iIntros (b Hb) => /=.
     iApply sim_tgt_rec_If. iModIntro => /=. destruct b.
-    - iApply (sim_memcpy with "[//] Hs"). { done. } { done. } { by left. } { by rewrite bool_decide_true. }
-      { by rewrite bool_decide_true. } {
-        rewrite bool_decide_true // => /Hb Hx. symmetry in Hx. by rewrite bool_decide_eq_true in Hx.
-      }
+    - iApply (sim_memcpy with "[//]"). iFrame. iSplit!. { case_bool_decide; naive_solver. }
       iIntros "?". iSplit!. iApply sim_gen_expr_end. iApply ("HΦ" with "[$]").
     - iApply (sim_gen_expr_bind _ [CallCtx _ [] _] with "[-]") => /=.
       iApply (sim_gen_expr_bind _ [BinOpRCtx _ _] with "[-]") => /=.
@@ -423,20 +433,108 @@ Section memmove.
       iApply (sim_gen_expr_bind _ [BinOpRCtx _ _] with "[-]") => /=.
       iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
       iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
-      iApply (sim_memcpy with "[//] Hs"). { done. } { done. } { by right. }
-      { rewrite bool_decide_false; [|done]. rewrite offset_loc_assoc.
+      iApply (sim_memcpy with "[//]"). iFrame. iSplit!.
+      { rewrite offset_loc_assoc.
         have -> : (length hvss + -1 + (- length hvss + 1)) = 0 by lia.
         rewrite offset_loc_0. done. }
-      { rewrite bool_decide_false; [|done]. rewrite offset_loc_assoc.
+      { rewrite offset_loc_assoc.
         have -> : (length hvss + -1 + (- length hvss + 1)) = 0 by lia.
         rewrite offset_loc_0. done. } {
-        rewrite bool_decide_false // => /Hb Hx. symmetry in Hx. rewrite bool_decide_eq_false in Hx.
+        move => /Hb Hx. symmetry in Hx. rewrite bool_decide_eq_false in Hx.
         simpl. lia.
       }
       iIntros "?". iSplit!. iApply sim_gen_expr_end. iApply ("HΦ" with "[$]").
   Qed.
 
   Local Canonical Structure spec_mod_lang_unit.
+  (* This spec is tricky to use since one needs to pick one J upfront *)
+  Lemma sim_locle_spec J Φ :
+    (∀ f vs h σ, imodhandle J (Some (Incoming, ERCall f vs h)) σ (λ σ', ∃ l1 l2, ⌜σ' = σ⌝ ∗
+      ⌜f = "locle"⌝ ∗ ⌜vs = [ValLoc l1; ValLoc l2]⌝ ∗ (∀ b,
+        ⌜l1.1 = l2.1 → b = bool_decide (l1.2 ≤ l2.2)⌝ -∗ ∀ σ,
+          imodhandle J (Some (Outgoing, ERReturn (ValBool b) h)) σ (λ σ', ⌜σ' = σ⌝ ∗
+            TGT locle_spec @ J {{ Φ }})))) -∗
+    TGT locle_spec @ J {{ Φ }}.
+  Proof.
+    iDestruct 1 as "HC". unfold locle_spec at 2. rewrite unfold_forever -/locle_spec.
+    rewrite /TReceive bind_bind bind_bind.
+    iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>".
+    rewrite bind_bind. setoid_rewrite bind_ret_l.
+    iApply (sim_gen_TVis with "[-]"). iIntros ([]) "!>".
+    iApply (imodhandle_mono with "HC"). iIntros (?). iDestruct 1 as (l1 l2 -> -> ->) "HC" => /=. iSplit; [done|].
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAll with "[-]"). iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAll with "[-]"). iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TExist with "[-]"). iIntros (b) "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAssert with "[-]"). iIntros (?) "!>".
+    iApply (sim_gen_TVis with "[-]"). iIntros ([]) "!>".
+    iApply (imodhandle_mono with "[HC]"). { iApply ("HC" with "[//]"). }
+    simpl. iIntros (?). iDestruct 1 as (->) "HC". iSplit; [done|].
+    done.
+  Qed.
+
+  (* This spec does not require one to pick J upfront, but it has the
+  downside that it is written in extreme continuation passing style *)
+  Lemma sim_locle_spec2 (J : iModHandler _ (m_state (spec_trans _ _)) _) Φ :
+      (∀ f vs h σ C,
+        (∀ l1 l2 σ' (J' : iModHandler _ (m_state (spec_trans _ _)) _) Φ',
+        ⌜σ' = σ⌝ -∗ ⌜f = "locle"⌝ -∗ ⌜vs = [ValLoc l1; ValLoc l2]⌝ -∗
+         (∀ b C', ⌜l1.1 = l2.1 → b = bool_decide (l1.2 ≤ l2.2)⌝ -∗
+         imodhandle J' (Some (Outgoing, ERReturn (ValBool b) h)) (locle_spec, tt) C') -∗
+        TGT σ'.1 @ J' {{ Φ' }}) -∗
+      imodhandle J (Some (Incoming, ERCall f vs h)) σ C) -∗
+    TGT locle_spec @ J {{ Φ }}.
+  Proof.
+    iDestruct 1 as "HC". unfold locle_spec at 2. rewrite unfold_forever -/locle_spec.
+    rewrite /TReceive bind_bind bind_bind.
+    iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>".
+    rewrite bind_bind. setoid_rewrite bind_ret_l.
+    iApply (sim_gen_TVis with "[-]"). iIntros ([]) "!>".
+    iApply "HC". iIntros (????? -> -> ->) "HC". simpl.
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAll with "[-]"). iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAll with "[-]"). iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TExist with "[-]"). iIntros (b) "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAssert with "[-]"). iIntros (?) "!>".
+    iApply (sim_gen_TVis with "[-]"). iIntros ([]) "!>".
+    by iApply "HC".
+  Qed.
+
+  Definition imodhandle_spec {EV S} (J : iModHandler Σ S EV)
+    (C : option EV → S → (S → iProp Σ) → iProp Σ) : iProp Σ :=
+    ∀ κ σ Φ, C κ σ Φ -∗ imodhandle J κ σ Φ.
+
+  Definition sim_gen_expr_spec {EV} {Λ : mod_lang _ _} (ts : tgt_src)
+    (C : iModHandler Σ (m_state Λ) EV → mexpr Λ → option (mstate Λ) → (mexpr Λ → iProp Σ) → iProp Σ) : iProp Σ :=
+    ∀ J e os Φ, C J e os Φ -∗ sim_gen_expr ts J e os Φ.
+
+  (* Maybe a bit less extreme continuation passing style? *)
+  Lemma sim_locle_spec3 (J : iModHandler _ (m_state (spec_trans _ _)) _) Φ :
+    imodhandle_spec J (λ κ σ _, ∃ f vs h, ⌜κ = Some (Incoming, ERCall f vs h)⌝ ∗
+      sim_gen_expr_spec Tgt (λ J' σ' os _, ∃ l1 l2,
+      ⌜σ' = σ.1⌝ ∗ ⌜os = None⌝ ∗ ⌜f = "locle"⌝ ∗ ⌜vs = [ValLoc l1; ValLoc l2]⌝ ∗
+        imodhandle_spec J' (λ κ σ _, ∃ b, ⌜l1.1 = l2.1 → b = bool_decide (l1.2 ≤ l2.2)⌝ ∗
+        ⌜κ = Some (Outgoing, ERReturn (ValBool b) h)⌝ ∗ ⌜σ = (locle_spec, tt)⌝))) -∗
+    TGT locle_spec @ J {{ Φ }}.
+  Proof.
+    iDestruct 1 as "HC". unfold locle_spec at 2. rewrite unfold_forever -/locle_spec.
+    rewrite /TReceive bind_bind bind_bind.
+    iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>".
+    rewrite bind_bind. setoid_rewrite bind_ret_l.
+    iApply (sim_gen_TVis with "[-]"). iIntros ([]) "!>".
+    iApply "HC". iSplit!. iIntros (????). iDestruct 1 as (?? -> -> -> ->) "HC".
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAll with "[-]"). iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAll with "[-]"). iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TExist with "[-]"). iIntros (b) "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAssert with "[-]"). iIntros (?) "!>".
+    iApply (sim_gen_TVis with "[-]"). iIntros ([]) "!>".
+    iApply "HC". iSplit!.
+  Qed.
+
   Program Definition locleMH m1 : iModHandler Σ (m_state m1) rec_event := {|
     imodhandle κ σ C := ∀ fns1 Π_s s,
       let Π := (link_tgt_leftP (m2:=spec_trans _ _) (rec_link_filter fns1 {["locle"]}) Π_s s (locle_spec, tt)) in
@@ -447,24 +545,25 @@ Section memmove.
     iApply "Hw". by iApply "HC".
   Qed.
 
-  Lemma sim_locle fns Φ l1 l2 J `{!inMH (locleMH _) J}:
+
+  Lemma sim_locle fns J `{!inMH (locleMH _) J}:
     rec_fn_auth fns -∗
     "locle" ↪ None -∗
-    (∀ b, ⌜l1.1 = l2.1 → b = bool_decide (l1.2 ≤ l2.2)⌝ -∗ Φ (Val (ValBool b))) -∗
-    TGT Call (Val (ValFn "locle")) [Val (ValLoc l1); Val $ ValLoc l2] @ J {{ Φ }}.
+    rec_fn_spec Tgt J "locle" locle_fn_spec.
   Proof.
-    iIntros "#Hfns #Hf HΦ".
+    iIntros "#Hfns #Hf" (es Φ) "HΦ". iDestruct "HΦ" as (l1 l2 ->) "HΦ".
     iApply (sim_tgt_rec_Call_external with "[$]"). iIntros (???) "#??? !>".
     iApply (inMH_apply (locleMH _)). iIntros (???) "Hσ".
     iIntros (??????). destruct!/=. case_bool_decide => //. rewrite (bool_decide_true (_ ∈ _)) //.
     iApply (sim_tgt_link_right_recv with "[-]").
     iApply (sim_gen_expr_intro _ tt _ None); simpl; [done..|].
+    (* iApply sim_locle_spec => /=. iIntros (????) "Hc". iIntros (?). simplify_eq/=. *)
     unfold locle_spec at 2. rewrite unfold_forever -/locle_spec.
     rewrite /TReceive bind_bind bind_bind.
     iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>".
     rewrite bind_bind. setoid_rewrite bind_ret_l.
     iApply (sim_gen_TVis with "[-]").
-    iIntros (?) "!>". iIntros "_" (?). simplify_eq/=.
+    iIntros (?) "!>". simpl. iIntros "_" (?). simplify_eq/=.
     iApply (sim_tgt_link_right with "[-]").
     iApply (sim_gen_expr_intro _ tt _ None); simpl; [done..|].
     rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
@@ -480,6 +579,107 @@ Section memmove.
     iSplit. { iIntros. iModIntro. iIntros (?). simplify_eq. }
     iIntros (???) "!>". iIntros (?). iApply (sim_tgt_link_left with "[-]"). destruct_all unit.
     iApply "Hσ". simplify_eq/=. iExists _. iFrame. iSplit!. by iApply "HΦ".
+  Qed.
+
+  Lemma sim_locle2 fns J `{!inMH (locleMH _) J}:
+    rec_fn_auth fns -∗
+    "locle" ↪ None -∗
+    rec_fn_spec Tgt J "locle" locle_fn_spec.
+  Proof.
+    iIntros "#Hfns #Hf" (es Φ) "HΦ". iDestruct "HΦ" as (l1 l2 ->) "HΦ".
+    iApply (sim_tgt_rec_Call_external with "[$]"). iIntros (???) "#??? !>".
+    iApply (inMH_apply (locleMH _)). iIntros (???) "Hσ".
+    iIntros (??????). destruct!/=. case_bool_decide => //. rewrite (bool_decide_true (_ ∈ _)) //.
+    iApply (sim_tgt_link_right_recv with "[-]").
+    iApply (sim_gen_expr_intro _ tt _ None); simpl; [done..|].
+    (* iApply sim_locle_spec2 => /=. iIntros (?????) "Hc _". iIntros (?). simplify_eq/=. *)
+    iApply sim_locle_spec3 => /=. iIntros (???).
+    iDestruct 1 as (??? ->) "Hc". iIntros "_" (?). simplify_eq/=.
+    iApply (sim_tgt_link_right with "[-]").
+    iApply (sim_gen_expr_intro _ tt _ None); simpl; [done..|].
+    iApply "Hc". iSplit!.
+    iIntros (???). iDestruct 1 as %[?[?[??]]]. iIntros "_". destruct!/=.
+    iIntros (??????). destruct!/=.
+    iApply (sim_tgt_link_left_recv with "[-]").
+    iApply sim_tgt_rec_Waiting_raw.
+    iSplit. { iIntros. iModIntro. iIntros (?). simplify_eq. }
+    iIntros (???) "!>". iIntros (?). iApply (sim_tgt_link_left with "[-]").
+    iApply "Hσ". simplify_eq/=. iExists _. iFrame. iSplit!. by iApply "HΦ".
+  Qed.
+
+  Lemma sim_main J `{!inMH nopMH J}:
+    "memmove" ↪ Some memmove_rec -∗
+    "memcpy" ↪ Some memcpy_rec -∗
+    "main" ↪ Some main_rec -∗
+    □ rec_fn_spec Tgt J "locle" locle_fn_spec -∗
+    rec_fn_spec Tgt J "main" (λ es Φ,
+        ⌜es = []⌝ ∗
+        rec_fn_spec Tgt J "print" (λ es Φ1, ⌜es = [Val 1]⌝ ∗ (∀ v',
+          rec_fn_spec Tgt J "print" (λ es Φ2, ⌜es = [Val 2]⌝ ∗ (∀ v',
+          (Φ 0) -∗ Φ2 v')) -∗
+          Φ1 v'))).
+  Proof.
+    iIntros "#? #? #? #?". iIntros (es Φ). iDestruct 1 as (->) "HΦ".
+    iApply sim_tgt_rec_Call_internal. 2: { done. } { done. }
+    iModIntro => /=.
+    iApply sim_tgt_rec_AllocA; [by econs|] => /=. iIntros (?) "Hl".
+    destruct ls as [|l []] => //=. 2: by iDestruct!.
+    have -> : (0%nat + 0) = 0 by []. have -> : (1%nat + 0) = 1 by []. have -> : (2%nat + 0) = 2 by [].
+    iDestruct "Hl" as "[[Hl0 [Hl1 [Hl2 _]]] _]". iModIntro.
+    iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
+    iApply (sim_gen_expr_bind _ [StoreLCtx _] with "[-]") => /=.
+    iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
+    iApply (sim_tgt_rec_Store with "Hl0"). iIntros "Hl0 !>" => /=.
+    iApply sim_tgt_rec_LetE. iIntros "!>" => /=.
+    iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
+    iApply (sim_gen_expr_bind _ [StoreLCtx _] with "[-]") => /=.
+    iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
+    iApply (sim_tgt_rec_Store with "Hl1"). iIntros "Hl1 !>" => /=.
+    iApply sim_tgt_rec_LetE. iIntros "!>" => /=.
+    iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
+    iApply (sim_gen_expr_bind _ [CallCtx _ [] _] with "[-]") => /=.
+    iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
+    iApply (sim_gen_expr_bind _ [CallCtx _ [_] _] with "[-]") => /=.
+    iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
+    iApply (sim_memmove); [done..|].
+    iExists [ValNum 1; ValNum 2], [ValNum 2; ValNum 0].
+    iSplit!. iSplitL "Hl0 Hl1 Hl2".
+    { rewrite !array_cons !array_nil -!insert_union_l !left_id_L.
+      rewrite !offset_loc_assoc insert_insert.
+      iApply (big_sepM_insert_2 with "[Hl0]"); [done|].
+      iApply (big_sepM_insert_2 with "[Hl1]"); [done|].
+      iApply (big_sepM_insert_2 with "[Hl2]"); [done|].
+      done. }
+    iIntros "Hl" => /=. rewrite !array_cons !array_nil -!insert_union_l !left_id_L.
+    rewrite !offset_loc_assoc.
+    rewrite (big_sepM_delete _ _ (l +ₗ 1)). 2: { by simplify_map_eq. }
+    rewrite delete_insert_delete.
+    rewrite delete_insert_ne //. 2: apply/loc_eq; split!; lia.
+    rewrite delete_insert_ne //. 2: apply/loc_eq; split!; lia.
+    rewrite delete_insert //.
+    rewrite big_sepM_insert. 2: { rewrite lookup_insert_ne //. apply/loc_eq; split!; lia. }
+    rewrite big_sepM_insert. 2: done.
+    iDestruct "Hl" as "[Hl1 [Hl2 [Hl0 _]]]".
+    iApply sim_tgt_rec_LetE. iModIntro => /=.
+    iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
+    iApply (sim_gen_expr_bind _ [CallCtx _ [] _] with "[-]") => /=.
+    iApply (sim_gen_expr_bind _ [LoadCtx] with "[-]") => /=.
+    iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
+    iApply (sim_tgt_rec_Load with "Hl1"). iIntros "Hl1 !>" => /=.
+
+    iApply "HΦ". iSplit!. iIntros (?) "HΦ".
+
+    iApply (sim_tgt_rec_LetE with "[-]"). iIntros "!>" => /=.
+    iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
+    iApply (sim_gen_expr_bind _ [CallCtx _ [] _] with "[-]") => /=.
+    iApply (sim_gen_expr_bind _ [LoadCtx] with "[-]") => /=.
+    iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
+    iApply (sim_tgt_rec_Load with "Hl2"). iIntros "Hl2 !>" => /=.
+
+    iApply "HΦ". iSplit!. iIntros (?) "HΦ".
+
+    iApply (sim_tgt_rec_LetE with "[-]"). iIntros "!>" => /=.
+    iApply sim_gen_expr_end => /=. iSplit!. iFrame.
   Qed.
 
 End memmove.
@@ -571,9 +771,9 @@ Section memmove.
     eassert (inMH (sim_tgtMH γσ_t γσ_s γκ _ Pκ _ _) J) as MHsrc. {
       unfold inMH. iIntros "!>" (???) "HJ Hσ".
       iDestruct ("HJ" with "Hσ") as "[[-> Hs]|[(%&%&->&Hs)|(%&%&->&Hs)]]" => /=.
-        + done.
-        + iIntros (??????). destruct!/=. rewrite bool_decide_false//.
-        + iIntros (??????). destruct!/=. done.
+      - done.
+      - iIntros (??????). destruct!/=. rewrite bool_decide_false//.
+      - iIntros (??????). destruct!/=. done.
     }
 
     clearbody J.
@@ -598,55 +798,10 @@ Section memmove.
     (* set (J := nopMH ∪ _ ∪ _). *)
 
     iApply (sim_gen_expr_bind _ [ReturnExtCtx _] with "[-]") => /=.
-    iApply sim_tgt_rec_Call_internal. 2: { by iApply (rec_fn_intro with "[$]"). } { done. }
-    iModIntro => /=.
-    iApply sim_tgt_rec_AllocA; [by econs|] => /=. iIntros (?) "Hl".
-    destruct ls as [|l []] => //=. 2: by iDestruct!.
-    have -> : (0%nat + 0) = 0 by []. have -> : (1%nat + 0) = 1 by []. have -> : (2%nat + 0) = 2 by [].
-    iDestruct "Hl" as "[[Hl0 [Hl1 [Hl2 _]]] _]". iModIntro.
-    iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
-    iApply (sim_gen_expr_bind _ [StoreLCtx _] with "[-]") => /=.
-    iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
-    iApply (sim_tgt_rec_Store with "Hl0"). iIntros "Hl0 !>" => /=.
-    iApply sim_tgt_rec_LetE. iIntros "!>" => /=.
-    iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
-    iApply (sim_gen_expr_bind _ [StoreLCtx _] with "[-]") => /=.
-    iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
-    iApply (sim_tgt_rec_Store with "Hl1"). iIntros "Hl1 !>" => /=.
-    iApply sim_tgt_rec_LetE. iIntros "!>" => /=.
-    iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
-    iApply (sim_gen_expr_bind _ [CallCtx _ [] _] with "[-]") => /=.
-    iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
-    iApply (sim_gen_expr_bind _ [CallCtx _ [_] _] with "[-]") => /=.
-    iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
-    iApply (sim_memmove [ValNum 1; ValNum 2] [ValNum 2; ValNum 0] with "[] [] [] [Hl0 Hl1 Hl2]").
-    { done. } { done. }
-    { by iApply (rec_fn_intro with "[$]"). }
-    { by iApply (rec_fn_intro with "[$]"). }
-    { iIntros "!>" (???) "HΦ".
-      iApply sim_locle. 1: done. 1: { by iApply (rec_fn_intro with "[$]"). } 1: done. }
-    { rewrite !array_cons !array_nil -!insert_union_l !left_id_L.
-      rewrite !offset_loc_assoc insert_insert.
-      iApply (big_sepM_insert_2 with "[Hl0]"); [done|].
-      iApply (big_sepM_insert_2 with "[Hl1]"); [done|].
-      iApply (big_sepM_insert_2 with "[Hl2]"); [done|].
-      done. }
-    iIntros "Hl" => /=. rewrite !array_cons !array_nil -!insert_union_l !left_id_L.
-    rewrite !offset_loc_assoc.
-    rewrite (big_sepM_delete _ _ (l +ₗ 1)). 2: { by simplify_map_eq. }
-    rewrite delete_insert_delete.
-    rewrite delete_insert_ne //. 2: apply/loc_eq; split!; lia.
-    rewrite delete_insert_ne //. 2: apply/loc_eq; split!; lia.
-    rewrite delete_insert //.
-    rewrite big_sepM_insert. 2: { rewrite lookup_insert_ne //. apply/loc_eq; split!; lia. }
-    rewrite big_sepM_insert. 2: done.
-    iDestruct "Hl" as "[Hl1 [Hl2 [Hl0 _]]]".
-    iApply sim_tgt_rec_LetE. iModIntro => /=.
-    iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
-    iApply (sim_gen_expr_bind _ [CallCtx _ [] _] with "[-]") => /=.
-    iApply (sim_gen_expr_bind _ [LoadCtx] with "[-]") => /=.
-    iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
-    iApply (sim_tgt_rec_Load with "Hl1"). iIntros "Hl1 !>" => /=.
+    iApply sim_main. 1-3: by iApply (rec_fn_intro with "[$]").
+    { iIntros "!>". iApply sim_locle. 1: done. 1: { by iApply (rec_fn_intro with "[$]"). } }
+    iSplit!.
+    iIntros (??). iDestruct 1 as (->) "HΦ".
     iApply (sim_tgt_rec_Call_external). { by iApply (rec_fn_intro with "[$]"). }
 
     iIntros (???) "Hfns' Hh Ha !>". iApply (inMH_apply (sim_tgtMH _ _ _ _ _ _ _)).
@@ -682,14 +837,9 @@ Section memmove.
     iSplit; [iIntros; iModIntro; by iIntros|].
     iIntros (???) "!>". iIntros (?). simplify_eq.
     iApply (sim_tgt_link_left with "[-]").
-    iApply "HC". iSplit!. iFrame.
+    iApply "HC". iSplit!. iFrame. iApply "HΦ".
 
-    iApply (sim_tgt_rec_LetE with "[-]"). iIntros "!>" => /=.
-    iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
-    iApply (sim_gen_expr_bind _ [CallCtx _ [] _] with "[-]") => /=.
-    iApply (sim_gen_expr_bind _ [LoadCtx] with "[-]") => /=.
-    iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
-    iApply (sim_tgt_rec_Load with "Hl2"). iIntros "Hl2 !>" => /=.
+    iIntros (??). iDestruct 1 as (->) "HΦ".
     iApply (sim_tgt_rec_Call_external). { by iApply (rec_fn_intro with "[$]"). }
 
     iIntros (???) "Hfns'' Hh Ha !>". iApply (inMH_apply (sim_tgtMH _ _ _ _ _ _ _)).
@@ -725,10 +875,8 @@ Section memmove.
     iSplit; [iIntros; iModIntro; by iIntros|].
     iIntros (???) "!>". iIntros (?). simplify_eq.
     iApply (sim_tgt_link_left with "[-]").
-    iApply "HC". iSplit!. iFrame.
+    iApply "HC". iSplit!. iFrame. iApply "HΦ".
 
-    iApply (sim_tgt_rec_LetE with "[-]"). iIntros "!>" => /=.
-    iApply sim_gen_expr_end => /=. iSplit!. iFrame.
     iApply sim_tgt_rec_ReturnExt. iIntros (???) "Hfns''' Hh Ha !>".
     iApply (inMH_apply (sim_tgtMH _ _ _ _ _ _ _)). iIntros "HC". iRight. iRight. iSplit!.
     iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
