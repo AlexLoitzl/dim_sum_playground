@@ -706,14 +706,18 @@ Hoare triple spec:
     iApply sim_gen_expr_end => /=. iSplit!. iFrame.
   Qed.
 
+  (* Writing this spec for main_spec probably does not gain much / if
+  anything compared to reasoning about the spec module directly *)
   Lemma sim_main_spec J Φ :
     (∃ f vs h, ∀ σ, imodhandle J (Some (Incoming, ERCall f vs h)) σ (λ σ', ⌜σ' = σ⌝ ∗ (
       ⌜f = "main"⌝ -∗ ⌜vs = []⌝ -∗
+      ∀ σ, imodhandle J None σ (λ σ', ⌜σ = σ'⌝ ∗
       (∃ h', ∀ σ, imodhandle J (Some (Outgoing, ERCall "print" [ValNum 1] h')) σ (λ σ', ⌜σ' = σ⌝ ∗
       (∃ e, ∀ σ, imodhandle J (Some (Incoming, e)) σ (λ σ', ⌜σ' = σ⌝ ∗ (∀ v', ⌜e = ERReturn v' h'⌝ -∗
+      ∀ σ, imodhandle J None σ (λ σ', ⌜σ = σ'⌝ ∗
       (∃ h', ∀ σ, imodhandle J (Some (Outgoing, ERCall "print" [ValNum 2] h')) σ (λ σ', ⌜σ' = σ⌝ ∗
       (∃ e, ∀ σ, imodhandle J (Some (Incoming, e)) σ (λ σ', ⌜σ' = σ⌝ ∗ (∀ v', ⌜e = ERReturn v' h'⌝ -∗
-      True))))))))))))) -∗
+      ∀ σ, imodhandle J None σ (λ σ', ⌜σ = σ'⌝ ∗ True)))))))))))))))) -∗
     SRC main_spec @ J {{ Φ }}.
   Proof.
     iIntros "HΦ". iDestruct "HΦ" as (f vs h) "HΦ".
@@ -724,19 +728,25 @@ Hoare triple spec:
     iIntros (?) "[-> HΦ]". iSplit; [done|].
     iApply sim_src_TAssume. iIntros (?).
     iApply sim_src_TAssume. iIntros (?). simplify_eq.
-    iDestruct ("HΦ" with "[//] [//]") as (?) "HΦ".
-    iApply sim_src_TExist. iApply sim_gen_TVis. iIntros ([]). iApply (imodhandle_mono with "HΦ").
-    iIntros (?) "[-> [% HΦ]]". iSplit; [done|].
-    iApply sim_src_TExist. iApply sim_gen_TVis. iIntros ([]). iApply (imodhandle_mono with "HΦ").
-    iIntros (?) "[-> HΦ]". iSplit; [done|].
-    iApply sim_src_TAssume. iIntros (?). case_match => //; simplify_eq.
-    iDestruct ("HΦ" with "[//]") as (?) "HΦ".
+    iDestruct ("HΦ" with "[//] [//]") as "HΦ".
+    iApply sim_gen_expr_None => /=. iIntros (? [] ??). iApply (imodhandle_mono with "HΦ").
+    iIntros (?) "[-> [% HΦ]]". iExists _. iSplit; [done|]. iSplit!.
     iApply sim_src_TExist. iApply sim_gen_TVis. iIntros ([]). iApply (imodhandle_mono with "HΦ").
     iIntros (?) "[-> [% HΦ]]". iSplit; [done|].
     iApply sim_src_TExist. iApply sim_gen_TVis. iIntros ([]). iApply (imodhandle_mono with "HΦ").
     iIntros (?) "[-> HΦ]". iSplit; [done|].
     iApply sim_src_TAssume. iIntros (?). case_match => //; simplify_eq.
     iDestruct ("HΦ" with "[//]") as "HΦ".
+    iApply sim_gen_expr_None => /=. iIntros (? [] ??). iApply (imodhandle_mono with "HΦ").
+    iIntros (?) "[-> [% HΦ]]". iExists _. iSplit; [done|]. iSplit!.
+    iApply sim_src_TExist. iApply sim_gen_TVis. iIntros ([]). iApply (imodhandle_mono with "HΦ").
+    iIntros (?) "[-> [% HΦ]]". iSplit; [done|].
+    iApply sim_src_TExist. iApply sim_gen_TVis. iIntros ([]). iApply (imodhandle_mono with "HΦ").
+    iIntros (?) "[-> HΦ]". iSplit; [done|].
+    iApply sim_src_TAssume. iIntros (?). case_match => //; simplify_eq.
+    iDestruct ("HΦ" with "[//]") as "HΦ".
+    iApply sim_gen_expr_None => /=. iIntros (? [] ??). iApply (imodhandle_mono with "HΦ").
+    iIntros (?) "[-> HΦ]". iExists _. iSplit; [done|]. iSplit!.
     iApply sim_src_TUb_end.
   Qed.
 End memmove.
@@ -769,21 +779,17 @@ Section memmove.
     iIntros "Hγσ_s Hγσ_t Hγκ".
     iApply (sim_gen_expr_intro _ tt _ None with "[] [-]"); [simpl; done..|].
     iApply (sim_gen_expr_wand _ _ _ _ _ (λ _, False%I) with "[-] []"); [|by iIntros].
-    iEval (unfold main_spec). rewrite /TReceive bind_bind.
-    iApply (sim_src_TExist (_, _, _)).
-    rewrite bind_bind. setoid_rewrite bind_ret_l.
-    iApply sim_gen_TVis. iIntros ([]) "HC".
+    iApply sim_main_spec. iSplit!. iIntros (?) "HC".
     iApply (sim_src_constP_elim with "[Hγσ_t] [Hγκ] [-]"); [done..|].
     iIntros "Hγσ_t Hγκ". iSplit!.
     iApply (sim_tgt_constP_intro γσ_t γσ_s γκ with "[Hγσ_t] [Hγσ_s] [Hγκ] [-]"); [done..|].
     iIntros "Hγσ_s". iApply sim_gen_stop.
     iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
     iIntros "Hγσ_s Hγσ_t Hγκ".
-    iApply "HC". iSplit!.
-    iApply sim_src_TAssume. iIntros (?).
-    iApply sim_src_TAssume. iIntros (?). simplify_eq.
+    iApply "HC". iSplit!. iIntros (-> ->). simplify_eq.
+
     rewrite bool_decide_true; [|done].
-    iApply sim_gen_expr_None. iIntros (???) "_ Hs". simplify_eq/=.
+    iIntros (?) "Hs".
     iApply (sim_src_constP_elim with "[Hγσ_t] [Hγκ] [-]"); [done..|].
     iIntros "Hγσ_t Hγκ". iSplit!.
 
@@ -865,8 +871,7 @@ Section memmove.
     iIntros "HC". iRight. iLeft. iSplit!.
     iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
     iIntros "Hγσ_s Hγσ_t Hγκ".
-    iApply "Hs". iExists _. iSplit; [iPureIntro; eassumption|]. iSplit!.
-    iApply sim_src_TExist. iApply sim_gen_TVis. iIntros ([]) "Hs".
+    iApply "Hs". iSplit!. iIntros (?) "Hs".
     iApply (sim_src_constP_elim with "[Hγσ_t] [Hγκ] [-]"); [done..|].
     iIntros "Hγσ_t Hγκ". iSplit!.
     iApply (sim_tgt_constP_intro γσ_t γσ_s γκ with "[Hγσ_t] [Hγσ_s] [Hγκ] [-]"); [done..|].
@@ -874,17 +879,14 @@ Section memmove.
     iApply (sim_tgt_link_None with "[-]"). iIntros "!>" (??????). destruct!/=.
     iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
     iIntros "Hγσ_s Hγσ_t Hγκ".
-    iApply "Hs". iSplit!.
-    iApply sim_src_TExist. iApply sim_gen_TVis. iIntros ([]) "Hs".
+    iApply "Hs". iSplit!. iIntros (?) "Hs".
     iApply (sim_src_constP_elim with "[Hγσ_t] [Hγκ] [-]"); [done..|].
     iIntros "Hγσ_t Hγκ". iSplit!.
     iApply (sim_tgt_constP_intro γσ_t γσ_s γκ with "[Hγσ_t] [Hγσ_s] [Hγκ] [-]"); [done..|].
     iIntros "Hγσ_s". iApply sim_gen_stop.
     iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
     iIntros "Hγσ_s Hγσ_t Hγκ".
-    iApply "Hs". iSplit!.
-    iApply sim_src_TAssume. iIntros (?). iApply sim_gen_expr_None => /=. iIntros (???) "_ Hs".
-    case_match; destruct!/=.
+    iApply "Hs". iSplit!. iIntros (? -> ?) "Hs". destruct!/=.
     iApply (sim_src_constP_elim with "[Hγσ_t] [Hγκ] [-]"); [done..|].
     iIntros "Hγσ_t Hγκ". iSplit!.
     iApply (sim_tgt_constP_intro γσ_t γσ_s γκ with "[Hγσ_t] [Hγσ_s] [Hγκ] [-]"); [done..|].
@@ -903,8 +905,7 @@ Section memmove.
     iIntros "HC". iRight. iLeft. iSplit!.
     iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
     iIntros "Hγσ_s Hγσ_t Hγκ".
-    iApply "Hs". iExists _. iSplit; [iPureIntro; eassumption|]. iSplit!.
-    iApply sim_src_TExist. iApply sim_gen_TVis. iIntros ([]) "Hs".
+    iApply "Hs". iSplit!. iIntros (?) "Hs".
     iApply (sim_src_constP_elim with "[Hγσ_t] [Hγκ] [-]"); [done..|].
     iIntros "Hγσ_t Hγκ". iSplit!.
     iApply (sim_tgt_constP_intro γσ_t γσ_s γκ with "[Hγσ_t] [Hγσ_s] [Hγκ] [-]"); [done..|].
@@ -912,17 +913,14 @@ Section memmove.
     iApply (sim_tgt_link_None with "[-]"). iIntros "!>" (??????). destruct!/=.
     iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
     iIntros "Hγσ_s Hγσ_t Hγκ".
-    iApply "Hs". iSplit!.
-    iApply sim_src_TExist. iApply sim_gen_TVis. iIntros ([]) "Hs".
+    iApply "Hs". iSplit!. iIntros (?) "Hs".
     iApply (sim_src_constP_elim with "[Hγσ_t] [Hγκ] [-]"); [done..|].
     iIntros "Hγσ_t Hγκ". iSplit!.
     iApply (sim_tgt_constP_intro γσ_t γσ_s γκ with "[Hγσ_t] [Hγσ_s] [Hγκ] [-]"); [done..|].
     iIntros "Hγσ_s". iApply sim_gen_stop.
     iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
     iIntros "Hγσ_s Hγσ_t Hγκ".
-    iApply "Hs". iSplit!.
-    iApply sim_src_TAssume. iIntros (?). iApply sim_gen_expr_None => /=. iIntros (???) "_ Hs".
-    case_match; destruct!/=.
+    iApply "Hs". iSplit!. iIntros (? -> ?) "Hs". destruct!/=.
     iApply (sim_src_constP_elim with "[Hγσ_t] [Hγκ] [-]"); [done..|].
     iIntros "Hγσ_t Hγκ". iSplit!.
     iApply (sim_tgt_constP_intro γσ_t γσ_s γκ with "[Hγσ_t] [Hγσ_s] [Hγκ] [-]"); [done..|].
@@ -938,8 +936,7 @@ Section memmove.
     iApply (inMH_apply (sim_tgtMH _ _ _ _ _ _ _)). iIntros "HC". iRight. iRight. iSplit!.
     iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
     iIntros "Hγσ_s Hγσ_t Hγκ".
-    iApply "Hs". iExists _. iSplit; [done|]. iSplit!.
-    iApply sim_src_TUb_end.
+    iApply "Hs". iSplit!.
   Qed.
 End memmove.
 
