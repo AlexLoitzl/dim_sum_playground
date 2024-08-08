@@ -4,14 +4,106 @@ From dimsum.core Require Import axioms.
 Local Open Scope Z_scope.
 
 (** * Rec, a "C-like" language *)
-(** ** Locations *)
+(** ** Provenances and locations *)
 Declare Scope loc_scope.
 Delimit Scope loc_scope with L.
 Open Scope loc_scope.
 
-Definition prov : Set := Z.
+Definition block_id := Z.
+
+Inductive prov : Set :=
+  ProvBlock (z : block_id) | ProvStatic (f : string) (i : Z).
 Definition loc : Set := (prov * Z).
 
+Global Instance prov_eq_dec : EqDecision prov.
+Proof. solve_decision. Qed.
+
+Global Program Instance prov_countable : Countable prov :=
+  inj_countable
+    (λ p : prov, match p with | ProvBlock z => inl z | ProvStatic f i => inr (f, i) end)
+    (λ q, match q with | inl z => Some (ProvBlock z) | inr (f, i) => Some (ProvStatic f i) end) _.
+Next Obligation. by move => []. Qed.
+
+Definition is_ProvBlock (p : prov) := if p is ProvBlock b then True else False.
+
+Global Instance is_ProvBlock_dec (p : prov) : Decision (is_ProvBlock p).
+Proof.
+  destruct p.
+  + by left.
+  + right. by intros [].
+Defined.
+
+Definition is_ProvStatic (p : prov) := if p is ProvStatic f i then True else False.
+
+Global Instance is_ProvStatic_dec p : Decision (is_ProvStatic p).
+Proof.
+  destruct p.
+  + right. by intros [].
+  + by left.
+Defined.
+
+Definition prov_to_block (p : prov) : option block_id :=
+  if p is ProvBlock b then Some b else None.
+
+(** *** fresh provenances *)
+Global Program Instance prov_infinite : Infinite prov :=
+  inj_infinite ProvBlock prov_to_block (λ x, eq_refl (Some x)).
+
+Lemma fresh_map_is_Block (s : gset prov) (X : gset prov) i p :
+  fresh_map s X !! i = Some p → is_ProvBlock p.
+Proof.
+  rewrite list_to_map_lookup_Some => [[j [Hj _]]].
+  apply lookup_zip_with_Some in Hj as [? [? [[=<-<-] [_ Hfresh]]]].
+  induction (length (elements s)) in Hfresh, X, j |-* => //=.
+  apply lookup_cons_Some in Hfresh as [[_ <-]|[? Hfresh]].
+  - by eexists.
+  - by eapply IHn.
+Qed.
+
+(** *** Static provenances *)
+Definition static_provs {A} (f : string) (svars : list A) : list prov :=
+  imap (λ i _, ProvStatic f i) svars.
+
+Definition static_locs {A} f (svars : list A) : list loc := (λ p, (p, 0)) <$> static_provs f svars.
+
+Lemma static_provs_length A f (l : list A) :
+  length (static_provs f l) = length l.
+Proof. by rewrite /static_provs imap_length. Qed.
+
+Lemma static_provs_lookup A f (svars : list A) (i : nat) :
+  static_provs f svars !! i = (λ _ : A, ProvStatic f i) <$> (svars !! i).
+Proof. apply list_lookup_imap. Qed.
+
+Lemma static_provs_lookup_Some A f (svars : list A) (i : nat) x :
+  static_provs f svars !! i = Some x ↔ x = ProvStatic f i ∧ (i < length svars)%nat.
+Proof.
+  rewrite static_provs_lookup fmap_Some -lookup_lt_is_Some /is_Some. naive_solver.
+Qed.
+
+Definition static_provs_eq {A B} f (svars1 : list A) (svars2 : list B) :
+  length svars1 = length svars2 →
+  static_provs f svars1 = static_provs f svars2.
+Proof.
+  move => ?. apply list_eq => i.  apply option_eq => ?.
+  rewrite !static_provs_lookup_Some. naive_solver lia.
+Qed.
+
+Lemma elem_of_static_provs A p f (svars : list A) :
+  p ∈ static_provs f svars ↔ ∃ (i : nat), p = ProvStatic f i ∧ (i < length svars)%nat.
+Proof. rewrite elem_of_list_lookup. by setoid_rewrite static_provs_lookup_Some. Qed.
+
+Lemma NoDup_static_provs {A} f (svars : list A) :
+  NoDup (static_provs f svars).
+Proof.
+  apply NoDup_alt => ??? /static_provs_lookup_Some? /static_provs_lookup_Some?.
+  naive_solver.
+Qed.
+
+Lemma static_provs_snoc {A} f svars (s : A):
+  static_provs f (svars ++ [s]) = static_provs f svars ++ [ProvStatic f (length svars)].
+Proof. rewrite /static_provs imap_app /=. do 3 f_equal. lia. Qed.
+
+(** *** Locations *)
 Definition offset_loc (l : loc) (z : Z) : loc := (l.1, l.2 + z).
 Notation "l +ₗ z" := (offset_loc l%L z%Z) (at level 50, left associativity) : loc_scope.
 Global Typeclasses Opaque offset_loc.
@@ -410,31 +502,85 @@ Qed.
 (** ** fndef *)
 Record fndef : Type := {
   fd_args : list string;
+  fd_static_vars : list (string * Z); (* (name, size) *)
   fd_vars : list (string * Z);
   fd_body : expr;
   fd_static : is_static_expr false fd_body;
 }.
 
 Lemma fndef_eq fn1 fn2 :
-  fn1 = fn2 ↔ fd_args fn1 = fd_args fn2 ∧ fd_vars fn1 = fd_vars fn2 ∧ fd_body fn1 = fd_body fn2.
-Proof. split; [naive_solver|]. destruct fn1, fn2 => /= -[?[??]]. subst. f_equal. apply proof_irrel. Qed.
+  fn1 = fn2 ↔ fd_args fn1 = fd_args fn2
+            ∧ fd_static_vars fn1 = fd_static_vars fn2
+            ∧ fd_vars fn1 = fd_vars fn2
+            ∧ fd_body fn1 = fd_body fn2.
+Proof. split; [naive_solver|]. destruct fn1, fn2 => /= -[?[?[??]]]. subst. f_equal. apply proof_irrel. Qed.
 
 (** ** heap *)
 Record heap_state : Set := Heap {
   h_heap : gmap loc val;
-  h_provs : gset prov;
-  heap_wf l : is_Some (h_heap !! l) → l.1 ∈ h_provs;
+  h_used_blocks : gset block_id;
+  heap_wf l : ∀ b, is_Some (h_heap !! l) → l.1 = ProvBlock b → b ∈ h_used_blocks;
 }.
 Add Printing Constructor heap_state.
 
 Lemma heap_state_eq h1 h2:
-  h1 = h2 ↔ h1.(h_heap) = h2.(h_heap) ∧ h1.(h_provs) = h2.(h_provs).
+  h1 = h2 ↔ h1.(h_heap) = h2.(h_heap) ∧ h1.(h_used_blocks) = h2.(h_used_blocks).
 Proof. split; [naive_solver|]. destruct h1, h2 => /= -[??]; subst. f_equal. apply AxProofIrrelevance. Qed.
 
-Global Program Instance heap_empty : Empty heap_state :=
-  Heap ∅ ∅ _.
-Next Obligation. move => ?. rewrite lookup_empty => -[??]. done. Qed.
+(** *** heap provs *)
+Definition h_static_provs (h : heap_state) : gset prov :=
+  filter (λ x, is_ProvStatic x) (set_map fst (dom (h_heap h))).
 
+Definition h_provs (h : heap_state) : gset prov :=
+  h_static_provs h ∪ set_map ProvBlock (h_used_blocks h).
+
+Lemma elem_of_h_static_provs h p :
+  p ∈ h_static_provs h ↔ is_ProvStatic p ∧ ∃ l, l.1 = p ∧ is_Some (h_heap h !! l).
+Proof. setoid_rewrite <-elem_of_dom. set_solver. Qed.
+
+Lemma elem_of_h_provs p h :
+  p ∈ h_provs h ↔ p ∈ h_static_provs h ∨ ∃ b, p = ProvBlock b ∧ b ∈ h_used_blocks h.
+Proof. set_solver. Qed.
+
+Lemma h_provs_blocks b h :
+  ProvBlock b ∈ h_provs h ↔ b ∈ h_used_blocks h.
+Proof. set_solver. Qed.
+
+Lemma h_provs_static p h :
+  is_ProvStatic p →
+  p ∈ h_provs h ↔ p ∈ h_static_provs h.
+Proof. set_solver. Qed.
+
+Lemma subseteq_h_provs s h :
+  s ⊆ h_provs h ↔
+  (∀ b, ProvBlock b ∈ s → b ∈ h_used_blocks h) ∧
+  (∀ f i, ProvStatic f i ∈ s → ProvStatic f i ∈ h_static_provs h).
+Proof.
+  setoid_rewrite <-h_provs_blocks. setoid_rewrite <-h_provs_static => //.
+  split.
+  - naive_solver.
+  - move => [H1 H2] []; naive_solver.
+Qed.
+
+(* TODO: Rename? *)
+Lemma lookup_heap_is_Some_elem_of_h_provs l h :
+  is_Some (h_heap h !! l) →
+  l.1 ∈ h_provs h.
+Proof.
+  move => Hl. rewrite elem_of_h_provs elem_of_h_static_provs.
+  destruct l.1 eqn:?.
+  - move: Hl => /heap_wf. naive_solver.
+  - naive_solver.
+Qed.
+
+Lemma lookup_heap_Some_elem_of_h_provs l h v :
+  h_heap h !! l = Some v →
+  l.1 ∈ h_provs h.
+Proof. move => ?. by apply lookup_heap_is_Some_elem_of_h_provs. Qed.
+
+Global Typeclasses Opaque h_provs.
+
+(** *** various functions on heaps *)
 Definition h_block (h : heap_state) (p : prov) : gmap Z val :=
   gmap_curry (h_heap h) !!! p.
 
@@ -482,18 +628,66 @@ Definition heap_range (h : heap_state) (l : loc) (a : Z) : Prop :=
   ∀ l', l'.1 = l.1 → is_Some (h.(h_heap) !! l') ↔ l.2 ≤ l'.2 < l.2 + a.
 
 Definition heap_is_fresh (h : heap_state) (l : loc) : Prop :=
-  l.1 ∉ h_provs h ∧ l.2 = 0.
+  l.1 ∉ h_provs h ∧ l.2 = 0 ∧ is_ProvBlock l.1.
 
-Definition heap_fresh (ps : gset prov) (h : heap_state) : loc :=
-  (fresh (ps ∪ h_provs h), 0).
+Definition heap_fresh (bs : gset block_id) (h : heap_state) : loc :=
+  (ProvBlock (fresh (bs ∪ (h_used_blocks h))), 0).
+
+Lemma heap_fresh_is_fresh bs h:
+  heap_is_fresh h (heap_fresh bs h).
+Proof.
+  unfold heap_fresh. split!.
+  match goal with | |- context [fresh ?X] => pose proof (is_fresh X) as H; revert H; move: {1 3}(X) => l Hl end.
+  split_and! => //=.
+  move => /h_provs_blocks.
+  set_solver.
+Qed.
+
+Lemma heap_fresh_not_in bs h b:
+  (heap_fresh bs h).1 = ProvBlock b →
+  b ∉ bs.
+Proof.
+  unfold heap_fresh => /=.
+  match goal with | |- context [fresh ?X] => pose proof (is_fresh X) as H; revert H; move: {1 3}(X) => l Hl end.
+  set_solver.
+Qed.
+Global Opaque heap_fresh.
+
+(** *** heap constructors *)
+Global Program Instance heap_empty : Empty heap_state :=
+  Heap ∅ ∅ _.
+Next Obligation. move => ? ?. rewrite lookup_empty => -[??]. done. Qed.
 
 Program Definition heap_update (h : heap_state) (l : loc) (v : val) : heap_state :=
-  Heap (alter (λ _, v) l h.(h_heap)) h.(h_provs) _.
-Next Obligation. move => ????. rewrite lookup_alter_is_Some. apply heap_wf. Qed.
+  Heap (alter (λ _, v) l h.(h_heap)) h.(h_used_blocks) _.
+Next Obligation. move => ?????. rewrite lookup_alter_is_Some. apply heap_wf. Qed.
+
+Lemma h_static_provs_heap_update h l v :
+  h_static_provs (heap_update h l v) = h_static_provs h.
+Proof. set_solver. Qed.
+
+Lemma h_provs_heap_update h l v :
+  h_provs (heap_update h l v) = h_provs h.
+Proof. unfold h_provs. set_solver. Qed.
+
+Lemma heap_alive_update h l l' v :
+  heap_alive h l →
+  heap_alive (heap_update h l' v) l.
+Proof. move => ?. rewrite /heap_alive/=. by apply lookup_alter_is_Some. Qed.
+
+Lemma h_block_heap_update hs l v:
+  h_block (heap_update hs l v) l.1 = alter (λ _, v) l.2 (h_block hs l.1).
+Proof.
+  rewrite /h_block/=. apply map_eq => i.
+  rewrite !lookup_total_gmap_curry.
+  destruct (decide (i = l.2)); simplify_map_eq.
+  - rewrite lookup_total_gmap_curry -?surjective_pairing. by simplify_map_eq.
+  - rewrite !lookup_alter_ne ?lookup_total_gmap_curry //. destruct l. naive_solver.
+Qed.
 
 Program Definition heap_update_big (h : heap_state) (m : gmap loc val) : heap_state :=
-  Heap (map_union_weak m h.(h_heap)) (h.(h_provs)) _.
-Next Obligation. move => ???. rewrite map_lookup_imap. move => [? /bind_Some[?[??]]]. by apply heap_wf. Qed.
+  Heap (map_union_weak m h.(h_heap)) (h.(h_used_blocks)) _.
+Next Obligation. move => ????. rewrite map_lookup_imap. move => [? /bind_Some[?[??]]]. by apply heap_wf. Qed.
 
 Lemma heap_update_big_empty h :
   heap_update_big h ∅ = h.
@@ -535,39 +729,208 @@ Proof.
   apply elem_of_list_fmap. eexists (o' - o). rewrite elem_of_seqZ /offset_loc /=.
   split; [do 2 f_equal; lia | naive_solver lia].
 Qed.
+
+Lemma heap_alloc_h_is_Some h l n l' :
+  is_Some (heap_alloc_h h l n !! l') ↔ is_Some (h !! l') ∨ l'.1 = l.1 ∧ l.2 ≤ l'.2 < l.2 + n.
+Proof.
+  rewrite /heap_alloc_h -!elem_of_dom dom_union dom_list_to_map elem_of_union elem_of_list_to_set.
+  rewrite -list_fmap_compose/compose/= elem_of_list_fmap.
+  setoid_rewrite elem_of_seqZ.
+  split; [naive_solver lia|].
+  move => [?|[??]]; [naive_solver|].
+  left. eexists (l'.2 - l.2). split; [|lia].
+  destruct l', l => /=. rewrite /offset_loc/=. simplify_eq/=.
+  f_equal. lia.
+Qed.
+
 (* must be Opaque, otherwise simpl takes ages to figure out that it cannot reduce heap_alloc_h. *)
 Global Opaque heap_alloc_h.
 
-
 Program Definition heap_alloc (h : heap_state) (l : loc) (n : Z) : heap_state :=
-  Heap (heap_alloc_h h.(h_heap) l n) ({[l.1]} ∪ h_provs h) _.
+  Heap (heap_alloc_h h.(h_heap) l n)
+    (option_to_set (prov_to_block l.1) ∪ h_used_blocks h) _.
 Next Obligation.
-  move => ????. move => [? /lookup_union_Some_raw[Hl|[? Hh]]]; apply elem_of_union; [left|right; by apply heap_wf].
-  move: Hl => /(elem_of_list_to_map_2 _ _ _)/elem_of_list_fmap. set_solver.
+  move => ? l ?? b /=. rewrite heap_alloc_h_is_Some.
+  move => [?|[-> ?]] Hblock.
+  - exploit heap_wf; [done..|]. set_solver.
+  - rewrite Hblock /=. set_solver.
 Qed.
 
+Lemma h_static_provs_heap_alloc h l n :
+  is_ProvBlock l.1 →
+  h_static_provs (heap_alloc h l n) = h_static_provs h.
+Proof.
+  rewrite set_eq => Hb p. rewrite !elem_of_h_static_provs.
+  setoid_rewrite heap_alloc_h_is_Some.
+  split; [|naive_solver].
+  move => [? [l' [? [?|[??]]]]]; simplify_eq; [naive_solver|].
+  by destruct l.1, l'.1.
+Qed.
+
+Lemma h_provs_heap_alloc h l n :
+  is_ProvBlock l.1 →
+  h_provs (heap_alloc h l n) = {[l.1]} ∪ h_provs h.
+Proof.
+  intros Heq.
+  rewrite /h_provs /= h_static_provs_heap_alloc //.
+  destruct l.1 as [b|] eqn:Hb; last done.
+  rewrite set_map_union_L set_map_singleton_L.
+  set_solver.
+Qed.
+
+Lemma heap_alive_alloc h l l' n :
+  l.1 = l'.1 →
+  l'.2 ≤ l.2 < l'.2 + n →
+  heap_alive (heap_alloc h l' n) l.
+Proof.
+  move => ??. rewrite /heap_alive heap_alloc_h_is_Some. naive_solver.
+Qed.
+
+Lemma h_block_heap_alloc h l n :
+  heap_is_fresh h l →
+  h_block (heap_alloc h l n) l.1 = zero_block l n.
+Proof.
+  intros [Hfresh ?].
+  rewrite /h_block /heap_alloc /zero_block /=.
+  apply map_eq; intros i.
+  rewrite !lookup_total_gmap_curry.
+  assert (h_heap h !! (l.1, i) = None) as Hlook.
+  { destruct lookup eqn: Hlook; last done.
+    apply lookup_heap_Some_elem_of_h_provs in Hlook.
+    naive_solver.
+  }
+  rewrite lookup_union; rewrite Hlook; clear Hlook.
+  destruct lookup; done.
+Qed.
+
+Program Definition heap_add_blocks (h : heap_state) (blocks : gset block_id) : heap_state :=
+  Heap (h_heap h) (blocks ∪ h_used_blocks h) _.
+Next Obligation. move => ??????. apply: union_subseteq_r. by eapply heap_wf. Qed.
+
 Program Definition heap_free (h : heap_state) (l : loc) : heap_state :=
-  Heap (filter (λ '(l', v), l'.1 ≠ l.1) h.(h_heap)) h.(h_provs) _.
-Next Obligation. move => ???. rewrite map_lookup_filter => -[?/bind_Some[?[??]]]. by apply heap_wf. Qed.
-
-Program Definition heap_merge (h1 h2 : heap_state) : heap_state :=
-  Heap (h_heap h1 ∪ h_heap h2) (h_provs h1 ∪ h_provs h2) _.
-Next Obligation. move => ???. move => /lookup_union_is_Some[/heap_wf?|/heap_wf?]; set_solver. Qed.
-
-Program Definition heap_restrict (h : heap_state) (P : prov → Prop) `{!∀ x, Decision (P x)} : heap_state :=
-  Heap (filter (λ x, P x.1.1) h.(h_heap)) h.(h_provs) _.
+  Heap (filter (λ '(l', v), l'.1 ≠ l.1) h.(h_heap)) h.(h_used_blocks) _.
 Next Obligation. move => ????. rewrite map_lookup_filter => -[?/bind_Some[?[??]]]. by apply heap_wf. Qed.
 
-Program Definition heap_add_provs (h : heap_state) (p : gset prov) : heap_state :=
-  Heap (h_heap h) (p ∪ h_provs h) _.
-Next Obligation. move => ????. apply: union_subseteq_r. by apply heap_wf. Qed.
+Lemma h_static_provs_heap_free h l :
+  is_ProvBlock l.1 →
+  h_static_provs (heap_free h l) = h_static_provs h.
+Proof.
+  rewrite set_eq => Hb p.
+  rewrite !elem_of_filter !elem_of_map.
+  setoid_rewrite elem_of_dom.
+  split.
+  - move => [Hs [[? z]/= [<-]]].
+    assert (p ≠ l.1) by by destruct p, l.1.
+    rewrite map_lookup_filter_true // => ?.
+    split; first done. by exists (p, z).
+  - move => [??]. assert (p ≠ l.1) by by destruct p, l.1.
+    destruct!. split!; [done|].
+    rewrite map_lookup_filter_true //.
+Qed.
 
-Fixpoint heap_fresh_list (xs : list Z) (ps : gset prov) (h : heap_state) : list loc :=
+Lemma h_provs_heap_free h l :
+  is_ProvBlock l.1 →
+  h_provs (heap_free h l) = h_provs h.
+Proof.
+  move => Hl. apply set_eq => p.
+  by rewrite !elem_of_h_provs h_static_provs_heap_free.
+Qed.
+
+Lemma heap_free_alloc h l n b :
+  l.1 = ProvBlock b →
+  b ∉ h_used_blocks h →
+  heap_free (heap_alloc h l n) l = heap_add_blocks h {[b]}.
+Proof.
+  move => Hl Hin.
+  apply heap_state_eq => /=. rewrite Hl. split; [| by simplify_eq].
+  rewrite map_filter_union.
+  2: { apply map_disjoint_list_to_map_l. rewrite Forall_fmap. apply Forall_forall.
+       move => ?? /=. apply eq_None_not_Some. move => /heap_wf/=. naive_solver. }
+  rewrite (map_filter_id _ (h_heap h)).
+  2: { move => [??] ? /(mk_is_Some _ _) /heap_wf/=Hwf ?. subst. naive_solver. }
+  rewrite map_filter_empty_iff_2 ?left_id_L //.
+  move => ?? /(elem_of_list_to_map_2 _ _ _)/elem_of_list_fmap[?[??]]. simplify_eq/=. by apply.
+Qed.
+
+Lemma heap_free_update h l l' v :
+  l'.1 = l.1 →
+  heap_free (heap_update h l' v) l = heap_free h l.
+Proof.
+  move => ?. apply heap_state_eq => /=. split; [|done].
+  apply map_filter_strong_ext_1 => l'' ?. destruct l'', l', l; simplify_eq/=.
+  split => -[?]; rewrite lookup_alter_ne //; congruence.
+Qed.
+
+Program Definition heap_merge (h1 h2 : heap_state) : heap_state :=
+  Heap (h_heap h1 ∪ h_heap h2) (h_used_blocks h1 ∪ h_used_blocks h2) _.
+Next Obligation. move => ????. move => /lookup_union_is_Some[/heap_wf?|/heap_wf?]; set_solver. Qed.
+
+Lemma h_static_provs_heap_merge h1 h2 :
+  h_static_provs (heap_merge h1 h2) = h_static_provs h1 ∪ h_static_provs h2.
+Proof. set_solver. Qed.
+
+Lemma h_provs_heap_merge h1 h2 :
+  h_provs (heap_merge h1 h2) = h_provs h1 ∪ h_provs h2.
+ Proof. unfold h_provs. set_solver. Qed.
+
+
+Program Definition heap_restrict (h : heap_state) (P : prov → Prop) `{!∀ x, Decision (P x)} : heap_state :=
+  Heap (filter (λ x, P x.1.1) h.(h_heap)) h.(h_used_blocks) _.
+Next Obligation. move => ?????. rewrite map_lookup_filter => -[?/bind_Some[?[??]]]. by apply heap_wf. Qed.
+
+Lemma h_static_provs_heap_restrict h (P : prov → Prop) `{!∀ x, Decision (P x)} :
+  h_static_provs (heap_restrict h P) = filter P (h_static_provs h).
+Proof.
+  apply set_eq => p. rewrite elem_of_filter !elem_of_h_static_provs /=.
+  rewrite /is_Some. setoid_rewrite map_lookup_filter_Some. naive_solver.
+Qed.
+
+Lemma h_provs_heap_restrict h (P : prov → Prop) `{!∀ x, Decision (P x)} :
+  h_provs (heap_restrict h P) = filter (λ p, is_ProvBlock p ∨ P p) (h_provs h).
+Proof.
+  apply set_eq => p.
+  rewrite elem_of_filter !elem_of_h_provs h_static_provs_heap_restrict elem_of_filter /= elem_of_h_static_provs.
+  split; [naive_solver|].
+  move => ?. destruct!; [|naive_solver..].
+  by destruct l.1.
+Qed.
+
+Program Definition heap_from_blocks (bs : gmap prov (gmap Z val)) : heap_state :=
+  Heap (gmap_uncurry bs) (set_omap prov_to_block (dom bs)) _.
+Next Obligation.
+  move => bs [??] ?/=. rewrite lookup_gmap_uncurry. move => [? /bind_Some[?[??]]] ?. simplify_eq.
+  apply: elem_of_set_omap_2; [by apply elem_of_dom|done].
+Qed.
+
+Lemma h_static_provs_heap_from_blocks bs :
+  map_Forall (λ p b, b ≠ ∅) bs →
+  h_static_provs (heap_from_blocks bs) = filter is_ProvStatic (dom bs).
+Proof.
+  move => Hnotempty.
+  apply set_eq => p. rewrite elem_of_h_static_provs elem_of_filter /=. f_equiv. split.
+  - move => [[??][? ]]. rewrite lookup_gmap_uncurry. move => [? /bind_Some?]. apply elem_of_dom. naive_solver.
+  - move => /elem_of_dom[??]. ogeneralize (Hnotempty _ _ _); [done|]. move => /(map_choose _)[?[??]].
+    eexists (_, _). split; [done|]. rewrite lookup_gmap_uncurry. by simplify_map_eq.
+Qed.
+
+Lemma h_provs_heap_from_blocks bs :
+  map_Forall (λ p b, b ≠ ∅) bs →
+  h_provs (heap_from_blocks bs) = dom bs.
+Proof.
+  move => ?. apply set_eq => p. rewrite elem_of_h_provs/=. rewrite h_static_provs_heap_from_blocks //.
+  rewrite - {3}(filter_union_complement_L is_ProvStatic (dom bs)). 2: apply inhabitant.
+  rewrite elem_of_union. f_equiv. rewrite elem_of_filter. split.
+  - move => [? [-> /elem_of_set_omap[p' [??]]]]. destruct p' => //. naive_solver.
+  - move => [??]. destruct p => //=. split!. apply elem_of_set_omap. naive_solver.
+Qed.
+
+
+Fixpoint heap_fresh_list (xs : list Z) (bs : gset block_id) (h : heap_state) : list loc :=
   match xs with
   | [] => []
   | x::xs' =>
-      let l := heap_fresh ps h in
-      l::heap_fresh_list xs' ps (heap_alloc h l x)
+      let l := heap_fresh bs h in
+      l::heap_fresh_list xs' bs (heap_alloc h l x)
   end.
 
 Fixpoint heap_alloc_list (xs : list Z) (ls : list loc) (h h' : heap_state) : Prop :=
@@ -579,7 +942,7 @@ Fixpoint heap_alloc_list (xs : list Z) (ls : list loc) (h h' : heap_state) : Pro
 Fixpoint heap_free_list (xs : list (loc * Z)) (h h' : heap_state) : Prop :=
   match xs with
   | [] => h' = h
-  | x::xs' => heap_range h x.1 x.2 ∧ heap_free_list xs' (heap_free h x.1) h'
+  | x::xs' => is_ProvBlock x.1.1 ∧ heap_range h x.1 x.2 ∧ heap_free_list xs' (heap_free h x.1) h'
   end.
 
 Lemma heap_alloc_list_length xs ls h h' :
@@ -587,111 +950,111 @@ Lemma heap_alloc_list_length xs ls h h' :
   length xs = length ls.
 Proof. elim: xs ls h h'. { case; naive_solver. } move => /= ??? [|??] ??; naive_solver. Qed.
 
+Lemma heap_alloc_list_is_block vs ls h1 h2 i l:
+  heap_alloc_list vs ls h1 h2 →
+  ls !! i = Some l →
+  is_ProvBlock l.1.
+Proof.
+  induction vs as [|v vs IHvs] in i, ls, h1, h2 |-*; destruct ls; simpl; try naive_solver.
+  intros (? & ? & ? & [? [??]] & ?) Hlook. simplify_eq.
+  destruct i; last by eauto.
+  by injection Hlook as ->.
+Qed.
+
 Lemma heap_alloc_list_offset_zero vs ls h1 h2 i l:
   heap_alloc_list vs ls h1 h2 →
   ls !! i = Some l →
   l.2 = 0%Z.
 Proof.
   induction vs as [|v vs IHvs] in i, ls, h1, h2 |-*; destruct ls; simpl; try naive_solver.
-  intros (? & ? & ? & Hf & ?) Hlook. simplify_eq.
+  intros (? & ? & ? & [? [??]] & ?) Hlook. simplify_eq.
   destruct i; last by eauto.
-  injection Hlook as ->. by destruct Hf.
+  by injection Hlook as ->.
 Qed.
 
-Lemma heap_fresh_is_fresh ps h:
-  heap_is_fresh h (heap_fresh ps h).
+Lemma heap_alloc_list_fresh xs bs h:
+  ∃ h', heap_alloc_list xs (heap_fresh_list xs bs h) h h'.
 Proof.
-  split; [|done] => /=.
-  match goal with | |- context [fresh ?X] => pose proof (is_fresh X) as H; revert H; move: {1 3}(X) => l Hl end.
-  set_solver.
-Qed.
-
-Lemma heap_fresh_not_in ps h:
-  (heap_fresh ps h).1 ∉ ps.
-Proof.
-  unfold heap_fresh => /=.
-  match goal with | |- context [fresh ?X] => pose proof (is_fresh X) as H; revert H; move: {1 3}(X) => l Hl end.
-  set_solver.
-Qed.
-Opaque heap_fresh.
-
-Lemma heap_alloc_list_fresh xs ps h:
-  ∃ h', heap_alloc_list xs (heap_fresh_list xs ps h) h h'.
-Proof.
-  elim: xs ps h. { case; naive_solver. }
-  move => a ? IH //= ps h. exploit IH => -[??].
+  elim: xs bs h. { case; naive_solver. }
+  move => a ? IH //= bs h. exploit IH => -[??].
   split!; [|done]. by apply heap_fresh_is_fresh.
 Qed.
 
-Global Transparent heap_alloc_h. (* TODO: remove this *)
-Lemma heap_alive_alloc h l l' n :
-  l.1 = l'.1 →
-  l'.2 ≤ l.2 < l'.2 + n →
-  heap_alive (heap_alloc h l' n) l.
-Proof.
-  destruct l as [p o], l' as [p' o'].
-  move => ??. simplify_eq/=. rewrite /heap_alive/=/heap_alloc_h/offset_loc/=.
-  apply lookup_union_is_Some. left. apply list_to_map_lookup_is_Some.
-  eexists 0. apply elem_of_list_fmap. eexists (o - o').
-  split; [do 2 f_equal; lia|]. apply elem_of_seqZ. lia.
-Qed.
-Global Opaque heap_alloc_h.
-
-Lemma heap_alive_update h l l' v :
-  heap_alive h l →
-  heap_alive (heap_update h l' v) l.
-Proof. move => ?. rewrite /heap_alive/=. by apply lookup_alter_is_Some. Qed.
-
-Lemma heap_free_update h l l' v :
-  l'.1 = l.1 →
-  heap_free (heap_update h l' v) l = heap_free h l.
-Proof.
-  move => ?. apply heap_state_eq => /=. split; [|done].
-  apply map_filter_strong_ext_1 => l'' ?. destruct l'', l', l; simplify_eq/=.
-  split => -[?]; rewrite lookup_alter_ne //; congruence.
-Qed.
-
-Lemma heap_free_alloc h l n :
-  l.1 ∉ h_provs h →
-  heap_free (heap_alloc h l n) l = heap_add_provs h {[l.1]}.
-Proof.
-  move => Hin.
-  apply heap_state_eq => /=. split; [|done].
-  rewrite map_filter_union.
-  2: { apply map_disjoint_list_to_map_l. rewrite Forall_fmap. apply Forall_forall.
-       move => ?? /=. apply eq_None_not_Some. by move => /heap_wf/=. }
-  rewrite (map_filter_id _ (h_heap h)).
-  2: { move => [??] ? /(mk_is_Some _ _) /heap_wf/=Hwf ?. subst. naive_solver. }
-  rewrite map_filter_empty_iff_2 ?left_id_L //.
-  move => ?? /(elem_of_list_to_map_2 _ _ _)/elem_of_list_fmap[?[??]]. simplify_eq/=. by apply.
-Qed.
-
-Lemma h_block_heap_alloc h l n:
+(** *** heap_range lemmata *)
+Lemma heap_range_alloc h l z :
   heap_is_fresh h l →
-  (h_block (heap_alloc h l n) l.1) = zero_block l n.
+  heap_range (heap_alloc h l z) l z.
 Proof.
-  intros Hfresh.
-  rewrite /h_block /heap_alloc /zero_block /=.
-  apply map_eq; intros i.
-  rewrite !lookup_total_gmap_curry.
-  assert (h_heap h !! (l.1, i) = None) as Hlook.
-  { rewrite /heap_is_fresh in Hfresh.
-    destruct lookup eqn: Hlook; last done.
-    destruct l; simpl in *.
-    exfalso. eapply Hfresh, (heap_wf _ (p, i)); eauto.
-  }
-  rewrite lookup_union; rewrite Hlook; clear Hlook.
-  destruct lookup; done.
+  move => [Hfresh ?] l' ? //=.
+  rewrite lookup_union_is_Some.
+  rewrite list_to_map_lookup_is_Some.
+  setoid_rewrite elem_of_list_fmap.
+  setoid_rewrite elem_of_seqZ.
+  split.
+  - move => Hheap. destruct l, l'. destruct!; simplify_eq/=.
+    + lia.
+    + by apply lookup_heap_is_Some_elem_of_h_provs in Hheap.
+  - destruct l, l'. naive_solver.
 Qed.
 
-Lemma h_block_heap_update hs l v:
-  h_block (heap_update hs l v) l.1 = alter (λ _, v) l.2 (h_block hs l.1).
+Lemma heap_range_alloc_other h l z l' z' :
+  l.1 ≠ l'.1 →
+  heap_range h l' z' →
+  heap_range (heap_alloc h l z) l' z'.
 Proof.
-  rewrite /h_block/=. apply map_eq => i.
-  rewrite !lookup_total_gmap_curry.
-  destruct (decide (i = l.2)); simplify_map_eq.
-  - rewrite lookup_total_gmap_curry -?surjective_pairing. by simplify_map_eq.
-  - rewrite !lookup_alter_ne ?lookup_total_gmap_curry //. destruct l. naive_solver.
+  move => Hneq Hrange l'' ? //=.
+  rewrite lookup_union_is_Some.
+  rewrite list_to_map_lookup_is_Some.
+  setoid_rewrite elem_of_list_fmap.
+  setoid_rewrite elem_of_seqZ.
+  split.
+  - move => [|].
+    + move => [v [o [[= ??] ?]]]. simplify_eq.
+    + by apply Hrange.
+  - destruct l, l'. move => /Hrange. naive_solver.
+Qed.
+
+Lemma heap_range_alloc_other' h l z l' z' :
+  0 < z' →
+  heap_is_fresh h l →
+  heap_range h l' z' →
+  heap_range (heap_alloc h l z) l' z'.
+Proof.
+  move => ? [Hfresh [??]] Hrange l'' ? //=.
+  rewrite lookup_union_is_Some.
+  rewrite list_to_map_lookup_is_Some.
+  setoid_rewrite elem_of_list_fmap.
+  setoid_rewrite elem_of_seqZ.
+  split.
+  - move => [|].
+    + move => [v [o [[= ??] ?]]].
+      unfold offset_loc in *. simplify_eq/=.
+      specialize (Hrange (l.1, l'.2) ltac:(done)).
+      contradict Hfresh. eapply (lookup_heap_is_Some_elem_of_h_provs (_, _)).
+      apply Hrange => /=. lia.
+    + by apply Hrange.
+  - destruct l, l'. move => /Hrange. naive_solver.
+Qed.
+
+Lemma heap_range_update h l z l' v :
+  heap_range h l z ↔
+  heap_range (heap_update h l' v) l z.
+Proof.
+  rewrite /heap_range //=.
+  by setoid_rewrite lookup_alter_is_Some.
+Qed.
+
+Lemma heap_range_free_other h l z l' :
+  l.1 ≠ l'.1 →
+  heap_range h l z →
+  heap_range (heap_free h l') l z.
+Proof.
+  move => Hneq Hrange l'' Heq //=.
+  rewrite -(Hrange l'' ltac:(done)).
+  unfold is_Some.
+  setoid_rewrite map_lookup_filter_Some.
+  rewrite -Heq in Hneq.
+  naive_solver.
 Qed.
 
 (** *** heap_preserved *)
@@ -703,6 +1066,12 @@ Lemma heap_preserved_mono m1 m2 h:
   m2 ⊆ m1 →
   heap_preserved m2 h.
 Proof. unfold heap_preserved => Hp Hsub ???. apply: Hp. by eapply map_subseteq_spec. Qed.
+
+Lemma heap_preserved_union m1 m2 h:
+  heap_preserved m1 h →
+  heap_preserved m2 h →
+  heap_preserved (m1 ∪ m2) h.
+Proof. unfold heap_preserved => Hp Hsub ?? /lookup_union_Some_raw ?. naive_solver. Qed.
 
 Lemma heap_preserved_lookup_r m h h' l v:
   h_heap h !! l = v →
@@ -719,7 +1088,7 @@ Proof.
   move => Hp ???? /=. rewrite lookup_alter_ne; [by eapply Hp|naive_solver].
 Qed.
 
-Lemma heap_preserved_alloc l n h m:
+Lemma heap_preserved_alloc l n h m :
   heap_preserved m h →
   m !! l.1 = None →
   heap_preserved m (heap_alloc h l n).
@@ -744,6 +1113,151 @@ Proof.
   move => Hp l f /= /lookup_insert_Some[[??]|[??]]; simplify_eq.
   - rewrite h_block_lookup. by destruct l.
   - apply: Hp => /=. rewrite lookup_delete_Some. done.
+Qed.
+
+(** ** initial heap *)
+Definition fd_init_heap (f : string) (statics : list (string * Z)) : gmap prov (gmap Z val) :=
+  list_to_map (zip_with (λ p sv, (p, zero_block (p, 0%Z) sv.2))
+                 (static_provs f statics) statics).
+
+Lemma fd_init_heap_lookup_Some f statics p h :
+  fd_init_heap f statics !! p = Some h ↔ ∃ i s, statics !! i = Some s ∧ static_provs f statics !! i = Some p ∧ h = zero_block (p, 0%Z) s.2.
+Proof.
+  rewrite /fd_init_heap list_to_map_lookup_Some_NoDup.
+  - f_equiv => ?. rewrite lookup_zip_with_Some. naive_solver.
+  - apply NoDup_alt => ???. rewrite !list_lookup_fmap_Some.
+    setoid_rewrite lookup_zip_with_Some.
+    setoid_rewrite static_provs_lookup_Some.
+    naive_solver.
+Qed.
+
+Definition fds_init_heap (fns : gmap string (list (string * Z))) : gmap prov (gmap Z val) :=
+  map_fold (λ f fn h, fd_init_heap f fn ∪ h) ∅ fns.
+
+Lemma fds_init_heap_empty :
+  fds_init_heap ∅ = ∅.
+Proof. done. Qed.
+
+Lemma fds_init_heap_insert f fn fns :
+  fns !! f = None →
+  fds_init_heap (<[f := fn]> fns) = fd_init_heap f fn ∪ fds_init_heap fns.
+Proof.
+  move => ?.
+  rewrite /fds_init_heap map_fold_insert_L //.
+  move => ?????? ??.
+  rewrite !assoc_L. f_equal. apply map_union_comm.
+  apply map_disjoint_spec.
+  move => ??? /fd_init_heap_lookup_Some[? [? [? [/static_provs_lookup_Some ? ?]]]].
+  move => /fd_init_heap_lookup_Some[? [? [? [/static_provs_lookup_Some ? ?]]]].
+  naive_solver.
+Qed.
+
+Lemma fd_init_heap_map_disjoint f1 f2 s1 s2 :
+  f1 ≠ f2 →
+  fd_init_heap f1 s1 ##ₘ fd_init_heap f2 s2.
+Proof.
+  move => ?. apply map_disjoint_spec => ???.
+  rewrite !fd_init_heap_lookup_Some.
+  setoid_rewrite static_provs_lookup_Some.
+  naive_solver.
+Qed.
+
+Lemma fds_init_heap_map_disjoint f s fns :
+  fns !! f = None →
+  fd_init_heap f s ##ₘ fds_init_heap fns.
+Proof.
+  rewrite /fds_init_heap.
+  apply (map_fold_ind (λ x m, m !! f = None → fd_init_heap f s ##ₘ x)).
+  { move => ?. apply map_disjoint_empty_r. }
+  move => ?????? /lookup_insert_None [??].
+  apply map_disjoint_union_r_2; [|naive_solver].
+  by apply fd_init_heap_map_disjoint.
+Qed.
+
+Lemma fds_init_heap_lookup_Some fns p h :
+  fds_init_heap fns !! p = Some h ↔ ∃ f statics, fns !! f = Some statics ∧ fd_init_heap f statics !! p = Some h.
+Proof.
+  rewrite /fds_init_heap.
+  apply (map_fold_ind (λ x m, x !! p = Some h ↔ ∃ f statics, m !! f = Some statics ∧
+     fd_init_heap f statics !! p = Some h)).
+  { setoid_rewrite lookup_empty. naive_solver. }
+  move => ????? IH.
+  rewrite lookup_union_Some_raw IH. split.
+  - move => [? |[?[?[?[??]]]]].
+    + eexists _, _. split; [|done]. apply lookup_insert.
+    + eexists _, _. split; [|done]. rewrite lookup_insert_ne //. naive_solver.
+  - move => [?[? [/lookup_insert_Some[[??]|[??]] ?]]]; simplify_eq; [naive_solver|].
+    right. split; [|naive_solver]. apply: map_disjoint_Some_r; [|done]. by apply fd_init_heap_map_disjoint.
+Qed.
+
+Lemma fd_init_heap_snoc f statics s :
+  fd_init_heap f (statics ++ [s]) =
+    <[ProvStatic f (length statics) := zero_block (ProvStatic f (length statics), 0) s.2]>
+      (fd_init_heap f statics).
+Proof.
+  apply map_eq => i. apply option_eq => h.
+  rewrite lookup_insert_Some !fd_init_heap_lookup_Some.
+  setoid_rewrite static_provs_snoc.
+  setoid_rewrite lookup_snoc_Some.
+  setoid_rewrite static_provs_length.
+  setoid_rewrite static_provs_lookup_Some.
+  naive_solver lia.
+Qed.
+
+Lemma fd_init_heap_ext f s1 s2 :
+  s1.*2 = s2.*2 →
+  fd_init_heap f s1 = fd_init_heap f s2.
+Proof.
+  move => Heq.
+  apply map_eq => ?. apply option_eq => ?.
+  rewrite !fd_init_heap_lookup_Some.
+  setoid_rewrite static_provs_lookup_Some.
+  have -> : length s1 = length s2 by rewrite -(fmap_length snd) Heq fmap_length.
+  split; move => [i [[? b] [?[[??]?]]]]; simplify_eq.
+  - have : s2.*2 !! i = Some b by rewrite -Heq list_lookup_fmap_Some; naive_solver.
+    move => /list_lookup_fmap_Some[?[??]]. naive_solver.
+  - have : s1.*2 !! i = Some b by rewrite Heq list_lookup_fmap_Some; naive_solver.
+    move => /list_lookup_fmap_Some[?[??]]. naive_solver.
+Qed.
+
+Lemma fds_init_heap_union fns1 fns2 :
+  fns1 ##ₘ fns2 →
+  fds_init_heap (fns1 ∪ fns2) = fds_init_heap fns1 ∪ fds_init_heap fns2.
+Proof.
+  induction fns1 as [|x l fns1 ? IH ] using map_ind. { by rewrite fds_init_heap_empty ?left_id_L. }
+  move => Hdisj. rewrite -insert_union_l !fds_init_heap_insert // ?IH ?assoc_L //.
+  - apply: map_disjoint_weaken_l; [done|]. by apply insert_subseteq_r.
+  - apply lookup_union_None. split; [done|]. apply: map_disjoint_Some_l; [done|]. apply lookup_insert.
+Qed.
+
+Lemma fds_init_heap_disj fns1 fns2 :
+  fns1 ##ₘ fns2 →
+  fds_init_heap fns1 ##ₘ fds_init_heap fns2.
+Proof.
+  induction fns1 as [|x l fns1 ? IH ] using map_ind.
+  { move => ?. rewrite fds_init_heap_empty. apply map_disjoint_empty_l. }
+  move => Hdisj. rewrite !fds_init_heap_insert //. apply map_disjoint_union_l_2.
+  - apply fds_init_heap_map_disjoint. apply: map_disjoint_Some_l; [done|]. apply lookup_insert.
+  - apply IH. apply: map_disjoint_weaken_l; [done|]. by apply insert_subseteq_r.
+Qed.
+
+Lemma fd_init_heap_not_empty f fn :
+  Forall (λ z, 0 < z)%Z fn.*2  →
+  map_Forall (λ p b, b ≠ ∅) (fd_init_heap f fn).
+Proof.
+  move => Hall p b /fd_init_heap_lookup_Some[?[?[?[??]]]]. simplify_eq.
+  move => /map_empty. move => /(_ 0). apply not_eq_None_Some. eexists _.
+  rewrite zero_block_lookup_Some //. split!.
+  exploit @Forall_lookup_1; [done..| rewrite list_lookup_fmap_Some; naive_solver|].
+  simpl. lia.
+Qed.
+
+Lemma fds_init_heap_not_empty fns :
+  map_Forall (λ f fn, Forall (λ z, 0 < z)%Z fn.*2) fns →
+  map_Forall (λ p b, b ≠ ∅) (fds_init_heap fns).
+Proof.
+  move => Hall p b /fds_init_heap_lookup_Some[?[?[??]]].
+  apply: fd_init_heap_not_empty; [|done]. by apply: Hall.
 Qed.
 
 (** ** state *)
@@ -815,6 +1329,10 @@ Definition eval_binop (op : binop) (v1 v2 : val) : option val :=
   | LtOp => z1 ← val_to_Z v1; z2 ← val_to_Z v2; Some (ValBool (bool_decide (z1 < z2)))
   end.
 
+(* substitution on function call *)
+Definition subst_static (f : string) (static_vars : list (string * Z)) :=
+  subst_l (static_vars.*1) (ValLoc <$> static_locs f static_vars).
+
 Inductive head_step : rec_state → option rec_event → (rec_state → Prop) → Prop :=
 | BinOpS v1 op v2 h fns:
   head_step (Rec (BinOp (Val v1) op (Val v2)) h fns) None (λ σ',
@@ -846,7 +1364,7 @@ Inductive head_step : rec_state → option rec_event → (rec_state → Prop) �
   fns !! f = Some fn →
   head_step (Rec (Call (Val (ValFn f)) (Val <$> vs)) h fns) None (λ σ,
    length vs = length fn.(fd_args) ∧
-   σ = Rec (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body))) h fns)
+   σ = Rec (AllocA fn.(fd_vars) (subst_static f fn.(fd_static_vars) (subst_l fn.(fd_args) vs fn.(fd_body)))) h fns)
 | CallExternalS f fns vs h:
   fns !! f = None →
   head_step (Rec (Call (Val (ValFn f)) (Val <$> vs)) h fns) (Some (Outgoing, ERCall f vs h)) (λ σ, σ = Rec (Waiting true) h fns)
@@ -1048,12 +1566,14 @@ Qed.
 
 Record static_fndef : Type := {
   sfd_args : list string;
+  sfd_static_vars : list (string * Z);
   sfd_vars : list (string * Z);
   sfd_body : static_expr;
 }.
 
 Program Definition static_fndef_to_fndef (fn : static_fndef) : fndef := {|
    fd_args := fn.(sfd_args);
+   fd_static_vars := fn.(sfd_static_vars);
    fd_vars := fn.(sfd_vars);
    fd_body := static_expr_to_expr fn.(sfd_body);
 |}.
@@ -1061,6 +1581,7 @@ Next Obligation. move => ?. apply static_expr_is_static. Qed.
 
 Definition fndef_to_static_fndef (fn : fndef) : static_fndef := {|
    sfd_args := fn.(fd_args);
+   sfd_static_vars := fn.(fd_static_vars);
    sfd_vars := fn.(fd_vars);
    sfd_body := expr_to_static_expr fn.(fd_body);
 |}.
@@ -1258,7 +1779,7 @@ Global Hint Resolve rec_step_ReturnExt_s : typeclass_instances.
 Lemma rec_step_Call_i fns h e K f vs es `{!RecExprFill e K (Call (Val (ValFn f)) es)} `{!AsVals es vs None}:
   TStepI rec_trans (Rec e h fns) (λ G,
     (∀ fn, fns !! f = Some fn → G true None (λ G', length vs = length fn.(fd_args) ∧
-         G' (Rec (expr_fill K (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body)))) h fns))) ∧
+         G' (Rec (expr_fill K (AllocA fn.(fd_vars) (subst_static f fn.(fd_static_vars) (subst_l fn.(fd_args) vs fn.(fd_body))))) h fns))) ∧
     (fns !! f = None → G true (Some (Outgoing, ERCall f vs h)) (λ G',
            G' (Rec (expr_fill K (Waiting true)) h fns)))).
 Proof.
@@ -1276,7 +1797,7 @@ Global Hint Resolve rec_step_Call_i : typeclass_instances.
 Lemma rec_step_Call_s fns h e K f vs `{!RecExprFill e K (Call (Val (ValFn f)) es)} `{!AsVals es vs None}:
   TStepS rec_trans (Rec e h fns) (λ G,
     (∃ fn, fns !! f = Some fn ∧ G None (λ G', length vs = length fn.(fd_args) → G'
-             (Rec (expr_fill K (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body)))) h fns))) ∨
+             (Rec (expr_fill K (AllocA fn.(fd_vars) (subst_static f fn.(fd_static_vars) (subst_l fn.(fd_args) vs fn.(fd_body))))) h fns))) ∨
     (fns !! f = None ∧ G (Some (Outgoing, ERCall f vs h)) (λ G',
            G' (Rec (expr_fill K (Waiting true)) h fns)))
 ).
@@ -1540,9 +2061,9 @@ Lemma rec_proof fns1 fns2:
              ⪯{rec_trans, rec_trans, n', b}
          Rec (expr_fill K2 (Val v2')) h2' fns2) →
 
-       Rec (expr_fill K1 (AllocA fn1.(fd_vars) $ subst_l fn1.(fd_args) vs (fd_body fn1))) h fns1
+       Rec (expr_fill K1 (AllocA fn1.(fd_vars) $ subst_static f fn1.(fd_static_vars) $ subst_l fn1.(fd_args) vs (fd_body fn1))) h fns1
            ⪯{rec_trans, rec_trans, n, false}
-       Rec (expr_fill K2 (AllocA fn2.(fd_vars) $ subst_l fn2.(fd_args) vs (fd_body fn2))) h fns2)) →
+       Rec (expr_fill K2 (AllocA fn2.(fd_vars) $ subst_static f fn2.(fd_static_vars) $ subst_l fn2.(fd_args) vs (fd_body fn2))) h fns2)) →
 
   trefines (rec_mod fns1) (rec_mod fns2).
 Proof.
@@ -1580,8 +2101,8 @@ Proof.
        h1 = h2 ∧
        fns1 !! f = Some fn1 ∧
        fns2 !! f = Some fn2 ∧
-       e1 = expr_fill K1 (AllocA fn1.(fd_vars) $ subst_l (fd_args fn1) vs (fd_body fn1)) ∧
-       e2 = expr_fill K2 (AllocA fn2.(fd_vars) $ subst_l (fd_args fn2) vs (fd_body fn2)) ∧
+       e1 = expr_fill K1 (AllocA fn1.(fd_vars) $ subst_static f fn1.(fd_static_vars) $ subst_l (fd_args fn1) vs (fd_body fn1)) ∧
+       e2 = expr_fill K2 (AllocA fn2.(fd_vars) $ subst_static f fn2.(fd_static_vars) $ subst_l (fd_args fn2) vs (fd_body fn2)) ∧
        length vs = length (fd_args fn1) ∧
        ∀ v' h',
          Rec (expr_fill K1 (Val v')) h' fns1
@@ -1655,9 +2176,9 @@ Lemma rec_prepost_proof {S} {M : ucmra} `{!Shrink M} R `{!∀ b, Transitive (R b
           Rec (expr_fill K1 (Val v1)) h1' fns1
               ⪯{rec_trans, prepost_trans i o rec_trans, n', b}
           (SMProg, Rec (expr_fill K2 (Val v2)) h2' fns2, (PPInside, s3, uPred_shrink r3))) →
-      Rec (expr_fill K1 (AllocA fn1.(fd_vars) $ subst_l fn1.(fd_args) vs1 fn1.(fd_body))) h1 fns1
+      Rec (expr_fill K1 (AllocA fn1.(fd_vars) $ subst_static f fn1.(fd_static_vars) $ subst_l fn1.(fd_args) vs1 fn1.(fd_body))) h1 fns1
           ⪯{rec_trans, prepost_trans i o rec_trans, n, false}
-          (SMProg, Rec (expr_fill K2 (AllocA fn2.(fd_vars) $  subst_l fn2.(fd_args) vs2 fn2.(fd_body))) h2 fns2, (PPInside, s2, uPred_shrink r2')))))) →
+          (SMProg, Rec (expr_fill K2 (AllocA fn2.(fd_vars) $ subst_static f fn2.(fd_static_vars) $  subst_l fn2.(fd_args) vs2 fn2.(fd_body))) h2 fns2, (PPInside, s2, uPred_shrink r2')))))) →
   trefines (rec_mod fns1) (prepost_mod i o (rec_mod fns2) s0 r0).
 Proof.
   move => ?? HR Hc.
@@ -1727,6 +2248,7 @@ Proof.
     + split! => //. naive_solver.
     + by split!.
 Qed.
+
 (** * closing *)
 (**
 module rec_event:
@@ -1744,8 +2266,8 @@ Inductive rec_closed_event : Type :=
 .
 
 Inductive rec_closed_state :=
-| RCStart
-| RCRecvStart (f : string) (vs : list Z)
+| RCStart (h : heap_state)
+| RCRecvStart (h : heap_state) (f : string) (vs : list Z)
 | RCRunning
 | RCRecvCall1 (f : string) (args : list val) (h : heap_state)
 | RCRecvCall2 (f : string) (args : list Z) (h : heap_state)
@@ -1756,11 +2278,11 @@ Inductive rec_closed_state :=
 
 Inductive rec_closed_step :
   rec_closed_state → option (sm_event rec_event rec_closed_event) → (rec_closed_state → Prop) → Prop :=
-| RCStartS f vs:
-  rec_closed_step RCStart (Some (SMEEmit (ERCStart f vs))) (λ σ, σ = RCRecvStart f vs)
-| RCRecvStartS f vs:
-  rec_closed_step (RCRecvStart f vs)
-                  (Some (SMEReturn (Some (Incoming, ERCall f (ValNum <$> vs) ∅)))) (λ σ, σ = RCRunning)
+| RCStartS h f vs:
+  rec_closed_step (RCStart h) (Some (SMEEmit (ERCStart f vs))) (λ σ, σ = RCRecvStart h f vs)
+| RCRecvStartS h f vs:
+  rec_closed_step (RCRecvStart h f vs)
+                  (Some (SMEReturn (Some (Incoming, ERCall f (ValNum <$> vs) h)))) (λ σ, σ = RCRunning)
 | RCRunningS f vs h:
   rec_closed_step RCRunning (Some (SMERecv (Outgoing, ERCall f vs h))) (λ σ, σ = RCRecvCall1 f vs h)
 | RCRecvCall1S f vs h:
@@ -1783,14 +2305,14 @@ Inductive rec_closed_step :
 Definition rec_closed_filter_trans : mod_trans (sm_event rec_event rec_closed_event) :=
   ModTrans rec_closed_step.
 
-Definition rec_closed_filter : module (sm_event rec_event rec_closed_event) :=
-  Mod rec_closed_filter_trans RCStart.
+Definition rec_closed_filter (h : heap_state) : module (sm_event rec_event rec_closed_event) :=
+  Mod rec_closed_filter_trans (RCStart h).
 
 Global Instance rec_closed_filter_vis_no_all : VisNoAng rec_closed_filter_trans.
 Proof. move => ????. inv_all @m_step; naive_solver. Qed.
 
-Definition rec_closed (m : module rec_event) : module rec_closed_event :=
-  seq_map_mod m rec_closed_filter SMFilter.
+Definition rec_closed (h : heap_state) (m : module rec_event) : module rec_closed_event :=
+  seq_map_mod m (rec_closed_filter h) SMFilter.
 
 (** * Linking *)
 (** ** Syntactic linking *)
@@ -1798,8 +2320,12 @@ Definition rec_syn_link (fns1 fns2 : gmap string fndef) : gmap string fndef :=
   fns1 ∪ fns2.
 
 Definition rec_ctx_refines (fnsi fnss : gmap string fndef) :=
-  ∀ C, trefines (rec_closed (rec_mod (rec_syn_link fnsi C)))
-                (rec_closed (rec_mod (rec_syn_link fnss C))).
+  ∀ C,
+    (* TODO: Move this constraint to fndef? *)
+    map_Forall (λ f fn, Forall (λ z, 0 < z) fn.(fd_static_vars).*2) C →
+    trefines
+         (rec_closed (heap_from_blocks (fds_init_heap (fd_static_vars <$> fnsi ∪ C))) (rec_mod (rec_syn_link fnsi C)))
+         (rec_closed (heap_from_blocks (fds_init_heap (fd_static_vars <$> fnss ∪ C))) (rec_mod (rec_syn_link fnss C))).
 
 (** ** Semantic linking *)
 Definition rec_link_filter (fns1 fns2 : gset string) : seq_product_case → list seq_product_case → rec_ev → seq_product_case → list seq_product_case → rec_ev → bool → Prop :=
@@ -1946,12 +2472,12 @@ Proof.
     + revert select ((_ ∪ _) !! _ = Some _) => /lookup_union_Some_raw[?|[??]].
       * tstep_s. left. split!. tend. split!.
         apply: Hloop. rewrite !expr_fill_app. split!; [done..|].
-        apply is_static_expr_expr_fill. split!. apply is_static_expr_subst_l.
+        apply is_static_expr_expr_fill. split!. do 2 apply is_static_expr_subst_l.
         apply is_static_expr_mono. apply fd_static.
       * tstep_s. right. simpl_map_decide. split!.
         tstep_s. left. split!. tstep_s. left. split! => ?. tend.
         split!. apply: Hloop. split!; [by econs|done..|].
-        apply is_static_expr_subst_l. apply is_static_expr_mono. apply fd_static.
+        do 2 apply is_static_expr_subst_l. apply is_static_expr_mono. apply fd_static.
     + revert select ((_ ∪ _) !! _ = None) => /lookup_union_None[??].
       tstep_s. right. simpl_map_decide. split!; [done|]. tend. split!.
       apply: Hloop. split!; [by econs|done..].
@@ -1982,10 +2508,10 @@ Proof.
         tstep_s. right. simpl_map_decide. split!.
         tstep_s. left. split!. tstep_s. left. split! => ?.
         tend. split!. apply: Hloop. split!; [by econs|done..|].
-        apply is_static_expr_subst_l. apply is_static_expr_mono. apply fd_static.
+        do 2 apply is_static_expr_subst_l. apply is_static_expr_mono. apply fd_static.
       * tstep_s. left. split! => /= ?. tend. split!.
         apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
-        apply is_static_expr_expr_fill. split!. apply is_static_expr_subst_l.
+        apply is_static_expr_expr_fill. split!. do 2 apply is_static_expr_subst_l.
         apply is_static_expr_mono. apply fd_static.
     + revert select ((_ ∪ _) !! _ = None) => /lookup_union_None[??].
       tstep_s. right. simpl_map_decide. split!;[done|] => /=. tend. split!; [done..|].
@@ -2061,7 +2587,7 @@ Proof.
       * tstep_s. naive_solver.
       * tstep_s. left. split!; [apply lookup_union_Some; naive_solver|] => ?. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..|].
-        apply is_static_expr_expr_fill. split!. apply is_static_expr_subst_l.
+        apply is_static_expr_expr_fill. split!. do 2 apply is_static_expr_subst_l.
         apply is_static_expr_mono. apply fd_static.
       * move => *. destruct!/=. repeat case_bool_decide => //.
         -- tend. split!. tstep_i. split => *; simplify_eq.
@@ -2105,7 +2631,7 @@ Proof.
       * tstep_s. naive_solver.
       * tstep_s. left. split!; [apply lookup_union_Some; naive_solver|] => ?. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..|].
-        apply is_static_expr_expr_fill. split!. apply is_static_expr_subst_l.
+        apply is_static_expr_expr_fill. split!. do 2 apply is_static_expr_subst_l.
         apply is_static_expr_mono. apply fd_static.
       * move => *. destruct!/=. repeat case_bool_decide => //.
         -- tend. split!. tstep_i. split => *; simplify_eq.
@@ -2134,10 +2660,12 @@ Qed.
 
 Lemma rec_trefines_implies_ctx_refines fnsi fnss :
   dom fnsi = dom fnss →
+  fd_static_vars <$> fnsi = fd_static_vars <$> fnss →
   trefines (rec_mod fnsi) (rec_mod fnss) →
   rec_ctx_refines fnsi fnss.
 Proof.
-  move => Hdom Href C. rewrite /rec_syn_link map_difference_union_r (map_difference_union_r fnss).
+  move => Hdom Hs Href C ?. rewrite /rec_syn_link map_difference_union_r (map_difference_union_r fnss).
+  rewrite !map_fmap_union Hs. rewrite {1}(map_difference_eq_dom_L C fnsi fnss) //.
   apply seq_map_mod_trefines. { apply _. } { apply _. }
   etrans. { apply rec_syn_link_refines_link. apply map_disjoint_difference_r'. }
   etrans. 2: { apply rec_link_refines_syn_link. apply map_disjoint_difference_r'. }

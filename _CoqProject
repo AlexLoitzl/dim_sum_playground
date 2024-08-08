@@ -31,7 +31,6 @@ dimsum/spec.v
 dimsum/spec_mod.v
 dimsum_examples/asm.v
 dimsum_examples/rec.v
-dimsum_examples/rec_heap_bij_pure.v
 dimsum_examples/rec_heap_bij.v
 dimsum_examples/rec_to_asm.v
 dimsum_examples/r2a_bij_vertical.v

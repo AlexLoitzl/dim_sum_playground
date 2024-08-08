@@ -541,8 +541,8 @@ Theorem coro_spec finit regs_init ssz_init fns1 fns2 m1 m2 ins1 ins2 f2i1 f2i2
   r2a_mem_stack_mem (regs_init !!! "SP") ssz_init ##ₘ coro_regs_mem regs_init →
   trefines
     (asm_link yield_asm_dom (ins1 ∪ ins2) (asm_mod yield_asm)
-       (asm_link ins1 ins2 (rec_to_asm ins1 f2i1 ∅ m1) (rec_to_asm ins2 f2i2 ∅ m2)))
-    (rec_to_asm ins f2i mo (coro_link fns1 fns2 finit m1 m2))
+       (asm_link ins1 ins2 (rec_to_asm ins1 f2i1 ∅ ∅ m1) (rec_to_asm ins2 f2i2 ∅ ∅ m2)))
+    (rec_to_asm ins f2i mo ∅ (coro_link fns1 fns2 finit m1 m2))
 .
 Proof.
   move => fns ins f2i mo Hinit Hfinit Hyf Hidisj Hfdisj Hydisj Hy1 Hy2 Hwf1 Hwf2 Hag Hf1 Hf2 Hfy Hmo.
@@ -590,7 +590,7 @@ Proof.
   { iSatMono. iIntros!. rewrite /r2a_mem_map/mo big_sepM_empty big_sepM_union //. iDestruct!.
     iDestruct select (r2a_f2i_incl f2i1 _) as "#Hf2i1". iFrame "#∗".
     iDestruct (r2a_mem_stack_init with "[$]") as "?".
-    iDestruct "Hf2i1" as "-#?". iAccu. }
+    iDestruct "Hf2i1" as "-#?". iSplit!. iAccu. }
   tsim_mirror m1 σ1. { tstep_s. by exists None. }
   move => *. subst.
   tstep_s. eexists (Some (Incoming, _)). split!. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
@@ -652,7 +652,7 @@ Proof.
        end). }
   { split!. {
       iSplit; iIntros!; iDestruct select (r2a_f2i_incl f2i2 _) as "#?"; iFrame "#∗".
-      by iApply big_sepM_empty. } } { done. }
+      iSplit!. by iApply big_sepM_empty. } } { done. }
   clear -Hyf Hidisj Hfdisj Hydisj Hy1 Hy2 Hwf1 Hwf2 Hag VisNoAng0 VisNoAng1.
   have ? : yield_addr ∈ yield_asm_dom by rewrite /yield_asm_dom /yield_asm; unlock; compute_done.
   move => n ? Hloop [[[σpy1 σpy2][yt yregs]][[[σpc1 σpc2][[σsm1 σ1][[pp1 [cs1 lr1]]x1]]][[σsm2 σ2][[pp2 [cs2 lr2]]x2]]]].

@@ -2,7 +2,6 @@ From iris.algebra Require Import big_op gmap frac agree dfrac_agree.
 From iris.base_logic.lib Require Import ghost_map.
 From dimsum.core.iris Require Export iris.
 From dimsum.examples Require Export rec.
-From dimsum.examples Require Import memmove.
 Set Default Proof Using "Type".
 
 Local Open Scope Z_scope.
@@ -56,12 +55,15 @@ Section array.
     - move => Hi Heq.
       exploit (Hi (l'.2 - l.2)). { unfold offset_loc. destruct l, l'; simplify_eq/=. f_equal. lia. }
       lia.
-    - move => Hi ??. simplify_eq/=. lia.
+    - move => Hi ??. simplify_eq/=. naive_solver lia.
   Qed.
 
   Lemma array_lookup_is_Some l l' vs :
     is_Some (array l vs !! l') ↔ l.1 = l'.1 ∧ l.2 ≤ l'.2 < l.2 + length vs.
-  Proof. rewrite -not_eq_None_Some array_lookup_None. naive_solver lia. Qed.
+  Proof.
+    rewrite -not_eq_None_Some array_lookup_None.
+    destruct (decide (l.1 = l'.1)); naive_solver lia.
+  Qed.
 End array.
 
 Definition fnsUR : cmra :=
@@ -108,7 +110,8 @@ Section definitions.
     ghost_map_auth rec_mapsto_name 1 h.
 
   Definition rec_alloc_def (l : loc) (sz : Z) : iProp Σ :=
-    ⌜l.2 = 0⌝ ∗ ghost_map_elem rec_alloc_name l.1 (DfracOwn 1) sz.
+    ⌜l.2 = 0⌝ ∗ ⌜is_ProvBlock l.1⌝ ∗
+    ghost_map_elem rec_alloc_name l.1 (DfracOwn 1) sz.
   Local Definition rec_alloc_aux : seal (@rec_alloc_def).
   Proof. by eexists. Qed.
   Definition rec_alloc := rec_alloc_aux.(unseal).
@@ -183,7 +186,8 @@ Section lemmas.
     iIntros (Ha) "Hh".
     iMod (rec_mapsto_alloc_big with "Hh") as "[$ ?]".
     { apply map_disjoint_list_to_map_l. apply Forall_forall => -[??] /= /elem_of_list_fmap[?[??]].
-      simplify_eq. apply eq_None_not_Some => /heap_wf. unfold heap_is_fresh in *. naive_solver. }
+      simplify_eq. apply eq_None_not_Some => /lookup_heap_is_Some_elem_of_h_provs/=.
+      unfold heap_is_fresh in *. naive_solver. }
     rewrite big_sepM_list_to_map. 2: {
       apply NoDup_alt => ???. do 2 setoid_rewrite list_lookup_fmap_Some.
       setoid_rewrite lookup_seqZ => ??. naive_solver lia. }
@@ -253,12 +257,13 @@ Section lemmas.
     rec_alloc_auth (dom (h_heap h)) ==∗
     rec_alloc_auth (dom (h_heap (heap_alloc h l sz))) ∗ rec_alloc l sz.
   Proof.
-    iIntros ([Hn Hl0] ?) "Ha". unseal.
+    iIntros ([Hn [Hl0 ?]] ?) "Ha". unseal.
     iDestruct "Ha" as (m Hsz Hin) "Ha".
     iMod (ghost_map_insert l.1 sz with "Ha") as "[Ha ?]". {
       apply eq_None_not_Some => -[??].
       have [//|_ Hdom]:= Hin _ _ ltac:(done) (l.1, 0).
-      apply Hn. apply (heap_wf _ (l.1, 0)). apply elem_of_dom. naive_solver lia.
+      apply Hn. apply (lookup_heap_is_Some_elem_of_h_provs (l.1, 0)).
+      apply elem_of_dom. naive_solver lia.
     }
     iModIntro. iFrame. iSplit!.
     - move => ?? /lookup_insert_Some. naive_solver lia.
@@ -267,7 +272,7 @@ Section lemmas.
         set_unfold. setoid_rewrite elem_of_seq.
         split; move => ?; destruct!/=.
         * lia.
-        * revert select (_ ∈ _) => /elem_of_dom/heap_wf. congruence.
+        * revert select (_ ∈ _) => /elem_of_dom/lookup_heap_is_Some_elem_of_h_provs. congruence.
         * left.  eexists (l +ₗ l'.2, _) => /=. split. { apply loc_eq. split!. lia. }
           eexists _. split; [done|]. eexists (Z.to_nat l'.2). lia.
       + rewrite dom_union_L elem_of_union dom_list_to_map_L.
@@ -293,17 +298,22 @@ Section lemmas.
     rec_alloc l sz -∗
     ⌜heap_range h l sz⌝.
   Proof.
-    unseal. iDestruct 1 as (p Hsz Hl) "?". iIntros "[% ?]".
+    unseal. iDestruct 1 as (p Hsz Hl) "?". iIntros "[% [% ?]]".
     iDestruct (ghost_map_lookup with "[$] [$]") as %?.
     iPureIntro. setoid_rewrite elem_of_dom in Hl.
     move => ??. rewrite Hl //. lia.
   Qed.
 
+  Lemma rec_alloc_block l sz :
+    rec_alloc l sz -∗
+    ⌜is_ProvBlock l.1⌝.
+  Proof. unseal. iIntros "[% [% ?]]". done. Qed.
+
   Lemma rec_alloc_size h l sz :
     rec_alloc_auth (dom (h_heap h)) -∗
     rec_alloc l sz -∗
     ⌜0 < sz⌝.
-    unseal. iDestruct 1 as (p Hsz Hl) "?". iIntros "[% ?]".
+    unseal. iDestruct 1 as (p Hsz Hl) "?". iIntros "[% [% ?]]".
     iDestruct (ghost_map_lookup with "[$] [$]") as %?.
     iPureIntro. naive_solver lia.
   Qed.
@@ -313,7 +323,7 @@ Section lemmas.
     rec_alloc l sz ==∗
     rec_alloc_auth (dom (h_heap (heap_free h l))).
   Proof.
-    unseal. iDestruct 1 as (p Hsz Hl) "?". iIntros "[% ?]".
+    unseal. iDestruct 1 as (p Hsz Hl) "?". iIntros "[% [% ?]]".
     iMod (ghost_map_delete with "[$] [$]"). iModIntro. iExists _. iFrame.
     iPureIntro. split => ?? /lookup_delete_Some. 1: naive_solver.
     move => [??] ?? /=. rewrite -Hl //.
@@ -334,9 +344,11 @@ Section lemmas.
     iDestruct (big_sepL2_cons_inv_r with "Hls") as (???) "[??]". simplify_eq/=.
     iDestruct (rec_alloc_range with "[$] [$]") as %?.
     iDestruct (rec_alloc_size with "[$] [$]") as %?.
+    iDestruct (rec_alloc_block with "[$]") as %?.
     iMod (rec_mapsto_free with "Hh [$]") as "Hh"; [done|lia|].
     iMod (rec_alloc_free with "Ha [$]") as "Ha".
-    iMod ("IH" with "Hh Ha [$] [$]") as (??) "[??]". iModIntro. iSplit!; [done|]. iFrame.
+    iMod ("IH" with "Hh Ha [$] [$]") as (??) "[??]". iModIntro.
+    iSplit!; [done|]. iFrame.
   Qed.
 
   (** fn ghost state  *)

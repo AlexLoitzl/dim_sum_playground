@@ -19,6 +19,7 @@ Definition asm_add : gmap Z asm_instr :=
 Definition rec_add : fndef := {|
   fd_args := ["a"; "b"];
   fd_vars := [];
+  fd_static_vars := [];
   fd_body := (BinOp (Var "a") AddOp (Var "b"));
   fd_static := I
 |}.
@@ -62,6 +63,7 @@ Definition asm_add_client : gmap Z asm_instr :=
 Definition rec_add_client : fndef := {|
   fd_args := [];
   fd_vars := [("tmp", 1)];
+  fd_static_vars := [];
   fd_body := (LetE "_" (Store (Var "tmp") (Val 1))
              (LetE "v" (Load (Var "tmp"))
              (rec.Call (Val (ValFn "add")) [Val 1; Var "v"])));
@@ -84,9 +86,10 @@ Local Ltac go_s := tstep_s; go.
 
 Lemma asm_add_refines_rec_add :
   trefines (asm_mod asm_add)
-           (rec_to_asm (dom asm_add) (<["add" := 100]> ∅) ∅ (rec_mod rec_add_prog)).
+           (rec_to_asm (dom asm_add) (<["add" := 100]> ∅) ∅ ∅ (rec_mod rec_add_prog)).
 Proof.
-  apply rec_to_asm_proof; [compute_done..|].
+  apply (rec_to_asm_proof True); [compute_done..| |].
+  { iIntros!. by iFrame. }
   move => n i rs mem K f fn vs h cs pc ssz rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? Hcall Hret.
   unfold rec_add_prog in Hf. unfold asm_add in Hi.
   move: Hf2i. rewrite !lookup_insert_Some => ?; destruct!; simplify_map_eq/=.
@@ -111,9 +114,10 @@ Qed.
 Lemma asm_add_client_refines_rec_add_client :
   trefines (asm_mod asm_add_client)
            (rec_to_asm (dom asm_add_client)
-              (<["add_client" := 200]> $ <["add" := 100]> ∅) ∅ (rec_mod rec_add_client_prog)).
+              (<["add_client" := 200]> $ <["add" := 100]> ∅) ∅ ∅ (rec_mod rec_add_client_prog)).
 Proof.
-  apply rec_to_asm_proof; [compute_done..|].
+  apply (rec_to_asm_proof True); [compute_done..| |].
+  { iIntros!. by iFrame. }
   move => n i rs mem K f fn vs h cs pc ssz rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? Hcall Hret.
   unfold rec_add_client_prog in Hf. unfold asm_add_client in Hi.
   move: Hf2i. rewrite !lookup_insert_Some => ?; destruct!; simplify_map_eq/=.
@@ -168,7 +172,7 @@ Proof.
   tstep_i; simplify_map_eq'.
   tstep_i; simplify_map_eq'.
   tstep_i => ??. simplify_map_eq'.
-  tstep_s => [?[??]]. simplify_eq.
+  tstep_s => ? [?[??]]. simplify_eq.
   have ->: rs !!! "SP" - 1 + 1 = rs !!! "SP" by lia.
   tstep_i; simplify_map_eq'.
   apply: Hret.
@@ -176,7 +180,7 @@ Proof.
   1: { iSatMonoBupd.
        iMod (r2a_mem_delete 1 with "[$] [Hret]") as "?"; [done|..].
        { iSplitL; [|done]. iExists _. iFrame. }
-       iMod (r2a_heap_free _ (heap_fresh ∅ h) with "[$] [$]") as "?".
+       iMod (r2a_heap_free _ (heap_fresh ∅ h) with "[$] [$]") as "?"; first done.
        iModIntro. iFrame. simplify_map_eq'.
        by rewrite Z.sub_add.
   }
@@ -187,7 +191,7 @@ Qed.
 Lemma full_add_stack :
   trefines (asm_mod full_asm_add)
            (rec_to_asm {[ 100; 101; 200; 201; 202; 203; 204; 205 ]}
-              (<["add_client" := 200]> $ <["add" := 100]> ∅) ∅ (rec_mod full_rec_add_prog)).
+              (<["add_client" := 200]> $ <["add" := 100]> ∅) ∅ ∅ (rec_mod full_rec_add_prog)).
 Proof.
   etrans. {
     apply asm_syn_link_refines_link. { unfold asm_add, asm_add_client. eauto with map_disjoint. }

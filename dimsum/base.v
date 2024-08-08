@@ -355,6 +355,20 @@ End map_filter.
 Section curry_uncurry.
   Context `{Countable K1, Countable K2} {A : Type}.
 
+Lemma lookup_gmap_curry_Some (m : gmap (K1 * K2) A) (i : K1) x:
+  gmap_curry m !! i = Some x ↔ x ≠ ∅ ∧ ∀ j, x !! j = m !! (i, j).
+Proof.
+  split.
+  - move => Hc. split.
+    + by apply: gmap_curry_non_empty.
+    + move => j. by rewrite -lookup_gmap_curry Hc.
+  - move => [Hne Hj]. destruct (gmap_curry m !! i) eqn:Heq.
+    + f_equal. apply map_eq => k. rewrite Hj. by rewrite -lookup_gmap_curry Heq.
+    + move: Heq => /lookup_gmap_curry_None Hnot.
+      move: Hne => /(map_choose _)[k[??]]. specialize (Hj k).
+      rewrite Hnot in Hj. naive_solver.
+Qed.
+
 Lemma lookup_total_gmap_curry (m : gmap (K1 * K2) A) (i : K1) (j : K2):
   ((gmap_curry m !!! i): gmap K2 A) !! j = m !! (i, j).
 Proof.
@@ -465,6 +479,14 @@ Proof.
   apply map_subseteq_spec => ??.
   rewrite !lookup_difference_Some !lookup_difference_None /is_Some. naive_solver.
 Qed.
+
+Lemma map_subseteq_difference_r {A} (m1 m2 m : M A) :
+  m ⊆ m1 → m ##ₘ m2 → m ⊆ m1 ∖ m2.
+Proof.
+  rewrite !map_subseteq_spec. setoid_rewrite lookup_difference_Some.
+  move => Hm Hdisj i j ?. split; [naive_solver|].
+  by apply: map_disjoint_Some_l.
+Qed.
 End theorems.
 
 Section theorems.
@@ -495,6 +517,20 @@ Lemma map_difference_eq_dom_L {A} (m m1 m2 : M A) `{!LeibnizEquiv D}:
   dom m1 = dom m2 →
   m ∖ m1 = m ∖ m2.
 Proof. unfold_leibniz. apply: map_difference_eq_dom. Qed.
+
+Lemma map_subseteq_exists_L {A} (m : M A) s `{!∀ x, Decision (x ∈ s)} `{!LeibnizEquiv D} :
+  s ⊆ dom m →
+  ∃ m', m = m' ∪ (m ∖ m') ∧ dom m' = s.
+Proof.
+  move => Hsub.
+  eexists (filter (λ x, x.1 ∈ s) m).
+  split; [rewrite map_difference_union //; apply map_filter_subseteq|].
+  apply set_eq => p. split.
+  - move => /elem_of_dom[? ] /map_lookup_filter_Some[??]. done.
+  - move => Hin. move: (Hin) => /Hsub/elem_of_dom[??].
+    apply /elem_of_dom. eexists _. by apply /map_lookup_filter_Some.
+Qed.
+
 End theorems.
 
 (** ** Lemmas about map_agree *)
@@ -544,6 +580,41 @@ Proof.
   setoid_rewrite list_lookup_fmap. setoid_rewrite fmap_Some. naive_solver.
 Qed.
 
+Lemma list_to_map_lookup_Some_ag {A} (l : list (K * A)) i y:
+  (∀ k a a', (k, a) ∈ l → (k, a') ∈ l → a = a') →
+  (list_to_map l : M A) !! i = Some y ↔ ∃ j, l !! j = Some (i, y).
+Proof.
+  elim: l i => /=. { move => ?. split => ?; simplify_map_eq; naive_solver. }
+  move => [k a] l IH k' Hag /=. rewrite lookup_insert_Some.
+  rewrite IH; last set_solver. split => ?; destruct!.
+  - by exists 0.
+  - by exists (S j).
+  - destruct j; simplify_eq/=.
+    + by left.
+    + destruct (decide (k = k')) as [-> | ?].
+      * left. split!. eapply Hag; apply elem_of_cons; first by left.
+        right. rewrite elem_of_list_lookup. by split!.
+      * right. by split!.
+Qed.
+
+Lemma NoDup_fst_imp_list_ag {A} (l : list (K * A)) :
+  NoDup l.*1 →
+  (∀ k a a', (k, a) ∈ l → (k, a') ∈ l → a = a').
+Proof.
+  rewrite NoDup_alt. setoid_rewrite list_lookup_fmap_Some.
+  setoid_rewrite elem_of_list_lookup.
+  move => Hnd k a a' [i Ha] [j Ha'].
+  enough (i = j) by congruence. eapply Hnd; split!.
+Qed.
+
+Lemma list_to_map_lookup_Some_NoDup {A} (l : list (K * A)) i y:
+  NoDup l.*1 →
+  (list_to_map l : M A) !! i = Some y ↔ ∃ j, l !! j = Some (i, y).
+Proof.
+  move => /NoDup_fst_imp_list_ag.
+  apply list_to_map_lookup_Some_ag.
+Qed.
+
 Lemma list_to_map_lookup_is_Some {A} (l : list (K * A)) i :
   is_Some ((list_to_map l : M A) !! i) ↔ ∃ x, (i,x) ∈ l.
 Proof.
@@ -556,6 +627,19 @@ Proof.
     { by rewrite lookup_insert. }
     rewrite lookup_insert_ne; [|done].
     naive_solver.
+Qed.
+
+Lemma map_to_list_union `{FinMap K M} {A} (m1 m2 : (M A)) :
+  m1 ##ₘ m2 →
+  map_to_list (m1 ∪ m2) ≡ₚ map_to_list m1 ++ map_to_list m2.
+Proof.
+  apply: (map_fold_ind (λ l m, m ##ₘ m2 → map_to_list (m ∪ m2) ≡ₚ l ++ map_to_list m2)).
+  - by rewrite map_empty_union.
+  - intros f fn m l Hf IH Hdisj.
+    decompose_map_disjoint.
+    rewrite -insert_union_l.
+    rewrite map_to_list_insert; last by apply lookup_union_None.
+    by rewrite /= IH.
 Qed.
 End theorems.
 
@@ -592,6 +676,19 @@ Section semi_set.
 End semi_set.
 
 (** * Lemmas about lists *)
+
+Definition sum_listZ_with {A} (f : A → Z) : list A → Z :=
+  fix go l :=
+  match l with
+  | [] => 0
+  | x :: l => f x + go l
+  end%Z.
+Notation sum_listZ := (sum_listZ_with id).
+
+Lemma sum_listZ_with_app {A} (f : A → Z) l1 l2 :
+  sum_listZ_with f (l1 ++ l2) = (sum_listZ_with f l1 + sum_listZ_with f l2)%Z.
+Proof. elim: l1 => //=. naive_solver lia. Qed.
+
 Lemma snoc_inv {A} (l : list A):
   l = [] ∨ ∃ x l', l = l' ++ [x].
 Proof. destruct l as [|x l'] using rev_ind; eauto. Qed.
@@ -607,6 +704,20 @@ Proof. set_solver. Qed.
 Lemma elem_of_drop {A} x n (xs : list A):
   x ∈ drop n xs → x ∈ xs.
 Proof.  move => /elem_of_list_lookup. setoid_rewrite lookup_drop => -[??]. apply elem_of_list_lookup. naive_solver. Qed.
+
+Lemma elem_of_list_lookup_strong `{EqDecision A} (l : list A) x :
+  x ∈ l ↔ ∃ i, l !! i = Some x ∧ ∀ j x', l !! j = Some x' → j < i → x' ≠ x.
+Proof.
+  split; last (rewrite elem_of_list_lookup; naive_solver).
+  induction 1 as [|???? IH].
+  - exists 0. split!. lia.
+  - destruct IH as [i [Hi Hlt]]; auto.
+    destruct (decide (x = y)) as [-> | Hneq].
+    + exists 0. split!. lia.
+    + exists (S i). split! => [[|j]] x' //=.
+      * congruence.
+      * eauto with lia.
+Qed.
 
 Section mjoin.
   Context {A : Type}.
@@ -1190,16 +1301,6 @@ Section sep_map.
     - rewrite alter_insert_ne // big_sepM_insert //. by apply lookup_alter_None.
   Qed.
 
-  Lemma big_sepM_list_to_map xs Φ :
-    NoDup xs.*1 →
-    ([∗ map] k↦y ∈ list_to_map xs, Φ k y) ⊣⊢ [∗ list] x∈xs, Φ x.1 x.2.
-  Proof.
-    induction xs as [|x xs IH]; csimpl.
-    { intros _. by rewrite big_sepM_empty. }
-    intros [??]%NoDup_cons. rewrite big_sepM_insert ?IH; [done..|].
-    by apply not_elem_of_list_to_map.
-  Qed.
-
   Lemma big_sepM_map_seq xs n (Φ : nat → A → PROP) :
     ([∗ map] k↦y ∈ map_seq n xs, Φ k y) ⊣⊢ [∗ list] i↦x∈xs, Φ (n + i) x.
   Proof.
@@ -1274,9 +1375,9 @@ Implicit Types Ps Qs : list PROP.
 Implicit Types A : Type.
 Section map2.
   Context `{Countable K} {A B : Type}.
-  Implicit Types Φ Ψ : A → B → PROP.
+  Implicit Types Φ Ψ : K → A → B → PROP.
 
-  Lemma big_sepM2_list_to_map_2 xs ys Φ :
+  Lemma big_sepM2_list_to_map_2 xs ys (Φ : A → B → PROP) :
     BiAffine PROP →
     xs.*1 = ys.*1 →
     ([∗ list] x;y∈xs.*2;ys.*2, Φ x y) -∗
@@ -1288,5 +1389,34 @@ Section map2.
     rewrite H1. iApply (big_sepM2_insert_2 with "[Hx]"); [done|].
     by iApply "IH".
   Qed.
+
+  Lemma big_sepM2_union m1 m1' m2 m2' Φ:
+    (TCOr (∀ i x y, Affine (Φ i x y)) (∀ i x y, Absorbing (Φ i x y))) →
+    ([∗ map] k↦v1;v2 ∈ m1; m2, Φ k v1 v2) -∗
+    ([∗ map] k↦v1;v2 ∈ m1'; m2', Φ k v1 v2) -∗
+    ([∗ map] k↦v1;v2 ∈ m1 ∪ m1'; m2 ∪ m2', Φ k v1 v2).
+  Proof.
+    iIntros (Hor) "Hm1 Hm2". iInduction (m1) as [|] "IH" using map_ind forall (m2).
+    { iDestruct (big_sepM2_empty_r with "[$]") as %->. by rewrite !left_id_L. }
+    iDestruct (big_sepM2_dom with "Hm1") as %Hdom.
+    have [??] : is_Some (m2 !! i) by
+      apply elem_of_dom; rewrite dom_insert_L in Hdom; set_solver.
+    erewrite <-(insert_delete m2); [|done].
+    rewrite big_sepM2_insert ?lookup_delete // -!insert_union_l.
+    iDestruct "Hm1" as "[H1 ?]".
+    iApply (big_sepM2_insert_2 with "H1"). { destruct Hor; apply _. }
+    iApply ("IH" with "[$] [$]").
+  Qed.
+
+  Lemma big_sepM2_delete_2 Φ m1 m2 i :
+    (∀ y : A * B, Affine (Φ i y.1 y.2)) →
+    ([∗ map] k↦x;y ∈ m1;m2, Φ k x y) ⊢
+      [∗ map] k↦x;y ∈ delete i m1;delete i m2, Φ k x y.
+  Proof.
+    move => Hor. rewrite !big_sepM2_alt !dom_delete_L -map_delete_zip_with.
+    iIntros "[-> ?]". iSplit; [done|].
+    by iApply big_sepM_delete_2.
+  Qed.
+
 End map2.
 End big_op.

@@ -12,6 +12,7 @@ Definition main_addr: Z := 800.
 
 Definition stream_rec: fndef := {|
   fd_args := [("n")];
+  fd_static_vars := [];
   fd_vars := [];
   fd_body := LetE "_" (rec.Call (Val (ValFn "yield")) [Var "n"]) $
              (rec.Call (Val (ValFn "stream")) [BinOp (Var "n") AddOp (Val $ ValNum 1)]);
@@ -22,6 +23,7 @@ Definition stream_prog : gmap string fndef :=
 
 Definition main_rec: fndef := {|
   fd_args := [];
+  fd_static_vars := [];
   fd_vars := [];
   fd_body := LetE "x" (rec.Call (Val (ValFn "yield")) [Val $ ValNum 0]) $
              LetE "_" (rec.Call (Val (ValFn "print")) [(Var "x")]) $
@@ -41,23 +43,23 @@ Definition all_f2i : gmap string Z :=
   ∅.
 
 Definition stream_asm : gmap Z asm_instr :=
-  deep_to_asm_instrs stream_addr ltac:(r2a_compile all_f2i stream_rec).
+  deep_to_asm_instrs stream_addr ltac:(r2a_compile all_f2i 1000 stream_rec).
 
 Definition main_asm : gmap Z asm_instr :=
-  deep_to_asm_instrs main_addr ltac:(r2a_compile all_f2i main_rec).
+  deep_to_asm_instrs main_addr ltac:(r2a_compile all_f2i 2000 main_rec).
 
 Definition stream_asm_dom : gset Z := locked dom stream_asm.
 Definition main_asm_dom : gset Z := locked dom main_asm.
 
 Lemma stream_asm_refines_rec :
   trefines (asm_mod stream_asm)
-           (rec_to_asm (dom stream_asm) all_f2i ∅ (rec_mod (<["stream" := stream_rec]> ∅))).
-Proof. apply: compile_correct; [|done|..]; compute_done. Qed.
+           (rec_to_asm (dom stream_asm) all_f2i ∅ ∅ (rec_mod (<["stream" := stream_rec]> ∅))).
+Proof. apply: (compile_correct 1000); [|done|..]; compute_done. Qed.
 
 Lemma main_asm_refines_rec :
   trefines (asm_mod main_asm)
-           (rec_to_asm (dom main_asm) all_f2i ∅ (rec_mod (<["main" := main_rec]> ∅))).
-Proof. apply: compile_correct; [|done|..]; compute_done. Qed.
+           (rec_to_asm (dom main_asm) all_f2i ∅ ∅ (rec_mod (<["main" := main_rec]> ∅))).
+Proof. apply: (compile_correct 2000); [|done|..]; compute_done. Qed.
 
 Definition main_spec : spec rec_event unit void :=
   '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
@@ -182,7 +184,7 @@ Lemma top_level_refines_spec :
   trefines (asm_link (yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom) (dom print_asm)
               (rec_to_asm (yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom)
                 all_f2i
-                (r2a_mem_stack_mem (stream_regs_init !!! "SP") stream_ssz ∪ coro_regs_mem stream_regs_init)
+                (r2a_mem_stack_mem (stream_regs_init !!! "SP") stream_ssz ∪ coro_regs_mem stream_regs_init) ∅
                 (spec_mod main_spec tt)) (spec_mod print_spec tt))
            (spec_mod top_level_spec tt).
 Proof.
@@ -197,7 +199,7 @@ Proof.
   tstep_i => ??. simplify_eq.
   tstep_i. eexists true. split; [done|] => /=. eexists ∅, _, [], [], "main". split!.
   { simplify_map_eq'. unfold yield_asm_dom, yield_asm, main_asm_dom, stream_asm_dom; unlock; compute_done. } { rewrite !not_elem_of_union. naive_solver. }
-  { apply: satisfiable_mono; [by eapply (r2a_res_init _ all_f2i)|].
+  { apply: satisfiable_mono; [by eapply (r2a_res_init _ ∅ all_f2i)|].
     iIntros!. iDestruct select (r2a_mem_auth _) as "$". iFrame.
     iDestruct (big_sepM_subseteq with "[$]") as "?"; [done|].
     rewrite big_sepM_union; [|done]. iDestruct!. iFrame.

@@ -44,17 +44,17 @@ They are related as depicted by the following diagram:
 (** * through bij *)
 Definition val_through_bij (bij : heap_bij) (vs : val) : val :=
   match vs with
-  | ValLoc l => ValLoc (if hb_bij bij !! l.1 is Some (HBShared p) then p else inhabitant, l.2)
+  | ValLoc l => ValLoc (if hb_bij bij !! l.1 is Some (HBShared p) then p else (ProvBlock 42), l.2)
   | _ => vs
   end.
 
 Program Definition heap_through_bij (bij : heap_bij) (h : heap_state) : heap_state :=
   Heap (list_to_map $ omap (λ '(l, v), if hb_bij bij !! l.1 is Some (HBShared p) then
          Some ((p, l.2), val_through_bij bij v) else None) (map_to_list (h_heap h)))
-       (hb_shared_i bij) _.
+       (set_omap prov_to_block (hb_shared_i bij)) _.
 Next Obligation.
-  move => ???. rewrite list_to_map_lookup_is_Some => -[?]. rewrite elem_of_list_omap => -[[[??]?]]/=[??].
-  repeat case_match; simplify_eq. rewrite elem_of_hb_shared_i. naive_solver.
+  move => ??? b. rewrite list_to_map_lookup_is_Some => -[?]. rewrite elem_of_list_omap => -[[[??]?]]/=[??].
+  repeat case_match; simplify_eq. rewrite elem_of_set_omap => ?. exists (ProvBlock b). split!. rewrite elem_of_hb_shared_i. naive_solver.
 Qed.
 
 Lemma heap_through_bij_Some bij h pi o vi:
@@ -73,6 +73,11 @@ Proof.
   - move => ?. destruct!. eexists (_,_,_). rewrite elem_of_map_to_list. split; [done|].
     by simplify_option_eq.
 Qed.
+
+Lemma heap_through_bij_blocks bij h:
+ h_used_blocks (heap_through_bij bij h) = set_omap prov_to_block (hb_shared_i bij).
+Proof. done. Qed.
+
 Opaque heap_through_bij.
 
 Lemma heap_through_bij_is_Some bij h pi o:
@@ -86,6 +91,39 @@ Lemma heap_through_bij_is_Some1 bij h pi ps o:
 Proof.
   move => ?. rewrite heap_through_bij_is_Some. split; [|naive_solver].
   move => [p'[??]]. by simplify_bij.
+Qed.
+
+Lemma h_static_provs_heap_through_bij bij h :
+  dom (hb_bij bij) ⊆ h_provs h →
+  h_static_provs (heap_through_bij bij h) = filter is_ProvStatic (hb_shared_i bij).
+Proof.
+  move => Hdom.
+  apply set_eq => p.
+  rewrite elem_of_filter !elem_of_h_static_provs elem_of_hb_shared_i.
+  split.
+  - move => [? [[??]/=[? ]]]. subst. rewrite heap_through_bij_is_Some.
+    move => [p2 [??]]. naive_solver.
+  - move => [? [p2 ?]]. split; [done|].
+    exploit hb_shared_prov; [done|] => ?.
+    exploit same_prov_kind_static_l; [done..|] => ?. subst.
+    have : p2 ∈ h_provs h. { apply Hdom. by apply: elem_of_dom_2. }
+    rewrite elem_of_h_provs elem_of_h_static_provs => ?. destruct!/=.
+    eexists (_, l.2). split!.
+    rewrite heap_through_bij_is_Some1; [|done]. by destruct l.
+Qed.
+
+Lemma h_provs_heap_through_bij bij h :
+  dom (hb_bij bij) ⊆ h_provs h →
+  h_provs (heap_through_bij bij h) = hb_shared_i bij.
+Proof.
+  move => ?.
+  apply set_eq => p.
+  rewrite elem_of_h_provs /=.
+  rewrite h_static_provs_heap_through_bij // heap_through_bij_blocks elem_of_filter.
+  setoid_rewrite elem_of_set_omap.
+  destruct p; [|set_solver].
+  split; [|naive_solver].
+  move => -[|[? [?[[]]]]]; naive_solver.
 Qed.
 
 (** * combine bij *)
@@ -186,11 +224,14 @@ Qed.
 (** ** r2a_combine_extend *)
 Lemma fresh_map_learn rh bijb (X : gset prov) ps pi:
   fresh_map (dom (r2a_rh_shared rh) ∖ hb_shared_s bijb) X !! ps = Some pi →
+  ps ∈ (dom (r2a_rh_shared rh) ∖ hb_shared_s bijb) ∧
   (∃ a, rh !! ps = Some (R2AShared a) ∧ ∀ pi', hb_bij bijb !! ps ≠ Some (HBShared pi'))
-   ∧ pi ∉ X.
+   ∧ pi ∉ X ∧ is_ProvBlock pi.
 Proof.
-  move => /(fresh_map_lookup_Some _ _ _ _)[/elem_of_difference[/elem_of_dom[? /r2a_ih_shared_Some ?]]].
-  rewrite !elem_of_hb_shared_s. naive_solver.
+  move => Hf. move: (Hf) => /fresh_map_is_Block?.
+  move: Hf => /(fresh_map_lookup_Some _ _ _ _) [Hd ?].
+  move: (Hd) => /elem_of_difference[/elem_of_dom[? /r2a_ih_shared_Some ?]].
+  rewrite !elem_of_hb_shared_s => ?. split!; naive_solver.
 Qed.
 Ltac fresh_map_learn :=
   repeat match goal with
@@ -198,16 +239,97 @@ Ltac fresh_map_learn :=
              learn_hyp (fresh_map_learn _ _ _ _ _ H)
          end.
 
+Definition fresh_or_static (s X : gset prov) :=
+    set_to_map (λ p, (p, p)) (filter (λ p, ¬is_ProvBlock p) s)
+  ∪ fresh_map s X.
+
+Lemma fresh_or_static_lookup_None s X i :
+  fresh_or_static s X !! i = None ↔ i ∉ s.
+Proof.
+  rewrite lookup_union union_None fresh_map_lookup_None eq_None_not_Some /is_Some.
+  setoid_rewrite lookup_set_to_map; last done.
+  split; first naive_solver.
+  move => H. split! => [[? [? [/elem_of_filter [??] [??]]]]]; by simplify_map_eq.
+Qed.
+
+Lemma fresh_or_static_lookup_Some_static s X p p' :
+  is_ProvStatic p →
+  fresh_or_static s X !! p = Some p' ↔ p = p' ∧ p ∈ s.
+Proof.
+  move => ?.
+  rewrite lookup_union_Some_raw lookup_set_to_map //.
+  setoid_rewrite elem_of_filter. destruct p => //.
+  split.
+  - move => [?|]; [naive_solver|].
+    move => [Hs /(fresh_map_lookup_Some _ _ _ _)[??]].
+    exfalso. apply: eq_None_ne_Some_1; [done|].
+    rewrite lookup_set_to_map //. split!. rewrite elem_of_filter. split!.
+    naive_solver.
+  - move => [??]. simplify_eq. left. split!. naive_solver.
+Qed.
+
+Lemma fresh_or_static_learn rh bijb (X : gset prov) ps pi:
+  fresh_or_static (dom (r2a_rh_shared rh) ∖ hb_shared_s bijb) X !! ps = Some pi →
+  (∃ a, rh !! ps = Some (R2AShared a) ∧ ∀ pi', hb_bij bijb !! ps ≠ Some (HBShared pi')) ∧
+  (if bool_decide (is_ProvBlock pi) then pi ∉ X else ps = pi).
+Proof.
+  rewrite lookup_union union_Some lookup_set_to_map // => [[[p [/elem_of_filter [H1 H2] [<-<-]]]|[?]]].
+  - rewrite elem_of_difference /hb_shared_s not_elem_of_dom elem_of_dom /is_Some in H2.
+    setoid_rewrite lookup_omap_Some in H2. destruct H2 as [[? [[] []]] Hbij]; last done. split!. 2: by case_bool_decide.
+    rewrite lookup_omap in Hbij.
+    move => ? Heq. rewrite Heq // in Hbij.
+  - move => H. fresh_map_learn. destruct!. split!. by case_bool_decide.
+Qed.
+Ltac fresh_or_static_learn :=
+  repeat match goal with
+         | H : fresh_or_static (dom (r2a_rh_shared _) ∖ hb_shared_s _) _ !! _ = Some _ |- _ =>
+             learn_hyp (fresh_or_static_learn _ _ _ _ _ H)
+         end.
+
+Lemma fresh_or_static_bij s X i1 i2 j :
+  fresh_or_static s X !! i1 = Some j →
+  fresh_or_static s X !! i2 = Some j →
+  i1 = i2.
+Proof.
+  rewrite !lookup_union !union_Some !lookup_set_to_map //.
+  move => ??. destruct!.
+  + done.
+  + apply fresh_map_is_Block in H2.
+    by apply elem_of_filter in H as [? ?].
+  + apply fresh_map_is_Block in H0.
+    by apply elem_of_filter in H1 as [? ?].
+  + by eapply fresh_map_bij.
+Qed.
+
+Lemma fresh_or_static_same_kind s X ps pi :
+  fresh_or_static s X !! ps = Some pi → same_prov_kind pi ps.
+Proof.
+  rewrite lookup_union union_Some !lookup_set_to_map // => [[]].
+  - move => [p [? [<-<-]]]. by destruct p.
+  - rewrite eq_None_not_Some /is_Some.
+    setoid_rewrite lookup_set_to_map => //.
+    setoid_rewrite elem_of_filter => [[H H']].
+    apply fresh_map_is_Block in H' as ?.
+    apply fresh_map_lookup_Some in H' as [].
+    destruct pi; last done.
+    destruct ps; first done.
+    exfalso. apply H. now split!.
+Qed.
+Global Typeclasses Opaque fresh_or_static.
+Global Opaque fresh_or_static.
+
 Definition r2a_combine_heap_bij_bij (X : gset prov) (rh : gmap prov rec_to_asm_elem) (bijb : heap_bij) :=
-  (HBShared <$> (hb_shared bijb ∪ fresh_map ((dom (r2a_rh_shared rh)) ∖ hb_shared_s bijb) X)) ∪
+  (HBShared <$> (hb_shared bijb ∪ fresh_or_static ((dom (r2a_rh_shared rh)) ∖ hb_shared_s bijb) X)) ∪
   (HBConstant <$> r2a_rh_constant rh).
 
 Lemma r2a_combine_heap_bij_bij_shared X bijb ps pi rh:
   r2a_combine_heap_bij_bij X rh bijb !! ps = Some (HBShared pi) ↔
     hb_bij bijb !! ps = Some (HBShared pi) ∨
-    fresh_map ((dom (r2a_rh_shared rh)) ∖ hb_shared_s bijb) X !! ps = Some pi.
+    fresh_or_static ((dom (r2a_rh_shared rh)) ∖ hb_shared_s bijb) X !! ps = Some pi.
 Proof.
-  rewrite /r2a_combine_heap_bij_bij !lookup_union_Some_raw ?lookup_union_None !lookup_fmap.
+  (* TODO: Why is the lock necessary? *)
+  rewrite /r2a_combine_heap_bij_bij (lock fresh_or_static) !lookup_union_Some_raw ?lookup_union_None !lookup_fmap.
+  unlock.
   rewrite !fmap_None !fmap_Some.
   setoid_rewrite r2a_rh_constant_Some.
   setoid_rewrite lookup_union_Some_raw.
@@ -218,7 +340,7 @@ Proof.
   - naive_solver.
   - naive_solver.
   - left. split!. naive_solver.
-  - fresh_map_learn. destruct!. left. split!. naive_solver.
+  - fresh_or_static_learn. destruct!. left. split!. naive_solver.
 Qed.
 
 Lemma r2a_combine_heap_bij_bij_priv_s X bijb ps rh h:
@@ -235,44 +357,68 @@ Proof.
   setoid_rewrite hb_shared_lookup_None.
   split => ?; destruct!/=.
   - naive_solver.
-  - right. split!. 1: naive_solver. apply fresh_map_lookup_None.
+  - right. split!. 1: naive_solver. apply fresh_or_static_lookup_None.
     apply not_elem_of_difference. left. move => /elem_of_dom[? /r2a_ih_shared_Some ?]. naive_solver.
+Qed.
+
+Definition r2a_shared_statics (rh : gmap prov rec_to_asm_elem) (bijb : heap_bij) : gset prov :=
+  filter is_ProvStatic (dom (r2a_rh_shared rh) ∖ hb_shared_s bijb).
+
+Lemma r2a_shared_statics_in rh bijb p :
+  p ∈ r2a_shared_statics rh bijb ↔
+    ∃ a, is_ProvStatic p ∧ rh !! p = Some (R2AShared a) ∧ p ∉ hb_shared_s bijb.
+Proof.
+  rewrite /r2a_shared_statics elem_of_filter elem_of_difference elem_of_dom /is_Some.
+  setoid_rewrite r2a_ih_shared_Some. naive_solver.
 Qed.
 
 Program Definition r2a_combine_heap_bij (X : gset prov) (rh : gmap prov rec_to_asm_elem) (bijb : heap_bij)
  (H1 : hb_provs_i bijb ⊆ X) : heap_bij :=
-  HeapBij (r2a_combine_heap_bij_bij X rh bijb) (hb_priv_i bijb) _ _.
+  HeapBij (r2a_combine_heap_bij_bij X rh bijb) (filter (λ p, p.1 ∉ r2a_shared_statics rh bijb) (hb_priv_i bijb)) _ _ _.
 Next Obligation.
   move => X rh bijb HX ps pi.
-  rewrite !r2a_combine_heap_bij_bij_shared // => -[?|?]; [by apply: hb_disj|].
-  apply eq_None_ne_Some => ??.
+  rewrite !r2a_combine_heap_bij_bij_shared // => -[/hb_disj ?|?].
+  { apply map_lookup_filter_None_2. by left. }
+  apply eq_None_ne_Some => ? /map_lookup_filter_Some[? Hnin].
   have : (pi ∈ hb_provs_i bijb) by rewrite elem_of_hb_provs_i; naive_solver.
-  fresh_map_learn. set_solver.
+  fresh_or_static_learn. destruct!. case_bool_decide; [set_solver| ].
+  move => ?. simplify_eq. eapply Hnin => /=. apply r2a_shared_statics_in.
+  split!. 1: by destruct pi. move => /elem_of_hb_shared_s. naive_solver.
 Qed.
 Next Obligation.
   move => X rh bijb HX pi ps ps'.
-  rewrite !r2a_combine_heap_bij_bij_shared => ??.
+  rewrite !r2a_combine_heap_bij_bij_shared => H1 H2.
   destruct!; simplify_bij.
   - done.
-  - fresh_map_learn. destruct!. move: (HX pi). rewrite elem_of_hb_provs_i. naive_solver.
-  - fresh_map_learn. destruct!. move: (HX pi). rewrite elem_of_hb_provs_i. naive_solver.
-  - by apply: fresh_map_bij.
+  - fresh_or_static_learn. destruct!. case_bool_decide.
+    + move: (HX pi). rewrite elem_of_hb_provs_i. naive_solver.
+    + simplify_eq. exploit hb_shared_static_eq_i => //. by destruct pi.
+  - fresh_or_static_learn. destruct!. case_bool_decide.
+    + move: (HX pi). rewrite elem_of_hb_provs_i. naive_solver.
+    + simplify_eq. exploit hb_shared_static_eq_i => //. by destruct pi.
+  - by eapply fresh_or_static_bij.
+Qed.
+Next Obligation.
+  move => X rh bijb HX ps pi.
+  rewrite !r2a_combine_heap_bij_bij_shared => [[H|]].
+  - by eapply hb_shared_prov.
+  - move => ?. by apply: fresh_or_static_same_kind.
 Qed.
 
 Definition r2a_combine_r2a (X : gset prov) (rh : gmap prov rec_to_asm_elem) (bijb : heap_bij) : gmap prov Z :=
   list_to_map $
    omap (λ '(ps, pi), if rh !! ps is Some (R2AShared a) then Some (pi : prov, a) else None) $
-    map_to_list (fresh_map ((dom (r2a_rh_shared rh)) ∖ hb_shared_s bijb) X).
+    map_to_list (fresh_or_static ((dom (r2a_rh_shared rh)) ∖ hb_shared_s bijb) X).
 
 Lemma r2a_combine_r2a_Some X rh bijb p a:
   r2a_combine_r2a X rh bijb !! p = Some a ↔
-    ∃ ps, fresh_map ((dom (r2a_rh_shared rh)) ∖ hb_shared_s bijb) X !! ps = Some p
+    ∃ ps, fresh_or_static ((dom (r2a_rh_shared rh)) ∖ hb_shared_s bijb) X !! ps = Some p
           ∧ rh !! ps = Some (R2AShared a).
 Proof.
   rewrite /r2a_combine_r2a. rewrite -elem_of_list_to_map. 2: {
     rewrite list_fmap_omap. apply: NoDup_omap_2_strong; [|apply NoDup_map_to_list].
     move => [??] [??] ? /elem_of_map_to_list? /elem_of_map_to_list? /= /fmap_Some[?[??]] /fmap_Some[?[??]].
-    repeat case_match => //. simplify_eq/=. f_equal. by apply: fresh_map_bij.
+    repeat case_match => //. simplify_eq/=. f_equal. by apply: fresh_or_static_bij.
   }
   rewrite elem_of_list_omap.
   split => ?; destruct!.
@@ -280,36 +426,50 @@ Proof.
   - eexists (_, _). simplify_option_eq. split!. by apply elem_of_map_to_list.
 Qed.
 
-Lemma r2a_combine_extend (X : gset prov) rha bijb rh ho hb :
+Lemma r2a_combine_extend (X : gset prov) rha bijb rh ho hb hsn :
   r2a_combine_bij (r2a_rh_shared rha) bijb ⊆ r2a_rh_shared rh →
   ho ⊆ r2a_rh_constant rh →
   ho ⊆ r2a_combine_priv (r2a_rh_shared rha) bijb hb →
   r2a_combine_priv_shared (r2a_rh_shared rha) bijb hb ⊆ ho →
   dom rha ⊆ X →
   hb_provs_i bijb ⊆ X →
+  R2AConstant <$> hsn ⊆ rha →
+  dom hsn = r2a_shared_statics rh bijb →
+  (* rh' : newly shared blocks, bijb': new heap bijection  *)
   ∃ rh' bijb',
     r2a_rh_shared rh = r2a_combine_bij (rh' ∪ r2a_rh_shared rha) bijb' ∧
     r2a_rh_constant rh = r2a_combine_priv (rh' ∪ r2a_rh_shared rha) bijb' hb ∧
-    dom rh' ## X ∧
+    dom rh' ## X ∖ dom (R2AConstant <$> hsn) ∧
     hb_shared bijb ⊆ hb_shared bijb' ∧
-    hb_priv_i bijb = hb_priv_i bijb' ∧
+    hb_priv_i bijb ∖ hsn = hb_priv_i bijb' ∧
     (* The following is a random collection of semi-redundant
     properties that are used by the later proof. TODO: clean this up *)
-    (R2AShared <$> rh') ##ₘ rha ∧
+    (R2AShared <$> rh') ##ₘ rha ∖ (R2AConstant <$> hsn) ∧
     dom (hb_bij bijb') ⊆ dom rh ∧
     (r2a_rh_constant rh ∖ (hb_priv_s bijb' ∖ ho)) = ho ∧
     ho ∖ (ho ∖ hb_priv_s bijb) ⊆ hb_priv_s bijb' ∧
     (hb_priv_s bijb' ∖ (ho ∖ (ho ∖ hb_priv_s bijb))) = hb_priv_s bijb' ∖ ho ∧
     dom rh' ⊆ hb_shared_i bijb' ∧
+    dom hsn ⊆ hb_shared_s bijb' ∧
     (∀ p2 p1, hb_bij bijb' !! p2 = Some (HBShared p1) →
               p1 ∉ dom (rh' ∪ r2a_rh_shared rha) →
               hb_bij bijb !! p2 = Some (HBShared p1))
 .
 Proof.
-  move => Hcombine Hho Hho2 Hpriv HXa HXb.
-  have Hdisj : (R2AShared <$> (r2a_combine_r2a X rh bijb)) ##ₘ rha. {
-    apply map_disjoint_spec => ???. rewrite lookup_fmap => /fmap_Some [?[/r2a_combine_r2a_Some[?[??]]?]] ?.
-    fresh_map_learn. destruct!. simplify_eq. revert select (_ ∉ X). apply. apply HXa. by apply elem_of_dom.
+  move => Hcombine Hho Hho2 Hpriv HXa HXb Hsr Hhsn.
+  have HhsnNone : ∀ i, hsn !! i = None ↔ ¬ (∃ a : Z, is_ProvStatic i ∧ rh !! i = Some (R2AShared a) ∧ i ∉ hb_shared_s bijb). {
+    move => i. by rewrite -not_elem_of_dom Hhsn r2a_shared_statics_in.
+  }
+  have HhsnSome : ∀ i x, hsn !! i = Some x → (∃ a : Z, is_ProvStatic i ∧ rh !! i = Some (R2AShared a) ∧ i ∉ hb_shared_s bijb). {
+    move => i x. move => /(elem_of_dom_2 _ _ _).
+    by rewrite Hhsn r2a_shared_statics_in.
+  }
+  have Hdisj : (R2AShared <$> (r2a_combine_r2a X rh bijb)) ##ₘ rha ∖ (R2AConstant <$> hsn). {
+    apply map_disjoint_spec => p ??. rewrite lookup_fmap => /fmap_Some [?[/r2a_combine_r2a_Some[?[??]]?]] /lookup_difference_Some [? Hn].
+    fresh_or_static_learn. destruct!. case_bool_decide; simplify_eq.
+    - revert select (_ ∉ X). apply. apply HXa. by apply elem_of_dom.
+    - move: Hn. rewrite lookup_fmap. move => /fmap_None/HhsnNone. apply.
+      split!. 1: by destruct p. rewrite elem_of_hb_shared_s. naive_solver.
   }
   have Hdisj2 : dom (r2a_combine_priv_shared (r2a_rh_shared rha) bijb hb) ## dom (r2a_rh_shared rh). {
     apply: disjoint_mono; [|by apply: subseteq_dom|done].
@@ -332,14 +492,18 @@ Proof.
   }
 
   eexists (r2a_combine_r2a X rh bijb).
-  eexists (r2a_combine_heap_bij X rh bijb HXb).
+  eexists (r2a_combine_heap_bij (X ∪ dom (hb_priv_s bijb)) rh bijb HXb).
   split_and!.
   - apply map_eq => ps. apply option_eq => a. rewrite r2a_ih_shared_Some.
     rewrite r2a_combine_bij_lookup_Some /=.
     setoid_rewrite r2a_combine_heap_bij_bij_shared.
-    setoid_rewrite lookup_union_Some. 2: {
-     apply (map_disjoint_fmap R2AShared R2AShared). eapply map_disjoint_weaken_r; [done|].
-     apply r2a_rh_shared_fmap_l. }
+    setoid_rewrite (lookup_union_Some _ (r2a_rh_shared rha)). 2: {
+     apply (map_disjoint_fmap R2AShared R2AShared).
+     eapply map_disjoint_weaken_r; [done|].
+     apply map_subseteq_difference_r; [apply r2a_rh_shared_fmap_l|].
+     apply map_disjoint_spec => ??? /lookup_fmap_Some[?[?/r2a_ih_shared_Some ?]] Hc.
+     exploit @lookup_weaken; [done..|]. move: Hc => /lookup_fmap_Some. naive_solver.
+    }
     setoid_rewrite r2a_combine_r2a_Some.
     setoid_rewrite r2a_ih_shared_Some.
     split => ?.
@@ -352,22 +516,38 @@ Proof.
            }
            rewrite r2a_ih_shared_Some. rewrite r2a_ih_shared_Some in Heq. naive_solver.
         -- exfalso. move: Hdisj2 => /elem_of_disjoint. apply.
-           ++ apply elem_of_dom. eexists _. apply r2a_combine_priv_shared_Some. naive_solver.
+           ++ apply elem_of_dom. eexists _.
+              rewrite r2a_combine_priv_shared_Some. naive_solver.
            ++ apply elem_of_dom. eexists _. by apply r2a_ih_shared_Some.
-      * have [??]: is_Some (fresh_map (dom (r2a_rh_shared rh) ∖ hb_shared_s bijb) X !! ps). {
-          apply not_eq_None_Some. rewrite fresh_map_lookup_None. apply. apply elem_of_difference.
+      * have [??]: is_Some (fresh_or_static (dom (r2a_rh_shared rh) ∖ hb_shared_s bijb) X !! ps). {
+          apply not_eq_None_Some. rewrite fresh_or_static_lookup_None. apply. apply elem_of_difference.
           split.
           - apply elem_of_dom. eexists _. by apply r2a_ih_shared_Some.
           - rewrite elem_of_hb_shared_s. rewrite hb_shared_lookup_None in Hps. naive_solver.
         }
-        eexists _. split; [by right|]. left. naive_solver.
+        eexists _.
+        split; [by right|]. left. naive_solver.
     + destruct!.
-      * fresh_map_learn. destruct!. exfalso. revert select (_ ∉ X). apply. apply HXb.
-        apply elem_of_hb_provs_i. naive_solver.
-      * have : ps = ps0; [|naive_solver]. by apply: fresh_map_bij.
+      * fresh_or_static_learn. destruct!. case_bool_decide.
+        -- exfalso. revert select (_ ∉ X). apply. apply HXb.
+           apply elem_of_hb_provs_i. naive_solver.
+        -- simplify_eq. exploit hb_shared_static_eq_i; [done|by destruct p'|].
+           naive_solver.
+      * have : ps = ps0; [|naive_solver]. by apply: fresh_or_static_bij.
       * rewrite -r2a_ih_shared_Some. apply: lookup_weaken; [|done].
         apply r2a_combine_bij_lookup_Some. split!. by apply r2a_ih_shared_Some.
-      * fresh_map_learn. destruct!. exfalso. revert select (_ ∉ X). apply. apply HXa. by apply elem_of_dom.
+      * fresh_or_static_learn. destruct!. case_bool_decide.
+        -- exfalso. select (_ ∉ _) (fun H => apply H).
+           enough (p' ∈ X). { revert select (p' ∈ X). clear. set_solver. }
+           apply HXa. by apply elem_of_dom.
+        -- simplify_eq.
+           have : p' ∈ r2a_shared_statics rh bijb. {
+             apply r2a_shared_statics_in. setoid_rewrite elem_of_hb_shared_s.
+             destruct p'; naive_solver. }
+           rewrite -Hhsn. move => /elem_of_dom[??].
+           rewrite map_subseteq_spec in Hsr.
+           exploit Hsr. { apply lookup_fmap_Some. naive_solver. }
+           naive_solver.
   - apply map_eq => ps. apply option_eq => b. rewrite r2a_rh_constant_Some r2a_combine_priv_Some /=.
     setoid_rewrite r2a_combine_heap_bij_bij_priv_s.
     setoid_rewrite r2a_combine_heap_bij_bij_shared.
@@ -378,18 +558,25 @@ Proof.
       opose proof* Hrev; [done..|]. destruct!.
       eexists _. split_and!; [by left | |done|done].
       apply eq_None_ne_Some => ?. rewrite r2a_combine_r2a_Some => ?. destruct!.
-      fresh_map_learn. destruct!. simplify_eq. revert select (_ ∉ X). apply. apply HXb.
-      rewrite elem_of_hb_provs_i. naive_solver.
+      fresh_or_static_learn. destruct!. case_bool_decide.
+      * simplify_eq. revert select (_ ∉ X). apply. apply HXb.
+        rewrite elem_of_hb_provs_i. naive_solver.
+      * simplify_eq. exploit hb_shared_static_eq_i; [done|by destruct pi|].
+        naive_solver.
     + naive_solver.
     + rewrite -r2a_rh_constant_Some. apply: lookup_weaken; [|done]. apply: lookup_weaken; [|done].
       rewrite r2a_combine_priv_shared_Some. naive_solver.
-    + fresh_map_learn. destruct!.
+    + fresh_or_static_learn. destruct!.
       exfalso. revert select (r2a_combine_r2a _ _ _ !! _ = None). apply not_eq_None_Some.
       eexists _. apply r2a_combine_r2a_Some. naive_solver.
-  - apply elem_of_disjoint => ? /elem_of_dom [? /r2a_combine_r2a_Some ?]. destruct!.
-    fresh_map_learn. naive_solver.
+  - apply elem_of_disjoint => p /elem_of_dom [? /r2a_combine_r2a_Some ?]. destruct!.
+    fresh_or_static_learn. destruct!. rewrite dom_fmap_L Hhsn.
+    move => /elem_of_difference[? /r2a_shared_statics_in].
+    case_bool_decide; [naive_solver|]. simplify_eq. apply.
+    split!; [by destruct p|]. rewrite elem_of_hb_shared_s. naive_solver.
   - apply map_subseteq_spec => ??. rewrite !hb_shared_lookup_Some /= r2a_combine_heap_bij_bij_shared. naive_solver.
-  - done.
+  - simpl. apply map_eq => p. apply option_eq => h.
+    by rewrite lookup_difference_Some map_lookup_filter_Some /= -not_elem_of_dom Hhsn.
   - done.
   - move => ps /elem_of_dom /=[][pi|?].
     + move => /r2a_combine_heap_bij_bij_shared[|].
@@ -398,7 +585,7 @@ Proof.
         -- left. apply: lookup_weaken_is_Some; [|done]. eexists _. apply r2a_combine_bij_lookup_Some. naive_solver.
         -- right. apply: lookup_weaken_is_Some; [|done]. apply: lookup_weaken_is_Some; [|done].
            eexists _. apply r2a_combine_priv_shared_Some. naive_solver.
-      * move => ?. fresh_map_learn. destruct!. by apply elem_of_dom.
+      * move => ?. fresh_or_static_learn. destruct!. by apply elem_of_dom.
     + move => /r2a_combine_heap_bij_bij_priv_s[??]. by apply elem_of_dom.
   - apply map_eq => ps. apply option_eq => b.
     rewrite lookup_difference_Some lookup_difference_None hb_priv_s_lookup_None r2a_rh_constant_Some /=.
@@ -409,7 +596,8 @@ Proof.
         have /r2a_rh_constant_Some : r2a_rh_constant rh !! ps = Some b' by apply: lookup_weaken.
         naive_solver.
       }
-      apply: lookup_weaken_is_Some; [|done]. eexists _. apply r2a_combine_priv_shared_Some.
+      apply: lookup_weaken_is_Some; [|done]. eexists _.
+      apply r2a_combine_priv_shared_Some.
       split!. apply eq_None_ne_Some_2 => a ?.
       enough (r2a_rh_shared rh !! ps = Some a) as ?%r2a_ih_shared_Some by naive_solver.
       apply: lookup_weaken; [|done]. apply r2a_combine_bij_lookup_Some. naive_solver.
@@ -435,9 +623,44 @@ Proof.
     + naive_solver.
   - move => ? /elem_of_dom[? /r2a_combine_r2a_Some[??]]. apply elem_of_hb_shared_i => /=.
     eexists _. apply r2a_combine_heap_bij_bij_shared. naive_solver.
+  - rewrite Hhsn. move => ? /r2a_shared_statics_in[?[?[??]]].
+    apply elem_of_hb_shared_s => /=. eexists _.
+    apply r2a_combine_heap_bij_bij_shared. right.
+    apply fresh_or_static_lookup_Some_static; [done|]. split!.
+    rewrite elem_of_difference. rewrite elem_of_dom /is_Some.
+    setoid_rewrite r2a_ih_shared_Some. naive_solver.
   - move => ?? /= /r2a_combine_heap_bij_bij_shared[//|?] Hnotin. exfalso. apply Hnotin.
     rewrite dom_union_L elem_of_union !elem_of_dom /is_Some.
-    setoid_rewrite r2a_combine_r2a_Some. fresh_map_learn. naive_solver.
+    setoid_rewrite r2a_combine_r2a_Some. fresh_or_static_learn. naive_solver.
+Qed.
+
+(** ** unowned statics *)
+Definition r2a_unowned_statics (h : heap_state) (bijb bijb' : heap_bij) : gmap prov (gmap Z val) :=
+  (map_imap (λ p _, Some (h_block h p))
+        (gset_to_gmap (ProvBlock inhabitant)
+           ((filter is_ProvStatic (dom (hb_bij bijb))) ∖ dom (hb_bij bijb')))).
+
+Lemma r2a_unowned_statics_lookup_Some h bijb bijb' p b :
+  r2a_unowned_statics h bijb bijb' !! p = Some b ↔
+   is_ProvStatic p ∧ b = h_block h p ∧
+       p ∈ dom (hb_bij bijb) ∧ p ∉ dom (hb_bij bijb').
+Proof.
+  rewrite map_lookup_imap. rewrite bind_Some.
+  setoid_rewrite lookup_gset_to_gmap_Some.
+  setoid_rewrite elem_of_difference.
+  setoid_rewrite elem_of_filter. naive_solver.
+Qed.
+
+Lemma r2a_unowned_statics_disj h bijb bijb' rha' :
+  R2AConstant <$> r2a_unowned_statics h bijb bijb' ##ₘ
+      (R2AShared <$> r2a_combine_bij (r2a_rh_shared rha') bijb') ∪
+      (R2AConstant <$> r2a_combine_priv (r2a_rh_shared rha') bijb' h).
+Proof.
+  apply map_disjoint_spec => p x y.
+  move => /lookup_fmap_Some[? [? ]] /r2a_unowned_statics_lookup_Some[?[?[? /not_elem_of_dom?]]].
+  move => /lookup_union_Some_raw[|].
+  - move => /lookup_fmap_Some[? [? ]] /r2a_combine_bij_lookup_Some. naive_solver.
+  - move => [? ] /lookup_fmap_Some[? [? ]] /r2a_combine_priv_Some. naive_solver.
 Qed.
 
 (** * mem_transfer *)
@@ -473,7 +696,7 @@ Ltac r2a_mem_transfer Hfrom Hto :=
 (** * pure versions *)
 (** ** rec to asm *)
 (** *** r2a_val_rel_pure *)
-Definition r2a_val_rel_pure (f2i : gmap string Z) (rh : gmap prov prov) (iv : val) (av : Z) : Prop :=
+Definition r2a_val_rel_pure (f2i : gmap string Z) (rh : gmap prov Z) (iv : val) (av : Z) : Prop :=
   match iv with
   | ValNum z => av = z
   | ValBool b => av = bool_to_Z b
@@ -641,7 +864,7 @@ Definition val_in_bij_pure (bij : heap_bij) (v1 v2 : val) : Prop :=
   | ValNum n1, ValNum n2 => n1 = n2
   | ValBool b1, ValBool b2 => b1 = b2
   | ValFn f1, ValFn f2 => f1 = f2
-  | ValLoc l1, ValLoc l2 => l1.2 = l2.2 ∧ hb_bij bij !! l2.1 = Some (HBShared l1.1)
+  | ValLoc l1, ValLoc l2 => l1.2 = l2.2 ∧ same_prov_kind l1.1 l2.1 ∧ hb_bij bij !! l2.1 = Some (HBShared l1.1)
   | _, _ => False
   end.
 
@@ -674,7 +897,7 @@ Lemma val_in_bij_of_pure bij v1 v2 :
   val_in_bij v1 v2.
 Proof.
   iIntros (Hv) "Hsh". destruct v1, v2 => //=. simplify_eq/=. destruct!.
-  iSplit; [done|]. iApply (big_sepM_lookup with "[$]"). by apply hb_shared_lookup_Some.
+  do 2 (iSplit; [done|]). iApply (big_sepM_lookup with "[$]"). by apply hb_shared_lookup_Some.
 Qed.
 
 (** *** heap_in_bij_pure *)
@@ -719,7 +942,8 @@ Lemma val_in_through_bij f2i bij v av rh1 rh:
 Proof.
   iIntros (Hp ?) "Hbij". destruct v => //; simplify_eq/=.
   move: Hp => [?[? /r2a_combine_bij_lookup_Some [?[??]]]]. simplify_map_eq.
-  iSplit; [done|]. iApply (big_sepM_lookup with "[$]").
+  unfold loc_in_bij. iSplit!. { by eapply hb_shared_prov. }
+  iApply (big_sepM_lookup with "[$]").
   by apply hb_shared_lookup_Some.
 Qed.
 
@@ -750,44 +974,61 @@ Proof.
 Qed.
 
 (** * Main vertical compositionality theorem:  *)
-
-Lemma option_elim_Some A (P : option A → Prop) :
-  ((∀ a, P (Some a)) → P None) → (∀ a : A, P (Some a)) → ∀ o : option A, P o.
-Proof. move => ??. case; naive_solver. Qed.
-
 Lemma pp_to_ex_quant_if_then {R M A} (b : bool) `{!Inhabited A} pp1 pp2 (Q : R → uPred M → Prop):
   pp_to_ex (if b then pp_quant pp1 else pp2) Q →
   ∃ x : A, pp_to_ex (if b then pp1 x else pp2) Q.
 Proof. destruct b => //=. by exists inhabitant. Qed.
 
-Lemma r2a_bij_vertical m moinit `{!VisNoAng m.(m_trans)} ins f2i:
-  trefines (rec_to_asm ins f2i moinit (rec_heap_bij m))
-           (rec_to_asm ins f2i moinit m).
+Lemma r2a_bij_vertical m moinit hinit `{!VisNoAng m.(m_trans)} ins f2i :
+  trefines (rec_to_asm ins f2i moinit hinit (rec_heap_bij hinit m))
+           (rec_to_asm ins f2i moinit hinit m).
 Proof.
   unshelve apply: mod_prepost_combine. {
     exact (λ pl '(R2A csa lra) _ '(R2A cs lr) Pa Pb P,
       csa = cs ∧
       lra = lr ∧
-      ∃ mem' moa mo,
+      (* mem': auth of asm memory *)
+      (* moa: reflection of the asm memory owned by the environment
+      into the rec_to_asm in the target *)
+      (* mo: reflection of the asm memory owned by the module
+      into the environment *)
+      (* sprovs: static provenances (all wrappers agree and ensured to be constant) *)
+      ∃ mem' moa mo sprovs,
         if pl is Env then
-          ∃ f2i_full rha bijb hob ho hprev mh hb,
+          (* rha: auth of the rec_to_asm in the target *)
+          (* bijb: auth of the heap bij (in the target) *)
+          (* hob: reflection of the ownership of the environment into
+          the heap bijection. *)
+          (* ho: reflection of the ownership of the module in the heap
+          bijection into the environment. *)
+          (* hprev: previous middle heap *)
+          (* mh: assembly memory backing the locations that are shared
+          in rha, but not in bijb *)
+          (* hb: previous inner heap *)
+          (* hs: statics owned in the middle heap *)
+          (* ho': ownership that was deallocated from bijb by the
+             module. We need to avoid that the env allocates this
+             ownership again since if it contains statics, and the env
+             shares these statics, we would not be able to mirrro this
+             sharing in the middle heap (since the module might not
+             have deallocated the ownership of the static in the
+             middle heap). **)
+          ∃ f2i_full rha bijb hob ho hprev mh hb hs ho',
           moa = mem' ∖ mo ∧
           hob = r2a_combine_priv (r2a_rh_shared rha) bijb hb ∖ ho ∧
-          (P ⊣⊢ r2a_mem_map mo ∗ r2a_mem_map mh ∗
+          (P ⊣⊢ r2a_mem_map mo ∗ r2a_mem_map mh ∗ r2a_statics sprovs ∗
              ([∗ map] p↦a ∈ r2a_combine_bij (r2a_rh_shared rha) bijb, r2a_heap_shared p a) ∗
              ([∗ map] p↦h ∈ ho, r2a_heap_constant p h) ∗
-             (if f2i_full is Some f2if then r2a_f2i_full f2if else r2a_f2i_incl f2i ins)) ∧
-          (* We need to lazily initialize the satisfiable since we
-          only know the right value for f2i_full once we get the first
-          call from the environment. *)
-          (if f2i_full is Some f2if then
-             satisfiable (Pa ∗ r2a_mem_auth mem' ∗ r2a_heap_auth rha ∗
-                          r2a_mem_map moa ∗ r2a_f2i_full f2if ∗
-                          ([∗ map]p↦a ∈ r2a_rh_shared rha, r2a_heap_shared p a))
-           else Pa = (r2a_mem_map moinit ∗ r2a_f2i_incl f2i ins)%I ∧ mem' = moinit ∧ rha = ∅ ∧ moa = ∅ ∧ mo = moinit)
-           ∧
-          satisfiable (Pb ∗ heap_bij_auth bijb ∗
+             ([∗ map] p↦h ∈ ho', r2a_heap_constant p h) ∗
+             r2a_f2i_full f2i_full) ∧
+          satisfiable (Pa ∗ r2a_mem_auth mem' ∗ r2a_heap_auth rha ∗
+                          r2a_mem_map moa ∗ r2a_statics sprovs ∗
+                          ([∗ map] p↦h∈ hs, r2a_heap_constant p h) ∗
+                          ([∗ map]p↦a ∈ r2a_rh_shared rha, r2a_heap_shared p a) ∗
+                          r2a_f2i_full f2i_full) ∧
+          satisfiable (Pb ∗ heap_bij_auth bijb ∗ heap_bij_statics sprovs ∗
              ([∗ map] p2↦p1∈ hb_shared bijb, heap_bij_shared p1 p2) ∗
+             ([∗ map] p↦h∈ hs, heap_bij_const_i p h) ∗
              ([∗ map] p↦h∈ hob, heap_bij_const_s p h) ∗
              heap_in_bij bijb hprev hb) ∧
           mo ⊆ mem' ∧
@@ -797,55 +1038,146 @@ Proof.
           heap_preserved (r2a_rh_constant rha) hprev ∧
           heap_preserved (hb_priv_i bijb) hprev ∧
           r2a_combine_priv_shared (r2a_rh_shared rha) bijb hb ⊆ ho ∧
-          (if f2i_full is Some f2if then
-            r2a_heap_shared_agree_pure f2if (filter (λ x, x.1.1 ∉ hb_shared_i bijb) (h_heap hprev))
-                                     (r2a_rh_shared rha) mh
-          else mh = ∅)
+          r2a_heap_shared_agree_pure f2i_full (filter (λ x, x.1.1 ∉ hb_shared_i bijb) (h_heap hprev))
+                                     (r2a_rh_shared rha) mh ∧
+          h_static_provs hprev = sprovs ∧
+          sprovs ∖ (dom ho ∪ dom ho' ∪ hb_shared_s bijb) ⊆ dom hs
         else
-          ∃ rha bijb rh hob ho hb f2i_full,
+          ∃ rha bijb rh hob ho hb hs ho' f2i_full,
           mo = mem' ∖ moa ∧
           ho = r2a_rh_constant rh ∖ hob ∧
           r2a_rh_shared rh = r2a_combine_bij (r2a_rh_shared rha) bijb ∧
           r2a_rh_constant rh = r2a_combine_priv (r2a_rh_shared rha) bijb hb ∧
           satisfiable (P ∗ r2a_mem_auth mem' ∗ r2a_heap_auth rh ∗ r2a_mem_map mo ∗
-                         r2a_f2i_full f2i_full ∗
+                         r2a_f2i_full f2i_full ∗ r2a_statics sprovs ∗
                           ([∗ map] p↦a ∈ r2a_rh_shared rh, r2a_heap_shared p a) ∗
-                          ([∗ map] p↦h ∈ ho, r2a_heap_constant p h)) ∧
-          (Pa ⊣⊢ r2a_f2i_full f2i_full ∗ r2a_mem_map moa ∗ ([∗ map] p↦a ∈ r2a_rh_shared rha, r2a_heap_shared p a)) ∧
+                          ([∗ map] p↦h ∈ ho, r2a_heap_constant p h) ∗
+                          ([∗ map] p↦h ∈ ho', r2a_heap_constant p h)) ∧
+          (Pa ⊣⊢ r2a_mem_map moa ∗ r2a_f2i_full f2i_full ∗ r2a_statics sprovs ∗
+             ([∗ map] p↦h∈ hs, r2a_heap_constant p h) ∗
+             ([∗ map] p↦a ∈ r2a_rh_shared rha, r2a_heap_shared p a)) ∧
+
           (Pb ⊣⊢ ([∗ map] p2↦p1∈ hb_shared bijb, heap_bij_shared p1 p2) ∗
-             ([∗ map] p↦h∈ hob, heap_bij_const_s p h)) ∧
+             ([∗ map] p↦h∈ hob, heap_bij_const_s p h) ∗
+             ([∗ map] p↦h∈ hs, heap_bij_const_i p h) ∗
+             heap_bij_statics sprovs) ∧
           moa ⊆ mem' ∧
-          hob ⊆ r2a_rh_constant rh
-). }
-  { simpl. split_and!; [done..|].
-    eexists moinit, ∅, moinit, None, ∅, ∅, ∅, ∅, ∅, ∅, ∅. split!.
+          hob ⊆ r2a_rh_constant rh ∧
+          filter is_ProvStatic (dom (hb_bij bijb)) ⊆ sprovs ∧
+          sprovs ∖ (dom ho ∪ dom ho' ∪ hb_shared_s bijb) ⊆ dom hs). }
+  { move => [? []] //= rs mem [] //= ? h *.
+    have [? [?[??]]] : ∃ rh, heap_preserved (r2a_rh_constant rh) h ∧ dom rh ⊆ h_provs h ∧
+                            hinit ⊆ r2a_rh_constant rh. {
+      iSatStart. iIntros!.
+      iDestruct select (r2a_heap_inv _) as (rh ??) "[Hsh [Hhag [Hh #Hag]]]".
+      iDestruct (r2a_heap_lookup_big' with "[$] [$]") as %?.
+      iSatStop. naive_solver.
+    }
+    iSatStart. iIntros!.
+    iDestruct select (r2a_f2i_incl f2i _) as "Hf2i".
+    unfold r2a_f2i_incl at 1. iDestruct "Hf2i" as (f2i_full ??) "#?".
+    iSatStop.
+
+    pose (hs := (filter (λ p, is_ProvStatic p.1 ∧ hinit !! p.1 = None) (gmap_curry (h_heap h)))).
+    have Hpres : heap_preserved (hinit ∪ hs) h. {
+      apply heap_preserved_union.
+      + by apply: heap_preserved_mono.
+      + move => ?? /map_lookup_filter_Some[/lookup_gmap_curry_Some[? ->] ?].
+        by rewrite -surjective_pairing.
+    }
+    have Hdisj : hinit ##ₘ hs. {
+      apply map_disjoint_spec => ???? /map_lookup_filter_Some. naive_solver.
+    }
+    have Hdisjinit : dom hs ## hb_shared_i (heap_bij_init_bij hinit). {
+      rewrite/= /heap_bij_init_bij hb_shared_i_hb_update_const_s_big
+        ?hb_shared_i_hb_update_const_i_big ?hb_shared_s_hb_update_const_i_big
+        ?hb_shared_i_empty ?hb_shared_s_empty; apply disjoint_empty_r.
+    }
+    have Hinprovs : dom hinit ∪ dom hs ⊆ h_provs h. {
+      apply union_subseteq. split.
+      + etrans; [|done]. etrans; [by eapply subseteq_dom|].
+        rewrite -(dom_fmap_L R2AConstant).
+        eapply subseteq_dom. apply r2a_rh_constant_fmap_l.
+      + move => ? /elem_of_dom[? /map_lookup_filter_Some[/lookup_gmap_curry_Some[He Heq] ?]].
+        move: He => /(map_choose _)[?[? Hl]]. rewrite Heq in Hl.
+        by apply: (lookup_heap_is_Some_elem_of_h_provs (_, _)).
+    }
+    eexists. split_and!; [done..| |].
+    eexists moinit, ∅, moinit, (h_static_provs h), f2i_full, (R2AConstant <$> (hinit ∪ hs)),
+      (hb_update_const_s_big hs
+         (hb_update_const_i_big hs (heap_bij_init_bij hinit) Hdisjinit)), hs, hinit, h, ∅, h, hs, ∅.
+    split!.
     - by rewrite map_difference_diag.
-    - iSplit; iIntros!; iFrame.
-      rewrite /r2a_mem_map r2a_rh_shared_empty /r2a_combine_bij omap_empty !big_sepM_empty. done.
-    - apply: satisfiable_mono; [apply heap_bij_init|]. iIntros "$".
-      rewrite /hb_shared omap_empty !big_sepM_empty. iSplit!.
-      iIntros (????). done.
+    - rewrite r2a_rh_shared_fmap_constant. apply map_eq => ?. apply option_eq => ?.
+      split.
+      + move => ?. apply lookup_difference_Some. split.
+        2: { by apply: map_disjoint_Some_r. }
+        apply r2a_combine_priv_Some. left => /=.
+        apply lookup_union_Some_raw. left. apply lookup_fmap_Some. naive_solver.
+      + move => /lookup_difference_Some[/r2a_combine_priv_Some]/=.
+        rewrite right_id_L. move => [|].
+        * move => /lookup_union_Some_raw[/lookup_fmap_Some|[?/lookup_fmap_Some]]; naive_solver.
+        * move => [? [/lookup_union_Some_raw[/lookup_fmap_Some|[?/lookup_fmap_Some]] ]]; naive_solver.
+    - apply: satisfiable_bmono; [apply (r2a_res_init' moinit (hinit ∪ hs))|].
+      rewrite big_sepM_union //.
+      iIntros!. iDestruct select (r2a_f2i_full _) as "#$". iFrame.
+      iModIntro. rewrite r2a_rh_shared_fmap_constant /r2a_mem_map.
+      iSplit!. unfold r2a_f2i_incl. by iFrame "#".
+    - apply: satisfiable_bmono; [apply heap_bij_init|]. iIntros "[? $]".
+      iMod (heap_bij_alloc_const_i_big hinit with "[$]") as "[? $]".
+      { rewrite hb_provs_i_empty. set_solver. }
+      iMod (heap_bij_alloc_const_s_big hinit with "[$]") as "[? $]".
+      { rewrite /= dom_empty. set_solver. }
+      iMod (heap_bij_alloc_const_i_big hs with "[$]") as "[? $]".
+      { rewrite hb_provs_i_hb_update_const_s_big
+          ?hb_provs_i_hb_update_const_i_big
+          ?hb_provs_i_empty ?hb_shared_s_hb_update_const_i_big
+          ?hb_shared_s_empty ?right_id_L.
+        - symmetry. by apply map_disjoint_dom.
+        - set_solver. }
+      iMod (heap_bij_alloc_const_s_big hs with "[$]") as "[? $]".
+      { rewrite /= right_id_L dom_fmap. symmetry. by apply map_disjoint_dom. }
+      iFrame. iModIntro. iSplit!.
+      + iApply big_sepM_intro. iIntros "!>" (?? Hin). exfalso. move: Hin.
+        rewrite hb_shared_lookup_Some /= right_id_L -map_fmap_union lookup_fmap_Some.
+        naive_solver.
+      + iIntros (???). simpl. rewrite right_id_L -map_fmap_union lookup_fmap_Some.
+        iIntros (?). naive_solver.
+    - rewrite r2a_rh_shared_fmap_constant. apply map_subseteq_spec => p ??.
+      apply r2a_combine_priv_Some. left => /=. rewrite right_id_L.
+      apply lookup_union_Some; [by rewrite map_disjoint_fmap|]. right.
+      apply lookup_fmap_Some. naive_solver.
+    - rewrite hb_provs_i_hb_update_const_s_big. 2: {
+         rewrite hb_shared_s_hb_update_const_i_big /heap_bij_init_bij
+           hb_shared_s_hb_update_const_s_big ?hb_shared_s_hb_update_const_i_big
+           ?hb_shared_s_empty; apply disjoint_empty_r. }
+      rewrite hb_provs_i_hb_update_const_i_big /heap_bij_init_bij
+        hb_provs_i_hb_update_const_s_big ?hb_shared_s_hb_update_const_i_big
+        ?hb_provs_i_hb_update_const_i_big ?hb_shared_s_empty
+        ?hb_provs_i_empty ?right_id_L. 2: apply disjoint_empty_r.
+      by rewrite union_comm.
+    - rewrite dom_fmap_L dom_union_L. done.
+    - rewrite r2a_rh_constant_fmap //.
+    - rewrite right_id_L map_union_comm //.
+    - rewrite r2a_rh_shared_fmap_constant. apply map_subseteq_spec => p ?.
+      move => /r2a_combine_priv_shared_Some/=[?[+[??]]].
+      rewrite right_id_L. rewrite -map_fmap_union lookup_fmap_Some. naive_solver.
+    - rewrite r2a_rh_shared_fmap_constant.
+      eexists ∅. move => ???. by simplify_map_eq.
+    - move => p /elem_of_difference[/elem_of_h_static_provs[?[l [? [??]]]]].
+      move => /not_elem_of_union[/not_elem_of_union[/not_elem_of_dom? _] _].
+      apply elem_of_dom. eexists (h_block h p). apply map_lookup_filter_Some. split!.
+      apply lookup_gmap_curry_Some. setoid_rewrite h_block_lookup. split; [|done].
+      move => /map_empty/(_ l.2). subst. rewrite h_block_lookup -surjective_pairing.
+      naive_solver.
+    - iSatMono. iIntros!. iDestruct (r2a_heap_get_statics with "[$]") as "#?". iFrame "∗#".
+      rewrite r2a_rh_shared_fmap_constant /r2a_mem_map !big_sepM_empty.
+      iSplit!. iApply big_sepM_intro. iIntros "!>" (?? [?[??]]%r2a_combine_bij_lookup_Some).
+      simplify_map_eq.
   }
   all: move => [csa lra] [] [cs lr] Pa Pb P [? e] ?/=; destruct!.
   - move: e => []//= regs mem b ? h ? vs avs.
     apply pp_to_all_forall => -[e' [??]] P'x Hx P' HP'. simplify_eq/=. setoid_subst. eexists b.
-    induction f2i_full as [HSome | f2i_full] using option_elim_Some. {
-      destruct!/=.
-      iSatStart HP'. iIntros!.
-      iDestruct select (r2a_f2i_incl _ _) as "Hf2i".
-      unfold r2a_f2i_incl. iDestruct "Hf2i" as (f2i_full ??) "#?". iSatStop.
-      apply: (HSome f2i_full).
-      - apply: satisfiable_mono; [apply r2a_res_init|]. iIntros!.
-        iDestruct select (r2a_f2i_full _) as "#?". iFrame "∗#".
-        rewrite r2a_rh_shared_empty map_difference_diag /r2a_mem_map !big_sepM_empty !right_id.
-        iSplit.
-        + iExists _. by iFrame "#".
-        + iDestruct select (r2a_heap_inv _) as (rh Hsub ?) "(?&?&?)".
-          have -> : rh = ∅; [|done]. apply map_eq => i. apply option_eq => ?. split => // ?.
-          have : i ∈ h_provs ∅; [|done]. apply Hsub. by apply elem_of_dom.
-      - eexists ∅. move => ?? /map_lookup_filter_Some. naive_solver.
-      - iSatMono. iFrame "∗#".
-    }
     rename select (satisfiable (Pa ∗ _)) into HPa.
     rename select (satisfiable (Pb ∗ _)) into HPb.
     rename select (heap_preserved (r2a_rh_constant rha) hprev) into Hpreva.
@@ -854,24 +1186,57 @@ Proof.
     iDestruct select (r2a_mem_inv _ _ _) as "((Hgp&Hsp)&Hmauth)".
     iDestruct (r2a_mem_lookup_big' mo with "[$] [$]") as %?.
     iDestruct (r2a_mem_uninit_alt1 with "[$]") as (? Hvslen) "Hsp"; [lia|].
-    iDestruct select (r2a_heap_inv _) as (rh ??) "[Hsh [Hhag Hh]]".
+    iDestruct select (r2a_heap_inv _) as (rh ??) "[Hsh [Hhag [Hh #Hag]]]".
     iDestruct (r2a_heap_shared_lookup_big' (r2a_combine_bij _ _) with "[$] [$]") as %?.
-    iDestruct (r2a_heap_lookup_big' with "[$] [$]") as %?.
+    iDestruct (r2a_heap_lookup_big' ho with "[$] [$]") as %?.
     iDestruct select (r2a_f2i_full _) as "#Hf2i_full".
     iDestruct (r2a_heap_shared_agree_to_pure with "[$] [$] [$]") as (??) "[? ?]".
     iDestruct (r2a_val_rel_big_to_pure with "[$] [$] [$]") as %Hvs.
+    iDestruct (r2a_statics_agree with "[$] [$]") as %Hag.
     iSatStop HP'.
 
-    have [| | | | | |rh' [bijb' ?]]:= r2a_combine_extend (h_provs hprev) rha bijb rh ho hb => //.
+    have /(map_subseteq_exists_L _ _)[hsn [Hhsn Hhsndom]] :
+      r2a_shared_statics rh bijb ⊆ dom hs. {
+      move => p /r2a_shared_statics_in[? [?[Hsh ?]]].
+      revert select (_ ⊆ dom hs). apply.
+      apply elem_of_difference. split. {
+        rewrite Hag -h_provs_static //. revert select (dom rh ⊆ h_provs h).
+        apply. by apply elem_of_dom. }
+      move => /elem_of_union[/elem_of_union Hin|//].
+      iSatStart HP'. iIntros!.
+      move: Hin => [|] /elem_of_dom[? Hl].
+      all: iDestruct (big_sepM_lookup _ _ _ _ Hl with "[$]") as "?".
+      all: iDestruct (r2a_heap_lookup' with "[$] [$]") as %Heq;
+        by rewrite Heq in Hsh.
+      Unshelve. all: by apply _.
+    }
+    iSatStart HPa. iIntros!.
+    rewrite Hhsn big_sepM_union. 2: { apply map_disjoint_difference_r'. }
+    iDestruct!.
+    iDestruct (r2a_heap_lookup_big' hsn with "[$] [$]") as %Hhsnsub.
+    iSatStop HPa.
+
+    have [| | | | | | | | rh' [bijb' ?]]:= r2a_combine_extend (h_provs hprev) rha bijb rh ho hb hsn => //.
+    { etrans; [by apply map_fmap_mono|]. apply r2a_rh_constant_fmap_l. }
     destruct!.
     rename select (r2a_rh_shared rh = _) into Hihs.
     rename select (r2a_rh_constant rh = _) into Hihc.
-    rename select (hb_priv_i bijb = hb_priv_i bijb') into Hpriveq.
+    rename select (hb_priv_i bijb ∖ hsn = hb_priv_i bijb') into Hpriveq.
     rename select (r2a_rh_constant rh ∖ (hb_priv_s bijb' ∖ ho) = ho) into Hhoeq.
     rename select (hb_priv_s bijb' ∖ (ho ∖ (ho ∖ hb_priv_s bijb)) = hb_priv_s bijb' ∖ ho) into Hhoeq2.
 
+    have Hstaticinprev :
+      ∀ p, is_ProvStatic p → p ∈ hb_shared_i bijb' → p ∈ h_provs hprev. {
+      move => p ? Hin. rewrite h_provs_static // Hag -h_provs_static //.
+      have : p ∈ dom (hb_bij bijb'); [|set_solver].
+      rewrite hb_shared_i_static // in Hin.
+      move: Hin => /elem_of_hb_shared_s[??].
+      by apply elem_of_dom.
+    }
+
     iSatStartBupd HPa. iIntros!.
     iMod (r2a_mem_update_all mem with "[$] [$]") as "[Ha Hmo]"; [done..|].
+    iMod (r2a_heap_free_big' _ hsn with "[$] [$]") as "?".
     iMod (r2a_heap_alloc_shared_big' with "[$]") as "[Hih ?]"; [done..|]. iModIntro.
     iSatStop HPa.
 
@@ -881,9 +1246,12 @@ Proof.
     iSatStart HP'. iIntros!. iDestruct (r2a_mem_lookup_big' with "[$] [$]") as %?. iSatStop HP'.
 
     iSatStartBupd HPb. iIntros!.
-    rewrite r2a_combine_priv_diff // (map_difference_difference_add (hb_priv_s bijb)).
+    rewrite r2a_combine_priv_diff //.
+    rewrite (map_difference_difference_add (hb_priv_s bijb)).
+    rewrite Hhsn big_sepM_union. 2: { apply map_disjoint_difference_r'. }
+    iDestruct select (_ ∗ _)%I as "[Hhsn ?]".
 
-    iMod (heap_bij_update_all bijb' with "[$] [$] [$]") as "[?[#Hs ?]]". {
+    iMod (heap_bij_update_all bijb' with "[$] [$] [$] Hhsn") as "[?[#Hs ?]]". {
       apply map_difference_difference_subseteq, map_agree_spec. move => j x1 x2 Hho.
       have : r2a_combine_priv (r2a_rh_shared rha) bijb hb !! j = Some x1 by apply: lookup_weaken.
       move => /r2a_combine_priv_Some ? /hb_priv_s_lookup_Some. naive_solver.
@@ -898,6 +1266,52 @@ Proof.
                   (heap_restrict hprev
                                  (λ x, x ∉ dom (rh' ∪ r2a_rh_shared rha) ∨ x ∉ hb_shared_i bijb')))).
     set (vs' := (val_through_bij bijb' <$> vs)).
+
+
+    have h_provs_h' : h_provs h' = hb_shared_i bijb' ∪ h_provs hprev. {
+      rewrite /h' h_provs_heap_merge !h_provs_heap_restrict h_provs_heap_through_bij.
+      2: set_solver.
+      apply set_eq => p. rewrite 2!elem_of_union !elem_of_filter.
+      destruct (decide (is_ProvBlock p)); [naive_solver|].
+      have ? : is_ProvStatic p by destruct p.
+      have ? : p ∈ hb_shared_i bijb' → p ∈ h_provs hprev by apply Hstaticinprev.
+
+      split => ?; destruct! => //.
+      - naive_solver.
+      - naive_solver.
+      - naive_solver.
+      - destruct (decide (p ∈ dom (rh' ∪ r2a_rh_shared rha) ∧ p ∈ hb_shared_i bijb')); naive_solver.
+      - destruct (decide (p ∈ dom (rh' ∪ r2a_rh_shared rha) ∧ p ∈ hb_shared_i bijb')) as [Hin|Hin];
+          [naive_solver|].
+        rewrite not_and_r in Hin. naive_solver.
+    }
+
+    have Hinstatic : ∀ p h, p ∈ h_static_provs h ↔ p ∈ h_provs h ∧ is_ProvStatic p. {
+      move => p ?. destruct (decide (is_ProvStatic p)).
+      - rewrite h_provs_static; naive_solver.
+      - rewrite elem_of_h_static_provs. naive_solver.
+    }
+
+    have h_static_provs_h' : h_static_provs h' = h_static_provs h. {
+      apply set_eq => p. rewrite Hinstatic h_provs_h' elem_of_union. split.
+      - move => [[Hin| Hin] ?].
+        + rewrite -Hag -h_provs_static //. by apply Hstaticinprev.
+        + rewrite h_provs_static // in Hin. congruence.
+      - move => ?. have ? : is_ProvStatic p by eapply elem_of_h_static_provs.
+        split; [|done]. right. rewrite h_provs_static; congruence.
+    }
+
+    have Hrh_shared :
+      r2a_rh_shared ((R2AShared <$> rh') ∪ rha ∖ (R2AConstant <$> hsn)) =
+        rh' ∪ r2a_rh_shared rha. {
+      rewrite r2a_rh_shared_union // r2a_rh_shared_fmap. f_equal.
+      apply map_eq => ?. apply option_eq => ?.
+      rewrite !r2a_ih_shared_Some lookup_difference_Some. split; [naive_solver|].
+      move => ?. split!. rewrite lookup_fmap fmap_None.
+      apply: lookup_weaken_None; [|done]. apply r2a_rh_constant_None. naive_solver.
+    }
+
+
     eexists h', _, vs', avs. apply pp_to_ex_exists.
     eexists ((e'.1, event_set_vals_heap e'.2 vs' h'), R2A _ _).
     move: Hx => /pp_to_ex_quant_if_then[f Hx].
@@ -905,28 +1319,32 @@ Proof.
     split!.
     + iSatMono HPa. iIntros!.
       iDestruct select (r2a_f2i_full _) as "#Hf2i". iFrame "Hf2i".
-      iAssert ([∗ map] p↦a ∈ r2a_rh_shared ((R2AShared <$> rh') ∪ rha), r2a_heap_shared p a)%I as "#Hsh". {
-        rewrite r2a_rh_shared_union // r2a_rh_shared_fmap. by iApply (big_sepM_union_2 with "[$]").
-      } iFrame "Hsh".
-      iDestruct select (r2a_mem_map (mem ∖ _)) as "$". iFrame.
+      iAssert ([∗ map] p↦a ∈ r2a_rh_shared ((R2AShared <$> rh') ∪ rha ∖ (R2AConstant <$> hsn)), r2a_heap_shared p a)%I as "#Hsh". {
+        rewrite Hrh_shared. iApply (big_sepM_union_2 with "[$] [$]").
+       } iFrame "Hsh".
+      iDestruct select (r2a_mem_map (mem ∖ _)) as "$".
+      iDestruct select (r2a_statics _) as "#$".
+      iFrame.
       iDestruct (r2a_mem_uninit_alt2 with "[$]") as "Huninit". rewrite Hvslen Z2Nat.id; [|lia].
       iFrame "Huninit". rewrite -!(assoc bi_sep).
-
-      iSplit!. 3: iSplitL; [|iSplit].
-      * rewrite dom_union_L. apply union_mono; [|done]. by rewrite dom_fmap_L.
+      iSplit!. 3: iSplitL; [|iSplit!].
+      * rewrite h_provs_h'. set_solver.
       * move => l ?. rewrite r2a_rh_constant_union // r2a_rh_constant_fmap_shared left_id_L.
         move => Hih /=.
         have ? : l.1 ∉ dom (rh' ∪ r2a_rh_shared rha). {
-          move: Hih => /r2a_rh_constant_Some?.
+          move: Hih => /r2a_rh_constant_Some/lookup_difference_Some[??].
           rewrite dom_union. apply not_elem_of_union. split.
-          - revert select (dom rh' ## h_provs hprev) => Hih'.
+          - revert select (dom rh' ## _) => Hih'.
             symmetry in Hih'. apply: Hih'.
-            revert select (dom rha ⊆ h_provs hprev). apply.
-            by apply elem_of_dom.
+            apply elem_of_difference. rewrite not_elem_of_dom. split; [|done].
+            revert select (dom rha ⊆ h_provs hprev). apply. by apply elem_of_dom.
           - apply not_elem_of_dom. apply r2a_rh_shared_None. naive_solver.
         }
         rewrite lookup_union_r. 2: { apply map_lookup_filter_None. naive_solver. }
-        rewrite map_lookup_filter_true; [by apply Hpreva|naive_solver].
+        rewrite map_lookup_filter_true; [|naive_solver].
+        apply Hpreva.
+        move: Hih => /r2a_rh_constant_Some /lookup_difference_Some[/r2a_rh_constant_Some ??].
+        done.
       * iApply r2a_heap_shared_agree_union. {
           apply map_disjoint_spec => -[p o] ?? /map_lookup_filter_Some[/=/heap_through_bij_Some??].
           move => /map_lookup_filter_Some[?[//|]] /=. destruct!.
@@ -941,52 +1359,63 @@ Proof.
            ++ by apply hb_shared_lookup_Some.
            ++ done.
            ++ rewrite Hihs. apply r2a_combine_bij_lookup_Some. split!.
-              by rewrite r2a_rh_shared_union // r2a_rh_shared_fmap in Hsh.
+              by rewrite Hrh_shared in Hsh.
            ++ move => ??. apply: r2a_val_rel_pure_through_bij; [done|].
-              by rewrite r2a_rh_shared_union // r2a_rh_shared_fmap.
+              by rewrite Hrh_shared.
         -- iApply r2a_heap_shared_agree_impl.
-           2: { iApply (r2a_heap_shared_agree_of_pure with "[$] [] [$]"). done.
-                rewrite r2a_rh_shared_union // big_sepM_union //. 2: by apply map_disjoint_omap.
-                by iDestruct!. }
+           2: { iApply (r2a_heap_shared_agree_of_pure with "[$] [] [$]"); [done|].
+                rewrite Hrh_shared // big_sepM_union //.
+                { by iDestruct!. }
+                apply (map_disjoint_fmap R2AShared R2AShared).
+                apply: map_disjoint_weaken_r; [done|].
+                apply: map_subseteq_difference_r; [apply r2a_rh_shared_fmap_l|].
+                apply: map_disjoint_weaken_r; [apply r2a_rh_shared_constant_disj|].
+                by apply map_fmap_mono.
+           }
            move => l ?? /map_lookup_filter_Some[? Hne] Ha.
            move: Hne => [Hne|Hne]; simplify_eq/=. {
              contradict Hne. apply elem_of_dom.
-             move: Ha. rewrite -r2a_ih_shared_Some r2a_rh_shared_union // r2a_rh_shared_fmap. done.
+             move: Ha. rewrite -r2a_ih_shared_Some Hrh_shared.
+             done.
            }
            split.
            ++ apply map_lookup_filter_Some => /=. split; [done|].
               contradict Hne. move: Hne => /elem_of_hb_shared_i[?]. rewrite -hb_shared_lookup_Some => ?.
               apply elem_of_hb_shared_i. eexists _. rewrite -hb_shared_lookup_Some.
               by apply: lookup_weaken.
-           ++ move: Ha => /lookup_union_Some_raw[|[??] //]. rewrite lookup_fmap => /fmap_Some[?[??]].
-              exfalso. revert select (dom rh' ## h_provs hprev). apply.
-              ** by apply elem_of_dom.
-              ** by apply heap_wf.
+           ++ move: Ha => /lookup_union_Some_raw[|[? /lookup_difference_Some[??]] //].
+              rewrite lookup_fmap => /fmap_Some[?[??]].
+              simplify_eq. contradict Hne.
+              revert select (dom rh' ⊆ hb_shared_i bijb'). apply.
+              by apply elem_of_dom.
+      * by rewrite Hag h_static_provs_h'.
       * iApply (r2a_val_rel_big_through_bij with "[$] Hsh"); [done|].
-        by rewrite r2a_rh_shared_union // r2a_rh_shared_fmap.
+        by rewrite Hrh_shared.
       * destruct b => //. destruct!/=. iSplit; [|done]. iApply (r2a_f2i_full_to_singleton with "Hf2i").
         iSatStart HP'. iDestruct!.
-        iDestruct (r2a_f2i_full_singleton with "[$] [$]") as %?. by iSatStop.
+        iDestruct (r2a_f2i_full_singleton with "[$] [$]") as %?.
+        by iSatStop.
     + iSatMono HPb. iIntros!. rewrite heap_of_event_event_set_vals_heap vals_of_event_event_set_vals_heap.
       2: { rewrite fmap_length. destruct b; simplify_eq/=; destruct!/=; done. }
-      iFrame "Hs". iFrame. iSplit!.
-      * by etrans.
-      * move => ? /elem_of_hb_provs_i[[? Hin]|[??]]; apply elem_of_union.
-        -- right. revert select (hb_provs_i bijb ⊆ h_provs hprev). apply.
-           apply elem_of_hb_provs_i. rewrite Hpriveq. naive_solver.
-        -- left. apply elem_of_hb_shared_i. naive_solver.
+      iDestruct select (heap_bij_statics _) as "#Hag".
+      iFrame. iSplit!.
+      * etrans; [eassumption|]. eassumption.
+      * rewrite h_provs_h' /hb_provs_i -Hpriveq. set_solver.
       * apply: heap_preserved_mono; [done|]. rewrite Hihc.
         apply map_subseteq_spec => ??. rewrite hb_priv_s_lookup_Some r2a_combine_priv_Some.
-        naive_solver.
+           naive_solver.
       * rewrite -Hpriveq.
-        move => [p o] ?? /=. rewrite lookup_union_r. 2: {
-           apply map_lookup_filter_None. left.
-           apply eq_None_not_Some => /heap_through_bij_is_Some[?[/hb_disj]].
-           rewrite -Hpriveq. naive_solver.
-         }
-         rewrite map_lookup_filter_true; [by apply Hprevb|].
-         move => ?? /=. right. move => /elem_of_hb_shared_i[??].
-         opose proof* hb_disj as HNone; [done|]. rewrite -Hpriveq in HNone. naive_solver.
+        move => [p o] /= ? /lookup_difference_Some[??].
+        rewrite lookup_union_r. 2: {
+          apply map_lookup_filter_None. left.
+          apply eq_None_not_Some => /heap_through_bij_is_Some[?[/hb_disj]].
+          rewrite -Hpriveq. move => /lookup_difference_None.
+          rewrite /is_Some. naive_solver.
+        }
+        rewrite map_lookup_filter_true; [by apply Hprevb|].
+        move => ?? /=. right. move => /elem_of_hb_shared_i[??].
+        exploit hb_disj; [done|]. rewrite -Hpriveq.
+        move => /lookup_difference_None. rewrite /is_Some. naive_solver.
       * iIntros (p1 p2 o ?) => /=.
         destruct (decide (p1 ∈ dom (rh' ∪ r2a_rh_shared rha))) as [Hin|].
         -- rewrite lookup_union_l.
@@ -994,11 +1423,16 @@ Proof.
            rewrite map_lookup_filter_true; [|done].
            iSplit; [iPureIntro; by apply heap_through_bij_is_Some1|].
            iIntros (??[?[?[?[??]]]]%heap_through_bij_Some ?). simplify_bij.
-           have [|??]:= r2a_heap_shared_agree_pure_lookup _ _ _ _ _ _ ltac:(done) ltac:(done) => /=. {
+           have [|? Hval]:= r2a_heap_shared_agree_pure_lookup _ _ _ _ _ _ ltac:(done) ltac:(done) => /=. {
              move: Hin => /elem_of_dom[??]. rewrite Hihs. eexists _. apply r2a_combine_bij_lookup_Some.
              naive_solver.
            }
-           by iApply (val_in_through_bij with "[$]").
+           revert select (r2a_rh_shared rh = _) => Heq. rewrite Heq in Hval.
+           destruct x0 => //; simplify_eq/=.
+           move: Hval => [?[? /r2a_combine_bij_lookup_Some [?[??]]]]. simplify_map_eq.
+           unfold loc_in_bij. iSplit!.
+           ++ by eapply hb_shared_prov.
+           ++ iApply (big_sepM_lookup with "[$]"). by apply hb_shared_lookup_Some.
         -- rewrite lookup_union_r. 2: { apply map_lookup_filter_None. naive_solver. }
            rewrite map_lookup_filter_true; [|naive_solver].
            revert select (heap_preserved (r2a_rh_constant rh) h) => Hpre.
@@ -1009,41 +1443,60 @@ Proof.
            iDestruct select (heap_in_bij _ _ _) as "Hbij".
            iApply ("Hbij" $! p1 p2 o). iPureIntro.
            naive_solver.
+        * by rewrite Hag h_static_provs_h'.
+        * by rewrite Hag.
       * rewrite big_sepL2_fmap_l. iApply big_sepL_sepL2_diag.
         iApply big_sepL_intro. iIntros "!>" (???).
         move: Hvs => /(Forall2_lookup_l _ _ _ _ _). move => /(_ _ _ ltac:(done))[?[??]].
         by iApply (val_in_through_bij with "[$]"); [|done].
+      * done.
     + destruct b; simplify_eq/=; destruct!/=; done.
-    + by rewrite r2a_rh_shared_union // r2a_rh_shared_fmap.
-    + rewrite {1}Hihc r2a_rh_shared_union; [|done]. by rewrite r2a_rh_shared_fmap.
+    + rewrite Hrh_shared. done.
+    + rewrite {1}Hihc Hrh_shared. done.
     + iSatMono HP'. iIntros!. rewrite Hhoeq. iFrame.
       rewrite !map_difference_id; [by iFrame|done..].
     + by apply map_subseteq_difference_l.
     + rewrite Hihc. apply map_union_subseteq_r';
            [by apply r2a_combine_priv_shared_priv_s_disj|by apply map_subseteq_difference_l].
+    + move => p /elem_of_filter[?]. rewrite Hag -h_provs_static //. set_solver.
+    + rewrite Hhoeq. rewrite dom_difference_L.
+      have Hsubb : hb_shared_s bijb ∪ dom hsn ⊆ hb_shared_s bijb'. {
+        apply union_least; [by apply subseteq_dom|done].
+      }
+      etrans. { by apply difference_mono_l, union_mono_l. }
+      rewrite assoc_L -difference_difference_l_L.
+      by apply difference_mono_r.
     + destruct b; simplify_eq/=; destruct!/=; split!.
   - move => vs hb' Pb' HPb' ? rs' mem'' ? avs.
-    apply pp_to_all_forall => -[e' [??]] ? Hx Pa' HPa'. setoid_subst.
+    apply pp_to_all_forall => -[e' [??]] ? Hx Pa' HPa'.
+    rename select (Pa ⊣⊢ _) into HPaeq.
+    rename select (Pb ⊣⊢ _) into HPbeq.
     rename select (satisfiable (P ∗ _)) into HP.
     rename select (r2a_rh_shared rh = _) into Hihs.
     rename select (r2a_rh_constant rh = _) into Hihc.
 
-    iSatStart HPb'. iIntros!.
-    iDestruct select (heap_bij_inv _ _) as (bijb' ? ? ? ?) "(Hsh&Hh&Hbij)".
+    iSatStart HPb'.
+    rewrite HPbeq.
+    iIntros!.
+    iDestruct select (heap_bij_inv _ _) as (bijb' ? ? ? ?) "(Hsh&Hh&Hbij&#[Hag1 Hag2])".
     iDestruct (val_in_bij_to_pure_big with "[$] [$]") as %?.
     iDestruct (heap_bij_const_s_lookup_big with "[$] [$]") as %?.
     iDestruct (heap_bij_shared_lookup_big with "[$] [$]") as %?.
     iDestruct (heap_in_bij_to_pure with "[$] [$]") as %?.
+    iDestruct (heap_bij_statics_eq with "[$] [$]") as %Hag. subst.
+    iDestruct (heap_bij_statics_eq with "Hag1 Hag2") as %Hag.
     iSatStop HPb'.
 
-    iSatStart HPa'. iIntros!.
+    iSatStart HPa'.
+    rewrite HPaeq.
+    iIntros!.
     rewrite heap_of_event_event_set_vals_heap vals_of_event_event_set_vals_heap.
     2: { destruct e; simplify_eq/=; destruct!/=; solve_length. }
     iDestruct select (r2a_f2i_full _) as "#Hf2i_full".
     iDestruct select (r2a_mem_inv _ _ _) as "((Hgp&Hsp)&Hmauth)".
     iDestruct (r2a_mem_lookup_big' moa with "[$] [$]") as %?.
     iDestruct (r2a_mem_uninit_alt1 with "[$]") as (? Hvslen) "Hsp"; [lia|].
-    iDestruct select (r2a_heap_inv _) as (rha' ??) "[Hsh [Hhag Hh]]".
+    iDestruct select (r2a_heap_inv _) as (rha' ??) "[Hsh [Hhag [Hh #Hag]]]".
     rewrite -(map_filter_union_complement (λ x, x.1.1 ∈ hb_shared_i bijb') (h_heap hb')).
     rewrite r2a_heap_shared_agree_union. 2: apply map_disjoint_filter_complement.
     iDestruct "Hhag" as "[Hhag1 Hhag2]".
@@ -1051,6 +1504,7 @@ Proof.
     iDestruct (r2a_heap_shared_agree_to_pure with "[$] Hhag2 [$]") as (mhag2 ?) "[? ?]".
     iDestruct (r2a_heap_shared_lookup_big' with "[$] [$]") as %?.
     iDestruct (r2a_val_rel_big_to_pure with "[$] [$] [$]") as %Hvs.
+    iDestruct (r2a_statics_agree with "[$] [$]") as %Hag'.
     iSatStop HPa'.
 
     have Hdisj := r2a_combine_bij_priv_disj (r2a_rh_shared rha') bijb' (heap_of_event e).
@@ -1060,10 +1514,17 @@ Proof.
     iMod (r2a_heap_update_all
             (r2a_combine_bij (r2a_rh_shared rha') bijb')
             (r2a_combine_priv (r2a_rh_shared rha') bijb' (heap_of_event e))
-           with "[$] [$] [$]") as "(?&?&?)"; [done| | | |].
+           with "[$] [$] [$]") as "(?&?&?)".
+    { done. }
     { etrans; [done|]. apply map_union_subseteq_r. apply r2a_combine_priv_shared_priv_s_disj. }
     { rewrite Hihs. by apply r2a_combine_bij_mono. }
     { move: Hdisj => /map_disjoint_dom. by rewrite !dom_fmap. }
+
+    have ? := r2a_unowned_statics_disj (heap_of_event e) bijb bijb' rha'.
+    iMod (r2a_heap_alloc_big' _ (r2a_unowned_statics (heap_of_event e) bijb bijb') with "[$]") as "(?&?)"; [done|].
+    iDestruct select ([∗ map] p↦h ∈ ho', r2a_heap_constant p h)%I as "Hho'".
+    iDestruct select ([∗ map] p↦h ∈ r2a_unowned_statics (heap_of_event e) bijb bijb', r2a_heap_constant p h)%I as "Hho''".
+    iDestruct (big_sepM_union_2 with "Hho' Hho''") as "Hho'".
     iModIntro.
     iSatStop HP.
 
@@ -1072,35 +1533,50 @@ Proof.
 
     split; [done|]. eexists  _, _, _, avs.
     apply pp_to_ex_exists. eexists (_, R2A _ _).
-    eexists (if e is ERCall f _ _ then (r2a_f2i_incl {[f := rs' !!! "PC"]} ∅) ∗ True else True)%I.
-    (* TODO: is there a better way to instatiate f2i_full with Some? *)
-    unshelve split!. 3: apply Some. all: shelve_unifiable; simpl.  2: {
+    eexists (if e is ERCall f _ _ then (r2a_f2i_incl {[f := rs' !!! "PC"]} ∅) ∗ True else True)%I. split!.
+    2: {
       iSatMono HPa'. iIntros!.
       iDestruct (r2a_mem_lookup_big' with "[$] [$]") as %?.
+      rewrite Hag'.
       iFrame. by erewrite map_difference_id.
     }
     + iSatMono HP. iIntros!.
       iDestruct select (r2a_f2i_full _) as "#Hf2i_full".
+      iDestruct select (r2a_statics _) as "#Hag".
+      iDestruct select ([∗ map] p↦h ∈ (ho' ∪ _), r2a_heap_constant p h)%I as "Hho'".
+      iDestruct select ([∗ map] p↦h ∈ (r2a_combine_priv _ _ _ ∖ _), r2a_heap_constant p h)%I as "Hho".
       iDestruct select (r2a_mem_map (mem'' ∖ _)) as "$".
       iDestruct select (r2a_mem_map mhag2) as "$".
-      iDestruct select ([∗ map] _↦_ ∈ _, r2a_heap_shared _ _)%I as "#Hsh". iFrame. iFrame "Hsh".
-      iDestruct (r2a_mem_uninit_alt2 with "[$]") as "Hsp". rewrite Hvslen Z2Nat.id; [|lia]. iFrame "∗#".
-      iSplitL; [iSplitL|].
-      * repeat iSplit.
-        -- iPureIntro. etrans; [|done]. rewrite dom_union_L !dom_fmap_L. apply union_least.
-           ++ move => ? /elem_of_dom[?/r2a_combine_bij_lookup_Some?]. apply elem_of_dom. naive_solver.
-           ++ move => ? /elem_of_dom[?/r2a_combine_priv_Some?]. apply elem_of_dom. naive_solver.
-        -- iPureIntro. rewrite r2a_rh_constant_union // r2a_rh_constant_fmap_shared left_id_L.
-           rewrite r2a_rh_constant_fmap.
-           move => ?? /r2a_combine_priv_Some[?|?].
+      iDestruct select ([∗ map] _↦_ ∈ _, r2a_heap_shared _ _)%I as "#Hsh".
+      (* We need to be very careful with the order of framing such
+      that ho and ho' get instantiated in the right way. *)
+      iFrame "Hho". iFrame "Hho'". iFrame "Hsh". iFrame.
+      iDestruct (r2a_mem_uninit_alt2 with "[$]") as "Hsp". rewrite Hvslen Z2Nat.id; [|lia].
+      rewrite Hag'. iFrame "∗#".
+      iSplitL; repeat iSplit.
+      * iPureIntro. rewrite !dom_union_L !dom_fmap_L.
+        apply union_subseteq. split.
+        2: etrans; [|done]; apply union_subseteq; split.
+        -- move => ? /elem_of_dom [? /r2a_unowned_statics_lookup_Some[?[?[??]]]].
+           apply elem_of_h_provs. left.
+           revert select (_ ⊆ h_static_provs (heap_of_event e)). apply.
+           by apply elem_of_filter.
+        -- move => p /elem_of_dom[?/r2a_combine_bij_lookup_Some?]. apply elem_of_dom. naive_solver.
+        -- move => p /elem_of_dom[?/r2a_combine_priv_Some?]. apply elem_of_dom. naive_solver.
+      * iPureIntro. rewrite !r2a_rh_constant_union // r2a_rh_constant_fmap_shared left_id_L.
+        rewrite !r2a_rh_constant_fmap.
+        move => l? /lookup_union_Some_raw[|[?]].
+        -- move => /r2a_unowned_statics_lookup_Some [?[->?]].
+           by rewrite h_block_lookup -surjective_pairing.
+        -- move => /r2a_combine_priv_Some[?|?].
            ++ revert select (heap_preserved (hb_priv_s bijb') (heap_of_event e)).
               apply. by apply hb_priv_s_lookup_Some.
            ++ destruct!. by rewrite h_block_lookup -surjective_pairing.
-        -- by rewrite r2a_rh_shared_union // r2a_rh_shared_fmap r2a_rh_shared_fmap_constant right_id_L.
-        -- iApply (r2a_heap_shared_agree_of_pure with "[$] [] [$]").
-           all: rewrite r2a_rh_shared_union // r2a_rh_shared_fmap r2a_rh_shared_fmap_constant right_id_L //.
-           apply: r2a_heap_shared_agree_pure_combine; [done..|].
-           move => ????. by apply map_lookup_filter_Some.
+      * rewrite !r2a_rh_shared_union // r2a_rh_shared_fmap !r2a_rh_shared_fmap_constant ?right_id_L ?left_id_L //.
+      * iApply (r2a_heap_shared_agree_of_pure with "[$] [] [$]").
+        all: rewrite !r2a_rh_shared_union // r2a_rh_shared_fmap !r2a_rh_shared_fmap_constant ?right_id_L ?left_id_L//.
+        apply: r2a_heap_shared_agree_pure_combine; [done..|].
+        move => ????. by apply map_lookup_filter_Some.
       * iApply (r2a_val_rel_big_of_pure with "[$] Hsh").
         apply Forall2_same_length_lookup. split; [solve_length|].
         move => ?????. move: Hvs => /(Forall2_lookup_r _ _ _ _ _). move => /(_ _ _ ltac:(done))[?[??]].
@@ -1119,17 +1595,37 @@ Proof.
     + done.
     + done.
     + done.
-    + rewrite /r2a_combine_priv map_difference_union_distr. apply map_union_subseteq_l'.
-      rewrite map_difference_disj_id //. apply: map_disjoint_weaken_r; [|done].
+    + rewrite /r2a_combine_priv map_difference_union_distr.
+      apply map_union_subseteq_l'.
+      rewrite (map_difference_disj_id _ hob) //.
+      apply: map_disjoint_weaken_r; [|done].
       apply r2a_combine_priv_shared_priv_s_disj.
     + done.
+    + etrans; [|done]. rewrite Hag' Hihc.
+      move => p /elem_of_difference[Hs Hn].
+      apply elem_of_difference. split; [done|]. contradict Hn.
+      rewrite dom_union !elem_of_union.
+      move: Hn => /elem_of_union[/elem_of_union[|]|]. 2: naive_solver.
+      2: { right. by apply: subseteq_dom. }
+      rewrite !dom_difference.
+      move => /elem_of_difference[+ ?].
+      move => /elem_of_dom[? /r2a_combine_priv_Some[|[?[??]]]].
+      * move => Hb. destruct (hb_bij bijb' !! p) as [[|]|] eqn: Hb'.
+        -- right. apply elem_of_hb_shared_s. naive_solver.
+        -- left. left. apply elem_of_difference. split; [|done].
+           apply elem_of_dom. eexists _. apply r2a_combine_priv_Some.
+           by left.
+        -- left. right. right. apply elem_of_dom. eexists _.
+           apply r2a_unowned_statics_lookup_Some. rewrite elem_of_dom not_elem_of_dom.
+           split_and! => //. by eapply elem_of_h_static_provs.
+      * right. apply: subseteq_dom; [done|]. apply elem_of_dom. eexists.
+        by apply hb_shared_lookup_Some.
     + destruct e; simplify_eq/=; destruct!/=; split!.
 Qed.
 
 (* Print Assumptions r2a_bij_vertical. *)
 
-Lemma r2a_bij_vertical_N m moinit `{!VisNoAng m.(m_trans)} ins f2i n:
-  trefines (rec_to_asm ins f2i moinit (rec_heap_bij_N n m))
-           (rec_to_asm ins f2i moinit m)
-.
-Proof. elim: n => //= ??. etrans; [by apply: r2a_bij_vertical|done]. Qed.
+Lemma r2a_bij_vertical_N m moinit hinit `{!VisNoAng m.(m_trans)} ins f2i n:
+  trefines (rec_to_asm ins f2i moinit hinit (rec_heap_bij_N n hinit m))
+           (rec_to_asm ins f2i moinit hinit m).
+Proof. elim: n => //= ??. etrans; [by apply: r2a_bij_vertical|eauto]. Qed.

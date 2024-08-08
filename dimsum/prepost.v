@@ -609,7 +609,9 @@ Section prepost.
         s1 s2 s x1 x2 x
         `{!VisNoAng m.(m_trans)}
         :
-        INV Env s1 s2 s x1 x2 x →
+        (∀ e, pp_to_all (i e s) (λ r y, ∀ x',
+            satisfiable (x ∗ y ∗ x') →
+            ∃ x0, INV Env s1 s2 s x1 x2 x0 ∧ satisfiable (x0 ∗ y ∗ x'))) →
        (∀ s1 s2 s x1 x2 x e,
            INV Env s1 s2 s x1 x2 x →
            pp_to_all (i e s) (λ r y, ∀ x',
@@ -640,7 +642,10 @@ Section prepost.
           '(σf, σ, (σpp, s, x)),
            ∃ p rx1 rx2 rx,
            x1 = uPred_shrink rx1 ∧ x2 = uPred_shrink rx2 ∧ x = uPred_shrink rx ∧
-           σ = σ1 ∧ INV p s1 s2 s rx1 rx2 rx ∧
+           σ = σ1 ∧ (if p is Env then
+            (∀ e, pp_to_all (i e s) (λ r y, ∀ x', satisfiable (rx ∗ y ∗ x') →
+                ∃ rx0, INV p s1 s2 s rx1 rx2 rx0 ∧ satisfiable (rx0 ∗ y ∗ x')))
+                     else INV p s1 s2 s rx1 rx2 rx) ∧
            ((p = Env ∧ σf1 = SMFilter ∧ σf2 = SMFilter ∧ σf = SMFilter ∧
               σpp1 = PPOutside ∧ σpp2 = PPOutside ∧ σpp = PPOutside) ∨
             (p = Prog ∧ σf1 = SMProg ∧ σpp1 = PPInside ∧ σpp2 = PPInside ∧ σpp = PPInside ∧
@@ -651,7 +656,13 @@ Section prepost.
       move => [[σf {}σ] [[σpp {}s] {}x]] ?. destruct!.
       - tstep_i => ?.
         tstep_s. split!.
-        tstep_s. apply: pp_to_all_mono; [by apply: Henv|]. move => r y /= ???.
+        tstep_s.
+        apply pp_to_all_forall => ?????.
+        revert select (∀ e, pp_to_all _ _).
+        setoid_rewrite pp_to_all_forall => Hinit.
+        exploit Hinit; [done..|] => -[? [??]].
+        setoid_rewrite pp_to_all_forall in Henv.
+        exploit Henv; [done..|] => ?.
         tstep_i. apply: pp_to_ex_mono; [naive_solver|]. move => r1 y1 /= [?[??]]. split!; [done|].
         tstep_i => ??. subst.
         tstep_i. apply: pp_to_ex_mono; [done|]. move => r2 y2 /= [?[?[??]]]. split!; [done|].
@@ -668,6 +679,7 @@ Section prepost.
         tstep_s. eexists _. apply: steps_spec_step_end; [done|] => ?? /=.
         tstep_s. apply: pp_to_ex_mono; [naive_solver|]. move => r y /= [?[?[??]]]. split!; [done|].
         apply: Hloop; [done|]. split!. naive_solver.
+        move => ?. apply pp_to_all_forall => *. naive_solver.
       - tstep_both.
         apply steps_impl_step_end => κ Pσ2 ? *. destruct κ as [e'|]. 2: {
           tstep_s. eexists None. split!.
@@ -753,6 +765,37 @@ Section prepost.
         tstep_s. eexists (Some _). split; [done|].
         apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
         apply: Hloop; [done|]. split!.
+    Qed.
+
+  Lemma mod_prepost_impl_prop
+        {EV1 EV2 S : Type}
+        {M : ucmra} `{!Shrink M}
+        (m : module EV2)
+        (i : EV1 → S → prepost (EV2 * S) M)
+        (o : EV2 → S → prepost (EV1 * S) M)
+        s xi0 xs0
+        `{!VisNoAng m.(m_trans)}
+        :
+         (∀ e, pp_to_all (i e s) (λ s' x',
+             (xs0 -∗ x' ==∗ xi0 ∗ x'))) →
+        trefines (prepost_mod i o m s xi0)
+                 (prepost_mod i o m s xs0).
+    Proof.
+      move => Hsub.
+      unshelve apply: mod_prepost_impl. {
+        exact (λ p si ss xi xs, si = ss ∧
+          match p with | Env => ss = s ∧ xs = xs0 ∧ xi = xi0 ∨ xs = xi | Prog => xi = xs end). }
+      { naive_solver. }
+      - move => /= ????? [? Hx]. subst. apply/pp_to_all_forall => ?????.
+        apply: pp_to_ex_mono; [done|].
+        move => ?? /= [-> ->]. split!.
+        move: Hx => [[? [??]] | <-] //. simplify_eq.
+        setoid_rewrite pp_to_all_forall in Hsub.
+        ospecialize* Hsub; [done|].
+        iSatMonoBupd. iIntros!. iMod (Hsub with "[$] [$]"). by iFrame.
+      - move => /= ????? [? ?]. subst. apply/pp_to_all_forall => ?????.
+        apply: pp_to_ex_mono; [done|].
+        move => ?? /= [-> ->]. split!; [done|naive_solver].
     Qed.
 
 End prepost.

@@ -87,12 +87,14 @@ Proof. elim: e => //= *; rewrite ?andb_True; split!; apply lexpr_op_is_static. Q
 (** * Function declarations *)
 Record lfndef : Type := {
   lfd_args : list string;
+  lfd_static_vars : list (string * Z);
   lfd_vars : list (string * Z);
   lfd_body : lexpr;
 }.
 
 Program Definition lfndef_to_fndef (fn : lfndef) : fndef := {|
    fd_args := fn.(lfd_args);
+   fd_static_vars := fn.(lfd_static_vars);
    fd_vars := fn.(lfd_vars);
    fd_body := lexpr_to_expr fn.(lfd_body);
 |}.
