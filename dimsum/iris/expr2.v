@@ -95,13 +95,12 @@ Qed.
 
 Program Definition sim_tgtMH {Σ EV} {m1 : mod_trans EV} `{!dimsumGS Σ}
   γσ_t γσ_s γκ m1_full Pκ m2 Π
-  `{!mstateG Σ (m2.(m_state))} `{!mstateG Σ (m_state m1_full)} `{!mstateG Σ (option EV)}
   : iModHandler Σ (m1.(m_state)) EV := {|
   imodhandle κ σ C :=
      (∀ σ', C σ' -∗ σ' ≈{m1}≈>ₜ Π) -∗
         Pκ κ σ (λ σ_full : m_state m1_full, sim_tgt_constP (m_t:=m1_full) (m_s := m2) γσ_t γσ_s γκ κ σ_full) |}%I.
 Next Obligation.
-  iIntros (??????????????????) "HΠ HC". iIntros "Hw". iApply "HΠ". iIntros (?) "?".
+  iIntros (???????????????) "HΠ HC". iIntros "Hw". iApply "HΠ". iIntros (?) "?".
   iApply "Hw". by iApply "HC".
 Qed.
 

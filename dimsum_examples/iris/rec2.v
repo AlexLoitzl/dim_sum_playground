@@ -758,10 +758,7 @@ Section memmove.
 
   Let m_t := rec_link_trans {["main"; "memmove"; "memcpy"]} {["locle"]} rec_trans (spec_trans rec_event ()).
 
-  Lemma memmove_sim
-    `{!mstateG Σ (m_state m_t)}
-    `{!mstateG Σ (option rec_event)}
-    `{!mstateG Σ (m_state (spec_trans rec_event unit))} :
+  Lemma memmove_sim :
     rec_state_interp (rec_init (main_prog ∪ memmove_prog ∪ memcpy_prog)) None -∗
     (MLFRun None, [], rec_init (main_prog ∪ memmove_prog ∪ memcpy_prog), (locle_spec, ())) ⪯{m_t,
       spec_trans rec_event ()} (main_spec, ()).
@@ -780,9 +777,7 @@ Section memmove.
     iApply (sim_gen_expr_intro _ tt _ None with "[] [-]"); [simpl; done..|].
     iApply (sim_gen_expr_wand _ _ _ _ _ (λ _, False%I) with "[-] []"); [|by iIntros].
     iApply sim_main_spec. iSplit!. iIntros (?) "HC".
-    iApply (sim_src_constP_elim with "[Hγσ_t] [Hγκ] [-]"); [done..|].
-    iIntros "Hγσ_t Hγκ". iSplit!.
-    iApply (sim_tgt_constP_intro γσ_t γσ_s γκ with "[Hγσ_t] [Hγσ_s] [Hγκ] [-]"); [done..|].
+    iApply (sim_src_constP_next with "[Hγσ_t] [Hγκ] [Hγσ_s] [%] [-]"); [done..|].
     iIntros "Hγσ_s". iApply sim_gen_stop.
     iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
     iIntros "Hγσ_s Hγσ_t Hγκ".
@@ -790,10 +785,7 @@ Section memmove.
 
     rewrite bool_decide_true; [|done].
     iIntros (?) "Hs".
-    iApply (sim_src_constP_elim with "[Hγσ_t] [Hγκ] [-]"); [done..|].
-    iIntros "Hγσ_t Hγκ". iSplit!.
-
-    iApply (sim_tgt_constP_intro γσ_t γσ_s γκ with "[Hγσ_t] [Hγσ_s] [Hγκ] [-]"); [done..|].
+    iApply (sim_src_constP_next with "[Hγσ_t] [Hγκ] [Hγσ_s] [%] [-]"); [done..|].
     iIntros "Hγσ_s".
     iApply (sim_tgt_link_left_recv with "[-]").
     iApply (sim_tgt_rec_Waiting_raw _ []).
@@ -872,24 +864,18 @@ Section memmove.
     iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
     iIntros "Hγσ_s Hγσ_t Hγκ".
     iApply "Hs". iSplit!. iIntros (?) "Hs".
-    iApply (sim_src_constP_elim with "[Hγσ_t] [Hγκ] [-]"); [done..|].
-    iIntros "Hγσ_t Hγκ". iSplit!.
-    iApply (sim_tgt_constP_intro γσ_t γσ_s γκ with "[Hγσ_t] [Hγσ_s] [Hγκ] [-]"); [done..|].
+    iApply (sim_src_constP_next with "[Hγσ_t] [Hγκ] [Hγσ_s] [%] [-]"); [done..|].
     iIntros "Hγσ_s".
     iApply (sim_tgt_link_None with "[-]"). iIntros "!>" (??????). destruct!/=.
     iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
     iIntros "Hγσ_s Hγσ_t Hγκ".
     iApply "Hs". iSplit!. iIntros (?) "Hs".
-    iApply (sim_src_constP_elim with "[Hγσ_t] [Hγκ] [-]"); [done..|].
-    iIntros "Hγσ_t Hγκ". iSplit!.
-    iApply (sim_tgt_constP_intro γσ_t γσ_s γκ with "[Hγσ_t] [Hγσ_s] [Hγκ] [-]"); [done..|].
+    iApply (sim_src_constP_next with "[Hγσ_t] [Hγκ] [Hγσ_s] [%] [-]"); [done..|].
     iIntros "Hγσ_s". iApply sim_gen_stop.
     iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
     iIntros "Hγσ_s Hγσ_t Hγκ".
     iApply "Hs". iSplit!. iIntros (? -> ?) "Hs". destruct!/=.
-    iApply (sim_src_constP_elim with "[Hγσ_t] [Hγκ] [-]"); [done..|].
-    iIntros "Hγσ_t Hγκ". iSplit!.
-    iApply (sim_tgt_constP_intro γσ_t γσ_s γκ with "[Hγσ_t] [Hγσ_s] [Hγκ] [-]"); [done..|].
+    iApply (sim_src_constP_next with "[Hγσ_t] [Hγκ] [Hγσ_s] [%] [-]"); [done..|].
     iIntros "Hγσ_s".
     iApply (sim_tgt_link_left_recv with "[-]").
     iApply sim_tgt_rec_Waiting_raw.
@@ -906,24 +892,18 @@ Section memmove.
     iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
     iIntros "Hγσ_s Hγσ_t Hγκ".
     iApply "Hs". iSplit!. iIntros (?) "Hs".
-    iApply (sim_src_constP_elim with "[Hγσ_t] [Hγκ] [-]"); [done..|].
-    iIntros "Hγσ_t Hγκ". iSplit!.
-    iApply (sim_tgt_constP_intro γσ_t γσ_s γκ with "[Hγσ_t] [Hγσ_s] [Hγκ] [-]"); [done..|].
+    iApply (sim_src_constP_next with "[Hγσ_t] [Hγκ] [Hγσ_s] [%] [-]"); [done..|].
     iIntros "Hγσ_s".
     iApply (sim_tgt_link_None with "[-]"). iIntros "!>" (??????). destruct!/=.
     iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
     iIntros "Hγσ_s Hγσ_t Hγκ".
     iApply "Hs". iSplit!. iIntros (?) "Hs".
-    iApply (sim_src_constP_elim with "[Hγσ_t] [Hγκ] [-]"); [done..|].
-    iIntros "Hγσ_t Hγκ". iSplit!.
-    iApply (sim_tgt_constP_intro γσ_t γσ_s γκ with "[Hγσ_t] [Hγσ_s] [Hγκ] [-]"); [done..|].
+    iApply (sim_src_constP_next with "[Hγσ_t] [Hγκ] [Hγσ_s] [%] [-]"); [done..|].
     iIntros "Hγσ_s". iApply sim_gen_stop.
     iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
     iIntros "Hγσ_s Hγσ_t Hγκ".
     iApply "Hs". iSplit!. iIntros (? -> ?) "Hs". destruct!/=.
-    iApply (sim_src_constP_elim with "[Hγσ_t] [Hγκ] [-]"); [done..|].
-    iIntros "Hγσ_t Hγκ". iSplit!.
-    iApply (sim_tgt_constP_intro γσ_t γσ_s γκ with "[Hγσ_t] [Hγσ_s] [Hγκ] [-]"); [done..|].
+    iApply (sim_src_constP_next with "[Hγσ_t] [Hγκ] [Hγσ_s] [%] [-]"); [done..|].
     iIntros "Hγσ_s".
     iApply (sim_tgt_link_left_recv with "[-]").
     iApply sim_tgt_rec_Waiting_raw.
@@ -946,11 +926,7 @@ Lemma memmove_refines_spec :
               (spec_mod locle_spec tt))
     (spec_mod main_spec tt).
 Proof.
-  eapply (sim_adequacy #[dimsumΣ; recΣ;
-       mstateΣ (m_state (rec_link_trans {["main"; "memmove"; "memcpy"]} {["locle"]}
-              (rec_trans) (spec_trans rec_event ())));
-       mstateΣ (m_state (spec_trans rec_event ()));
-       mstateΣ (option rec_event)]); [eapply _..|].
+  eapply (sim_adequacy #[dimsumΣ; recΣ]); [eapply _..|].
   iIntros (??) "!>". simpl.
   iApply (fupd_sim with "[-]").
   iMod recgs_alloc as (?) "[?[??]]". iModIntro.
