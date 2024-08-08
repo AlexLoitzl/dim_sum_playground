@@ -28,6 +28,10 @@ Definition rec_fn_spec `{!dimsumGS Σ} `{!recGS Σ} (ts : tgt_src) (J : iModHand
   (f : string) (C : list expr → (val → iProp Σ) → iProp Σ) : iProp Σ :=
   (∀ es Φ, C es (λ v, Φ (Val v)) -∗ TGT Call (Val (ValFn f)) es @ J {{ Φ }}).
 
+Definition rec_fn_spec_hoare `{!dimsumGS Σ} `{!recGS Σ} (ts : tgt_src) (J : iModHandler Σ _ _)
+  (f : string) (pre : list expr → iProp Σ) (post : val → iProp Σ) : iProp Σ :=
+  rec_fn_spec ts J f (λ es Φ, pre es ∗ (∀ v', post v' -∗ Φ v'))%I.
+
 Section fn_spec.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
   Lemma rec_fn_spec_ctx ts J f C :
@@ -607,17 +611,37 @@ Section memmove.
     iApply "Hσ". simplify_eq/=. iExists _. iFrame. iSplit!. by iApply "HΦ".
   Qed.
 
+(*
+possible specs:
+
+only pre:
+    rec_fn_spec Tgt J "main" (λ es Φ,
+      ⌜es = []⌝ ∗
+      rec_fn_spec Tgt J "print" (λ es Φ1, ⌜es = [Val 1]⌝ ∗ (∀ v',
+        rec_fn_spec Tgt J "print" (λ es Φ2, ⌜es = [Val 2]⌝ ∗ (∀ v', Φ 0 -∗ Φ2 v')) -∗
+      Φ1 v'))).
+
+    rec_fn_spec Tgt J "main" (λ Φ, Φ []) (λ Φ,
+      rec_fn_spec Tgt J "print" (λ Φ, Φ [Val 1]) (λ Φ1, ∀ v',
+        rec_fn_spec Tgt J "print" (λ Φ, Φ [Val 2]) (λ Φ2, ∀ v', Φ 0 -∗ Φ2 v') -∗
+      Φ1 v')).
+
+Hoare triple spec:
+    ∀ Φ,
+      rec_fn_spec Tgt J "main" (λ es, ⌜es = []⌝ ∗
+       rec_fn_spec Tgt J "print" (λ es, ⌜es = [Val 1]⌝) (λ _,
+        rec_fn_spec Tgt J "print" (λ es, ⌜es = [Val 2]⌝) (λ _, Φ 0))) Φ
+*)
+
+
   Lemma sim_main J `{!inMH nopMH J}:
     "memmove" ↪ Some memmove_rec -∗
     "memcpy" ↪ Some memcpy_rec -∗
     "main" ↪ Some main_rec -∗
     □ rec_fn_spec Tgt J "locle" locle_fn_spec -∗
-    rec_fn_spec Tgt J "main" (λ es Φ,
-        ⌜es = []⌝ ∗
-        rec_fn_spec Tgt J "print" (λ es Φ1, ⌜es = [Val 1]⌝ ∗ (∀ v',
-          rec_fn_spec Tgt J "print" (λ es Φ2, ⌜es = [Val 2]⌝ ∗ (∀ v',
-          (Φ 0) -∗ Φ2 v')) -∗
-          Φ1 v'))).
+    rec_fn_spec Tgt J "main" (λ es Φ, ⌜es = []⌝ ∗
+      rec_fn_spec_hoare Tgt J "print" (λ es, ⌜es = [Val 1]⌝) (λ _,
+        rec_fn_spec_hoare Tgt J "print" (λ es, ⌜es = [Val 2]⌝) (λ _, Φ 0))).
   Proof.
     iIntros "#? #? #? #?". iIntros (es Φ). iDestruct 1 as (->) "HΦ".
     iApply sim_tgt_rec_Call_internal. 2: { done. } { done. }
@@ -682,6 +706,39 @@ Section memmove.
     iApply sim_gen_expr_end => /=. iSplit!. iFrame.
   Qed.
 
+  Lemma sim_main_spec J Φ :
+    (∃ f vs h, ∀ σ, imodhandle J (Some (Incoming, ERCall f vs h)) σ (λ σ', ⌜σ' = σ⌝ ∗ (
+      ⌜f = "main"⌝ -∗ ⌜vs = []⌝ -∗
+      (∃ h', ∀ σ, imodhandle J (Some (Outgoing, ERCall "print" [ValNum 1] h')) σ (λ σ', ⌜σ' = σ⌝ ∗
+      (∃ e, ∀ σ, imodhandle J (Some (Incoming, e)) σ (λ σ', ⌜σ' = σ⌝ ∗ (∀ v', ⌜e = ERReturn v' h'⌝ -∗
+      (∃ h', ∀ σ, imodhandle J (Some (Outgoing, ERCall "print" [ValNum 2] h')) σ (λ σ', ⌜σ' = σ⌝ ∗
+      (∃ e, ∀ σ, imodhandle J (Some (Incoming, e)) σ (λ σ', ⌜σ' = σ⌝ ∗ (∀ v', ⌜e = ERReturn v' h'⌝ -∗
+      True))))))))))))) -∗
+    SRC main_spec @ J {{ Φ }}.
+  Proof.
+    iIntros "HΦ". iDestruct "HΦ" as (f vs h) "HΦ".
+    iEval (unfold main_spec). rewrite /TReceive bind_bind.
+    iApply (sim_src_TExist (_, _, _)).
+    rewrite bind_bind. setoid_rewrite bind_ret_l.
+    iApply sim_gen_TVis. iIntros ([]). iApply (imodhandle_mono with "HΦ").
+    iIntros (?) "[-> HΦ]". iSplit; [done|].
+    iApply sim_src_TAssume. iIntros (?).
+    iApply sim_src_TAssume. iIntros (?). simplify_eq.
+    iDestruct ("HΦ" with "[//] [//]") as (?) "HΦ".
+    iApply sim_src_TExist. iApply sim_gen_TVis. iIntros ([]). iApply (imodhandle_mono with "HΦ").
+    iIntros (?) "[-> [% HΦ]]". iSplit; [done|].
+    iApply sim_src_TExist. iApply sim_gen_TVis. iIntros ([]). iApply (imodhandle_mono with "HΦ").
+    iIntros (?) "[-> HΦ]". iSplit; [done|].
+    iApply sim_src_TAssume. iIntros (?). case_match => //; simplify_eq.
+    iDestruct ("HΦ" with "[//]") as (?) "HΦ".
+    iApply sim_src_TExist. iApply sim_gen_TVis. iIntros ([]). iApply (imodhandle_mono with "HΦ").
+    iIntros (?) "[-> [% HΦ]]". iSplit; [done|].
+    iApply sim_src_TExist. iApply sim_gen_TVis. iIntros ([]). iApply (imodhandle_mono with "HΦ").
+    iIntros (?) "[-> HΦ]". iSplit; [done|].
+    iApply sim_src_TAssume. iIntros (?). case_match => //; simplify_eq.
+    iDestruct ("HΦ" with "[//]") as "HΦ".
+    iApply sim_src_TUb_end.
+  Qed.
 End memmove.
 
 Section memmove.
