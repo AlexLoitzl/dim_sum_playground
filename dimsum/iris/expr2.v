@@ -27,6 +27,18 @@ Global Arguments mtrans {_ _} _.
 Global Arguments mexpr_rel {_ _} _ _ _.
 Global Arguments mstate_interp {_ _} _ _.
 
+(* TODO: better name  *)
+Definition handle_cont {Σ EV} `{!dimsumGS Σ} (m : mod_trans EV) (ts : tgt_src) (Π : option EV → m.(m_state) → iProp Σ)
+  (κ : option EV) (σ : m.(m_state)) (C : m.(m_state) → iProp Σ) : iProp Σ :=
+  (∀ σ', C σ' -∗ σ' ≈{ts, m}≈> Π) -∗ Π κ σ.
+
+Lemma handle_cont_mono {Σ EV} `{!dimsumGS Σ} (m : mod_trans EV) ts Π κ σ C1 C2:
+  handle_cont m ts Π κ σ C1 -∗
+  (∀ σ, C1 σ -∗ C2 σ) -∗
+  handle_cont m ts Π κ σ C2.
+Proof. iIntros "HC Hw Hc". iApply "HC". iIntros (?) "?". iApply "Hc". by iApply "Hw". Qed.
+
+
 Record iModHandler Σ (S EV : Type) := {
   (* TODO: make this a coercion? *)
   imodhandle : option EV → S → (S → iProp Σ) → iProp Σ;
@@ -46,38 +58,38 @@ Proof.
 Qed.
 
 
-Definition subMH {Σ S EV} (J1 J2 : iModHandler Σ S EV) : iProp Σ :=
-  □ (∀ κ σ C, imodhandle J1 κ σ C -∗ imodhandle J2 κ σ C).
+Definition subMH {Σ EV} `{!dimsumGS Σ} (m : mod_trans EV) (ts : tgt_src) (J : iModHandler Σ m.(m_state) EV) (Π : option EV → m.(m_state) → iProp Σ) : iProp Σ :=
+  □ (∀ κ σ C, imodhandle J κ σ C -∗ handle_cont m ts Π κ σ C).
 
-Class inMH {Σ S EV} (J1 : iModHandler Σ S EV) (J2 : iModHandler Σ S EV) :=
-  is_inMH : ⊢ subMH J1 J2.
+Class inMH {Σ EV} `{!dimsumGS Σ} (m : mod_trans EV) (ts : tgt_src) (J : iModHandler Σ m.(m_state) EV) (Π : option EV → m.(m_state) → iProp Σ) :=
+  is_inMH : ⊢ subMH m ts J Π.
 
-Global Hint Mode inMH + + + ! ! : typeclass_instances.
+Global Hint Mode inMH + + + ! - ! ! : typeclass_instances.
 
-Lemma inMH_apply {Σ S EV} (J1 : iModHandler Σ S EV) {J2} (H : inMH J1 J2) κ σ C :
-  imodhandle J1 κ σ C -∗
-  imodhandle J2 κ σ C.
-Proof. iIntros "?". by iApply (is_inMH (J1:=J1) (J2:=J2)). Qed.
+Lemma inMH_apply {Σ EV} `{!dimsumGS Σ} {m} (J : iModHandler Σ _ EV) {Π} {ts} (H : inMH m ts J Π) κ σ C :
+  imodhandle J κ σ C -∗
+  handle_cont m ts Π κ σ C.
+Proof. iIntros "?". by iApply (is_inMH (J:=J) (Π:=Π) with "[$]"). Qed.
 
-Lemma subMH_trans Σ S EV (J1 J2 J3 : iModHandler Σ S EV) :
-  subMH J1 J2 -∗ subMH J2 J3 -∗ subMH J1 J3.
-Proof. iIntros "#H1 #H2" (???) "!> HJ". iApply "H2". by iApply "H1". Qed.
+(* Lemma subMH_trans Σ S EV (J1 J2 J3 : iModHandler Σ S EV) : *)
+(*   subMH J1 J2 -∗ subMH J2 J3 -∗ subMH J1 J3. *)
+(* Proof. iIntros "#H1 #H2" (???) "!> HJ". iApply "H2". by iApply "H1". Qed. *)
 
 
-Global Program Instance iModHandler_union Σ S EV : Union (iModHandler Σ S EV) := λ J1 J2, {|
-  imodhandle κ σ C := imodhandle J1 κ σ C ∨ imodhandle J2 κ σ C;
-|}%I.
-Next Obligation.
-  iIntros (?????????) "[?|?] HC"; [iLeft|iRight]; by iApply (imodhandle_mono with "[$]").
-Qed.
+(* Global Program Instance iModHandler_union Σ S EV : Union (iModHandler Σ S EV) := λ J1 J2, {| *)
+(*   imodhandle κ σ C := imodhandle J1 κ σ C ∨ imodhandle J2 κ σ C; *)
+(* |}%I. *)
+(* Next Obligation. *)
+(*   iIntros (?????????) "[?|?] HC"; [iLeft|iRight]; by iApply (imodhandle_mono with "[$]"). *)
+(* Qed. *)
 
-Lemma subMH_union_l Σ S EV (J1 J2 : iModHandler Σ S EV) :
-  ⊢ subMH J1 (J1 ∪ J2).
-Proof. iIntros "!>" (???) "HJ". by iLeft. Qed.
+(* Lemma subMH_union_l Σ S EV (J1 J2 : iModHandler Σ S EV) : *)
+(*   ⊢ subMH J1 (J1 ∪ J2). *)
+(* Proof. iIntros "!>" (???) "HJ". by iLeft. Qed. *)
 
-Lemma subMH_union_r Σ S EV (J1 J2 : iModHandler Σ S EV) :
-  ⊢ subMH J2 (J1 ∪ J2).
-Proof. iIntros "!>" (???) "HJ". by iRight. Qed.
+(* Lemma subMH_union_r Σ S EV (J1 J2 : iModHandler Σ S EV) : *)
+(*   ⊢ subMH J2 (J1 ∪ J2). *)
+(* Proof. iIntros "!>" (???) "HJ". by iRight. Qed. *)
 
 Program Definition nopMH {Σ S EV} : iModHandler Σ S EV := {|
   imodhandle κ σ C := ⌜κ = None⌝ ∗ C σ;
@@ -104,13 +116,11 @@ Next Obligation.
   iApply "Hw". by iApply "HC".
 Qed.
 
-Program Definition switchMH {Σ EV} {m1 : mod_trans EV} `{!dimsumGS Σ}
-  Pκ Π
+Program Definition switchMH {Σ EV} {m1 : mod_trans EV} `{!dimsumGS Σ} Π Pκ
   : iModHandler Σ (m1.(m_state)) EV := {|
   imodhandle κ σ C :=
      (∀ σ', C σ' -∗ σ' ≈{m1}≈>ₜ Π) -∗
-      Pκ κ σ (λ ts' (m2 : mod_trans EV) σ2 Pκ', σ2 ≈{ts', m2}≈> λ κ' σ2',
-       ∀ Π2, Pκ' κ' Π2 (σ2' ≈{ts', m2}≈> Π2)) |}%I.
+      Pκ κ σ (λ ts' (m2 : mod_trans EV) σ2 Π2, σ2 ≈{ts', m2}≈> Π2) |}%I.
 Next Obligation.
   iIntros (??????????)  "HΠ HC". iIntros "Hw". iApply "HΠ". iIntros (?) "?".
   iApply "Hw". by iApply "HC".
@@ -130,19 +140,19 @@ Section sim_gen_expr.
   ? Some s. However, this would require splitting this definition into
   two (and break concurrent reasoning, but not sure that we care /
   that would be the point). *)
-  Definition sim_gen_expr_pre (J : iModHandler Σ (m_state Λ) EV)
+  Definition sim_gen_expr_pre (Π : option EV → m_state Λ → iProp Σ)
     (sim_gen_expr : leibnizO (mexpr Λ) -d> leibnizO (option (mstate Λ)) -d> (leibnizO (mexpr Λ) -d> iPropO Σ) -d> iPropO Σ) :
     leibnizO (mexpr Λ) -d> leibnizO (option (mstate Λ)) -d> (leibnizO (mexpr Λ) -d> iPropO Σ) -d> iPropO Σ := λ e os Φ,
     (∀ σ K, ⌜mexpr_rel Λ σ (mfill Λ K e)⌝ -∗ mstate_interp Λ σ os -∗ |={∅}=> ((∃ e', ⌜mexpr_rel Λ σ (mfill Λ K e')⌝ ∗ mstate_interp Λ σ os ∗ Φ e') ∨
-        σ ≈{ ts, Λ }≈> (λ κ σ', imodhandle J κ σ' (λ σ'',
+        σ ≈{ ts, Λ }≈> (λ κ σ', handle_cont _ ts Π κ σ' (λ σ'',
          ∃ e', ⌜mexpr_rel Λ σ'' (mfill Λ K e')⌝ ∗ mstate_interp Λ σ'' os ∗ sim_gen_expr e' os Φ))))%I.
 
-  Global Instance sim_gen_expr_pre_ne J n:
-    Proper ((dist n ==> dist n ==> dist n ==> dist n) ==> dist n ==> dist n ==> dist n ==> dist n) (sim_gen_expr_pre J).
+  Global Instance sim_gen_expr_pre_ne Π n:
+    Proper ((dist n ==> dist n ==> dist n ==> dist n) ==> dist n ==> dist n ==> dist n ==> dist n) (sim_gen_expr_pre Π).
   Proof.
     move => ?? Hsim ?? -> ?? -> ?? HΦ. rewrite /sim_gen_expr_pre.
     repeat (f_equiv || eapply Hsim || eapply HΦ || reflexivity).
-    move => ?? -> ?? ->.
+    move => ?? -> ?? ->. unfold handle_cont.
     repeat (f_equiv || eapply Hsim || eapply HΦ || reflexivity).
   Qed.
 
@@ -152,7 +162,7 @@ Section sim_gen_expr.
   Proof.
     iIntros "#Hinner" (e os Φ) "Hsim". iIntros (???) "?".
     iMod ("Hsim" with "[//] [$]") as "[?|Hsim]"; [by iLeft; iFrame| iRight; iModIntro].
-    iApply (sim_gen_wand with "Hsim"). iIntros (??) "?". iApply (imodhandle_mono with "[$]").
+    iApply (sim_gen_wand with "Hsim"). iIntros (??) "?". iApply (handle_cont_mono with "[$]").
     iIntros (?) "(%e'&?&?&?)". iExists _. iFrame. by iApply "Hinner".
   Qed.
 
@@ -231,14 +241,14 @@ Section sim_gen_expr.
   Implicit Types (e : mexpr Λ).
 
   Local Existing Instance sim_gen_expr_pre_monotone.
-  Lemma sim_gen_expr_unfold e J os Φ:
-    WP{ts} e @ ? os, J {{ Φ }} ⊣⊢ sim_gen_expr_pre ts J (sim_gen_expr ts J) e os Φ.
+  Lemma sim_gen_expr_unfold e Π os Φ:
+    WP{ts} e @ ? os, Π {{ Φ }} ⊣⊢ sim_gen_expr_pre ts Π (sim_gen_expr ts Π) e os Φ.
   Proof. rewrite /sim_gen_expr /curry3. apply: least_fixpoint_unfold. Qed.
 
-  Lemma sim_gen_expr_strong_ind J (R: leibnizO (mexpr Λ) -d> leibnizO (option (mstate Λ)) -d> (leibnizO (mexpr Λ) -d> iPropO Σ) -d> iPropO Σ):
+  Lemma sim_gen_expr_strong_ind Π (R: leibnizO (mexpr Λ) -d> leibnizO (option (mstate Λ)) -d> (leibnizO (mexpr Λ) -d> iPropO Σ) -d> iPropO Σ):
     NonExpansive3 R →
-    ⊢ (□ ∀ e os Φ, sim_gen_expr_pre ts J (λ e os Φ, R e os Φ ∧ WP{ts} e @ ? os, J {{Φ}}) e os Φ -∗ R e os Φ)
-      -∗ ∀ e os Φ, WP{ts} e @ ? os, J {{Φ}} -∗ R e os Φ.
+    ⊢ (□ ∀ e os Φ, sim_gen_expr_pre ts Π (λ e os Φ, R e os Φ ∧ WP{ts} e @ ? os, Π {{Φ}}) e os Φ -∗ R e os Φ)
+      -∗ ∀ e os Φ, WP{ts} e @ ? os, Π {{Φ}} -∗ R e os Φ.
   Proof.
     iIntros (Hne) "#HPre". iIntros (e os Φ) "Hsim".
     rewrite {2}/sim_gen_expr {1}/curry3.
@@ -246,26 +256,26 @@ Section sim_gen_expr.
     iIntros "!>" ([[??]?]) "Hsim" => /=. by iApply "HPre".
   Qed.
 
-  Lemma sim_gen_expr_ind J (R: leibnizO (mexpr Λ) -d> leibnizO (option (mstate Λ)) -d> (leibnizO (mexpr Λ) -d> iPropO Σ) -d> iPropO Σ) :
+  Lemma sim_gen_expr_ind Π (R: leibnizO (mexpr Λ) -d> leibnizO (option (mstate Λ)) -d> (leibnizO (mexpr Λ) -d> iPropO Σ) -d> iPropO Σ) :
     NonExpansive3 R →
-    ⊢ (□ ∀ e os Φ, sim_gen_expr_pre ts J R e os Φ -∗ R e os Φ)
-      -∗ ∀ e os Φ, WP{ts} e @ ? os, J {{ Φ }} -∗ R e os Φ.
+    ⊢ (□ ∀ e os Φ, sim_gen_expr_pre ts Π R e os Φ -∗ R e os Φ)
+      -∗ ∀ e os Φ, WP{ts} e @ ? os, Π {{ Φ }} -∗ R e os Φ.
   Proof.
     iIntros (Hne) "#HPre". iApply sim_gen_expr_strong_ind. iIntros "!>" (e os Φ) "Hsim".
     iApply "HPre". iApply (sim_gen_expr_pre_mono with "[] Hsim").
     iIntros "!>" (???) "[? _]". by iFrame.
   Qed.
 
-  Lemma sim_gen_expr_wand e os J Φ Ψ :
-    WP{ts} e @ ? os, J {{ Ψ }} -∗
+  Lemma sim_gen_expr_wand e os Π Φ Ψ :
+    WP{ts} e @ ? os, Π {{ Ψ }} -∗
     (∀ e', Ψ e' -∗ Φ e') -∗
-    WP{ts} e @ ? os, J {{ Φ }}.
+    WP{ts} e @ ? os, Π {{ Φ }}.
   Proof.
     iIntros "HWP Hwand".
     pose (F := (λ e os Ψ, ∀ Φ,
         (∀ e', Ψ e' -∗ Φ e') -∗
-         WP{ts} e @ ? os, J {{Φ}})%I).
-    iAssert (∀ Ψ, WP{ts} e @ ? os, J {{Ψ}} -∗ F e os Ψ)%I as "Hgen"; last first.
+         WP{ts} e @ ? os, Π {{Φ}})%I).
+    iAssert (∀ Ψ, WP{ts} e @ ? os, Π {{Ψ}} -∗ F e os Ψ)%I as "Hgen"; last first.
     { iApply ("Hgen" with "HWP"). iIntros (?) "?". by iApply "Hwand". }
     iIntros (?) "Hsim".
     iApply (sim_gen_expr_ind with "[] Hsim"). { solve_proper. }
@@ -274,19 +284,19 @@ Section sim_gen_expr.
     iMod ("Hsim" with "[//] [$]") as "[[% [% [? HΦ]]]|Hsim]"; iModIntro.
     - iLeft. iExists _. iSplit; [done|]. iFrame. by iApply "Hc".
     - iRight. iApply (sim_gen_wand with "Hsim"). iIntros (? ?) "Hsim /=".
-      iApply (imodhandle_mono with "Hsim"). iIntros (?) "(%e'&?&?&Hsim)". iExists _. iFrame.
+      iApply (handle_cont_mono with "Hsim"). iIntros (?) "(%e'&?&?&Hsim)". iExists _. iFrame.
       by iApply "Hsim".
   Qed.
 
-  Lemma sim_gen_expr_bind K e os J Φ :
-    WP{ts} e @ ? os, J {{ e', WP{ts} mfill Λ K e' @ ? os , J {{Φ}} }} -∗
-    WP{ts} mfill Λ K e @ ? os, J {{ Φ }}.
+  Lemma sim_gen_expr_bind K e os Π Φ :
+    WP{ts} e @ ? os, Π {{ e', WP{ts} mfill Λ K e' @ ? os , Π {{Φ}} }} -∗
+    WP{ts} mfill Λ K e @ ? os, Π {{ Φ }}.
   Proof.
     iIntros "HWP".
     pose (F := (λ e os' Ψ, ∀ Φ, ⌜os' = os⌝ -∗
-        (∀ e', Ψ e' -∗ WP{ts} mfill Λ K e' @ ? os, J {{Φ}}) -∗
-         WP{ts} mfill Λ K e @ ? os , J {{Φ}})%I).
-    iAssert (∀ Ψ, WP{ts} e @ ? os , J {{Ψ}} -∗ F e os Ψ)%I as "Hgen"; last first.
+        (∀ e', Ψ e' -∗ WP{ts} mfill Λ K e' @ ? os, Π {{Φ}}) -∗
+         WP{ts} mfill Λ K e @ ? os , Π {{Φ}})%I).
+    iAssert (∀ Ψ, WP{ts} e @ ? os , Π {{Ψ}} -∗ F e os Ψ)%I as "Hgen"; last first.
     { iApply ("Hgen" with "HWP [//]"). iIntros (?) "?". done. }
     iIntros (?) "Hsim".
     iApply (sim_gen_expr_ind with "[] Hsim"). { solve_proper. }
@@ -297,19 +307,19 @@ Section sim_gen_expr.
       iDestruct ("Hc" with "[] [$]") as "?". { by rewrite mfill_comp. }
       done.
     - iModIntro. iRight. iApply (sim_gen_wand with "Hsim"). iIntros (??) "Hsim /=".
-      iApply (imodhandle_mono with "Hsim"). iIntros (?) "(%e'&?&?&Hsim)". rewrite -mfill_comp.
+      iApply (handle_cont_mono with "Hsim"). iIntros (?) "(%e'&?&?&Hsim)". rewrite -mfill_comp.
       iExists _. iFrame. by iApply "Hsim".
   Qed.
 
-  Lemma sim_gen_expr_bind0 e os J Φ :
-    WP{ts} e @ ? os, J {{ e', WP{ts} e' @ ? os , J {{Φ}} }} -∗
-    WP{ts} e @ ? os, J {{ Φ }}.
+  Lemma sim_gen_expr_bind0 e os Π Φ :
+    WP{ts} e @ ? os, Π {{ e', WP{ts} e' @ ? os , Π {{Φ}} }} -∗
+    WP{ts} e @ ? os, Π {{ Φ }}.
   Proof.
     iIntros "HWP".
     pose (F := (λ e os' Ψ, ∀ Φ, ⌜os' = os⌝ -∗
-        (∀ e', Ψ e' -∗ WP{ts} e' @ ? os, J {{Φ}}) -∗
-         WP{ts} e @ ? os , J {{Φ}})%I).
-    iAssert (∀ Ψ, WP{ts} e @ ? os , J {{Ψ}} -∗ F e os Ψ)%I as "Hgen"; last first.
+        (∀ e', Ψ e' -∗ WP{ts} e' @ ? os, Π {{Φ}}) -∗
+         WP{ts} e @ ? os , Π {{Φ}})%I).
+    iAssert (∀ Ψ, WP{ts} e @ ? os , Π {{Ψ}} -∗ F e os Ψ)%I as "Hgen"; last first.
     { iApply ("Hgen" with "HWP [//]"). iIntros (?) "?". done. }
     iIntros (?) "Hsim".
     iApply (sim_gen_expr_ind with "[] Hsim"). { solve_proper. }
@@ -320,18 +330,19 @@ Section sim_gen_expr.
       iDestruct ("Hc" with "[] [$]") as "?". { done. }
       done.
     - iModIntro. iRight. iApply (sim_gen_wand with "Hsim"). iIntros (??) "Hsim /=".
-      iApply (imodhandle_mono with "Hsim"). iIntros (?) "(%e'&?&?&Hsim)".
+      iApply (handle_cont_mono with "Hsim"). iIntros (?) "(%e'&?&?&Hsim)".
       iExists _. iFrame. by iApply "Hsim".
   Qed.
 
-  Lemma sim_gen_expr_handler_wand J1 J2 e os Φ :
-    WP{ts} e @ ? os, J1 {{ Φ }} -∗
-    subMH J1 J2 -∗
-    WP{ts} e @ ? os, J2 {{ Φ }}.
+  (*
+  Lemma sim_gen_expr_handler_wand Π1 Π2 e os Φ :
+    WP{ts} e @ ? os, Π1 {{ Φ }} -∗
+    subMH Π1 Π2 -∗
+    WP{ts} e @ ? os, Π2 {{ Φ }}.
   Proof.
     iIntros "HWP #Hwand".
-    pose (F := (λ e os Φ, WP{ts} e @ ? os, J2 {{Φ}})%I).
-    iAssert (WP{ts} e @ ? os, J1 {{Φ}} -∗ F e os Φ)%I as "Hgen"; last first.
+    pose (F := (λ e os Φ, WP{ts} e @ ? os, Π2 {{Φ}})%I).
+    iAssert (WP{ts} e @ ? os, Π1 {{Φ}} -∗ F e os Φ)%I as "Hgen"; last first.
     { iApply ("Hgen" with "HWP"). }
     iIntros "Hsim".
     iApply (sim_gen_expr_ind with "[] Hsim"). { solve_proper. }
@@ -343,6 +354,7 @@ Section sim_gen_expr.
       iApply "Hwand". iApply (imodhandle_mono with "Hsim").
       iIntros (?) "(%e'&?&?&Hsim)". iExists _. by iFrame.
   Qed.
+   *)
 
   Definition direct_post (K : mectx Λ) (os : option (mstate Λ)) (Π : option EV → m_state Λ → iProp Σ) (e : mexpr Λ) : iProp Σ :=
     ∀ σ', ⌜mexpr_rel Λ σ' (mfill Λ K e)⌝ -∗ mstate_interp Λ σ' os -∗ σ' ≈{ts, Λ}≈> Π.
@@ -351,14 +363,14 @@ Section sim_gen_expr.
   Lemma sim_gen_expr_intro K e os Π σ :
     mexpr_rel Λ σ (mfill Λ K e) →
     mstate_interp Λ σ os -∗
-    WP{ts} e @ ? os, directMH ts Π {{ direct_post K os Π }} -∗
+    WP{ts} e @ ? os, Π {{ direct_post K os Π }} -∗
     σ ≈{ts, Λ}≈> Π.
   Proof.
     iIntros (?) "Hσ Hsim".
     pose (F := (λ e os' Ψ, ∀ σ, ⌜mexpr_rel Λ σ (mfill Λ K e)⌝ -∗ ⌜os' = os⌝ -∗ mstate_interp Λ σ os -∗
        (∀ e', Ψ e' -∗ direct_post K os Π e') -∗
        σ ≈{ ts, Λ }≈> Π)%I).
-    iAssert (∀ e Φ, WP{ts} e @ ? os, directMH ts Π {{Φ}} -∗ F e os Φ)%I as "Hgen"; last first.
+    iAssert (∀ e Φ, WP{ts} e @ ? os, Π {{Φ}} -∗ F e os Φ)%I as "Hgen"; last first.
     { iApply ("Hgen" with "Hsim [//] [//] Hσ"). iIntros (?) "$". }
     iIntros (??) "Hsim".
     iApply (sim_gen_expr_ind with "[] Hsim"). { solve_proper. }
@@ -370,38 +382,38 @@ Section sim_gen_expr.
     iApply "Hhandler". iIntros (?) "[%e'[%[? HF]]]". iApply ("HF" with "[//] [//] [$] [$]").
   Qed.
 
-  Lemma sim_gen_expr_ctx e J os Φ :
-    (ord_later_ctx -∗ WP{ts} e @ ? os, J {{ Φ }}) -∗
-    WP{ts} e @ ? os, J {{ Φ }}.
+  Lemma sim_gen_expr_ctx e Π os Φ :
+    (ord_later_ctx -∗ WP{ts} e @ ? os, Π {{ Φ }}) -∗
+    WP{ts} e @ ? os, Π {{ Φ }}.
   Proof. Admitted.
 
-  Lemma fupd_sim_gen_expr e os J Φ :
-    (|={∅}=> WP{ts} e @ ? os, J {{ Φ }}) -∗
-    WP{ts} e @ ? os, J {{ Φ }}.
+  Lemma fupd_sim_gen_expr e os Π Φ :
+    (|={∅}=> WP{ts} e @ ? os, Π {{ Φ }}) -∗
+    WP{ts} e @ ? os, Π {{ Φ }}.
   Proof. iIntros "Hsim". rewrite sim_gen_expr_unfold. by iMod "Hsim". Qed.
 
-  Lemma sim_gen_expr_end e J os Φ :
-    Φ e -∗ WP{ts} e @ ? os , J {{ Φ }}.
+  Lemma sim_gen_expr_end e Π os Φ :
+    Φ e -∗ WP{ts} e @ ? os , Π {{ Φ }}.
   Proof.
     iIntros "HΦ". rewrite sim_gen_expr_unfold. iIntros (??) "HF ?".
     iModIntro. iLeft. iExists _. iSplit; [done|]. iFrame.
   Qed.
 
-  Lemma sim_gen_expr_steps e os J Φ :
+  Lemma sim_gen_expr_steps e os Π Φ :
     (∀ σ K, ⌜mexpr_rel Λ σ (mfill Λ K e)⌝ -∗ mstate_interp Λ σ os -∗
-          σ ≈{ ts, Λ }≈> (λ κ σ', imodhandle J κ σ' (λ σ'',
-             ∃ e', ⌜mexpr_rel Λ σ'' (mfill Λ K e')⌝ ∗ mstate_interp Λ σ'' os ∗ WP{ts} e' @ ? os , J {{Φ}}))) -∗
-    WP{ts} e @ ? os , J {{ Φ }}.
+          σ ≈{ ts, Λ }≈> (λ κ σ', handle_cont _ ts Π κ σ' (λ σ'',
+             ∃ e', ⌜mexpr_rel Λ σ'' (mfill Λ K e')⌝ ∗ mstate_interp Λ σ'' os ∗ WP{ts} e' @ ? os , Π {{Φ}}))) -∗
+    WP{ts} e @ ? os , Π {{ Φ }}.
   Proof.
     iIntros "HΦ". rewrite sim_gen_expr_unfold. iIntros (???) "? !>". iRight.
     iApply (sim_gen_wand with "[-]"). { by iApply "HΦ". } by iIntros (??) "?".
   Qed.
 
-  Lemma sim_gen_expr_None e os J Φ :
+  Lemma sim_gen_expr_None e os Π Φ :
     (∀ σ K, ⌜mexpr_rel Λ σ (mfill Λ K e)⌝ -∗ mstate_interp Λ σ os -∗
-          imodhandle J None σ (λ σ'',
-             ∃ e', ⌜mexpr_rel Λ σ'' (mfill Λ K e')⌝ ∗ mstate_interp Λ σ'' os ∗ WP{ts} e' @ ? os , J {{Φ}})) -∗
-    WP{ts} e @ ? os , J {{ Φ }}.
+          handle_cont _ ts Π None σ (λ σ'',
+             ∃ e', ⌜mexpr_rel Λ σ'' (mfill Λ K e')⌝ ∗ mstate_interp Λ σ'' os ∗ WP{ts} e' @ ? os , Π {{Φ}})) -∗
+    WP{ts} e @ ? os , Π {{ Φ }}.
   Proof.
     iIntros "HΦ". iApply sim_gen_expr_steps. iIntros (???) "?".
     iApply sim_gen_stop. by iApply "HΦ".
