@@ -588,6 +588,28 @@ Section link.
     - iIntros ([[[??]?]?] ?). simplify_eq/=. by iLeft.
   Qed.
 
+  Definition link_tgt_left_constP R {m1 m2 : mod_trans (io_event EV)}
+    (Π : option (io_event EV) → link_case EV * S * m_state m1 * m_state m2 → iProp Σ)
+    (γ_s γ_σ2: gname) : option (io_event EV) → m_state m1 → iProp Σ :=
+    λ κ σ1', (∀ s σ2, γ_s ⤳ s -∗ γ_σ2 ⤳ σ2 -∗ link_tgt_leftP R Π s σ2 κ σ1')%I.
+
+  Lemma sim_tgt_link_left_const R m1 m2 s σ1 σ2 γ_s γ_σ2 Π :
+    γ_s ⤳@{S} - -∗
+    γ_σ2 ⤳@{m_state m2} - -∗
+    (γ_s ⤳ s -∗ γ_σ2 ⤳ σ2 -∗ σ1 ≈{m1}≈>ₜ link_tgt_left_constP R Π γ_s γ_σ2) -∗
+    (MLFRun (Some SPLeft), s, σ1, σ2) ≈{link_trans R m1 m2}≈>ₜ Π.
+  Proof.
+    iIntros "Hγ_s Hγ_σ2 Hsim".
+    iApply (@fupd_sim_gen with "[-]").
+    iMod (mstate_var_split γ_s with "Hγ_s") as "[??]".
+    iMod (mstate_var_split γ_σ2 with "Hγ_σ2") as "[??]".
+    iModIntro.
+    iApply sim_tgt_link_left. iSpecialize ("Hsim" with "[$] [$]").
+    iApply (sim_gen_wand with "Hsim"). iIntros (??) "Hsim".
+    iApply ("Hsim" with "[$] [$]").
+  Qed.
+
+
   Lemma sim_tgt_link_left_recv R m1 m2 s σ1 σ2 Π e :
     (σ1 ≈{m1}≈>ₜ λ κ σ1',
       match κ with

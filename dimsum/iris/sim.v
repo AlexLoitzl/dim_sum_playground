@@ -57,6 +57,7 @@ Section mstate_var.
   Proof. iIntros "[% H]". by iMod (ghost_var_update with "H") as "[$ $]". Qed.
 
 End mstate_var.
+Global Arguments mstate_var_alloc {_} _ {_ _}.
 
 Global Typeclasses Opaque mstate_var mstate_var_full.
 

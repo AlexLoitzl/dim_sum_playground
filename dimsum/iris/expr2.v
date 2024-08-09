@@ -104,6 +104,18 @@ Next Obligation.
   iApply "Hw". by iApply "HC".
 Qed.
 
+Program Definition switchMH {Σ EV} {m1 : mod_trans EV} `{!dimsumGS Σ}
+  Pκ Π
+  : iModHandler Σ (m1.(m_state)) EV := {|
+  imodhandle κ σ C :=
+     (∀ σ', C σ' -∗ σ' ≈{m1}≈>ₜ Π) -∗
+      Pκ κ σ (λ ts' (m2 : mod_trans EV) σ2 Pκ', σ2 ≈{ts', m2}≈> λ κ' σ2',
+       ∀ Π2, Pκ' κ' Π2 (σ2' ≈{ts', m2}≈> Π2)) |}%I.
+Next Obligation.
+  iIntros (??????????)  "HΠ HC". iIntros "Hw". iApply "HΠ". iIntros (?) "?".
+  iApply "Hw". by iApply "HC".
+Qed.
+
 (** * [sim_gen_expr] *)
 Section sim_gen_expr.
   Context {EV} {Σ} {Λ : mod_lang EV Σ} `{!dimsumGS Σ}.
