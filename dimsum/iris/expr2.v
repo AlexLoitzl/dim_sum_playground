@@ -54,104 +54,31 @@ Proof.
   by iApply "Hmono".
 Qed.
 
-(* (* TODO: better name  *) *)
-(* Definition handle_cont {Σ EV} `{!dimsumGS Σ} (m : mod_trans EV) (ts : tgt_src) (Π : option EV → m.(m_state) → iProp Σ) *)
-(*   (κ : option EV) (σ : m.(m_state)) (C : m.(m_state) → iProp Σ) : iProp Σ := *)
-(*   (∀ σ', C σ' -∗ σ' ≈{ts, m}≈> Π) -∗ Π κ σ. *)
+(* Switching for an externally visible event *)
+(* TODO: Prove lemmas about this *)
+Definition switch_external `{!dimsumGS Σ} {S EV} (Π : option EV → S → iProp Σ)
+  (K : _) : iProp Σ :=
+  switch Π (λ κ σ POST,
+    K σ (λ e m2 σ2 K2, ⌜κ = Some e⌝ ∗
+  POST Src m2 (λ σ_s Π_s,
+    ⌜σ_s = σ2⌝ ∗
+  switch Π_s (λ κ' σ_s2 POST,
+    ⌜κ' = κ⌝ ∗
+  POST Src _ (λ σ_s2' Π',
+    ⌜σ_s2' = σ_s2⌝ ∗ K2 σ_s2 Π')))))%I.
 
-(* Lemma handle_cont_mono {Σ EV} `{!dimsumGS Σ} (m : mod_trans EV) ts Π κ σ C1 C2: *)
-(*   handle_cont m ts Π κ σ C1 -∗ *)
-(*   (∀ σ, C1 σ -∗ C2 σ) -∗ *)
-(*   handle_cont m ts Π κ σ C2. *)
-(* Proof. iIntros "HC Hw Hc". iApply "HC". iIntros (?) "?". iApply "Hc". by iApply "Hw". Qed. *)
+(* Switching to a linked module *)
+Definition switch_link `{!dimsumGS Σ} {S EV} (ts : tgt_src) (Π : option (io_event EV) → S → iProp Σ)
+  (K : _) : iProp Σ :=
+  switch Π (λ κ σ0 POST,
+    K σ0 (λ e m2 σ2 K2, ⌜κ = Some (Outgoing, e)⌝ ∗
+  POST ts m2 (λ σi Πi,
+    ⌜σi = σ2⌝ ∗
+  switch Πi (λ κ' σ POST,
+    ∃ e', ⌜κ' = Some (Incoming, e')⌝ ∗
+  POST ts m2 (λ σr Πr,
+    ⌜σr = σ⌝ ∗ ⌜e' = e⌝ ∗ K2 σ Πr)))))%I.
 
-
-(* Record iModHandler Σ (S EV : Type) := { *)
-(*   (* TODO: make this a coercion? *) *)
-(*   imodhandle : option EV → S → (S → iProp Σ) → iProp Σ; *)
-(*   imodhandle_mono κ σ C C' : imodhandle κ σ C -∗ (∀ σ', C σ' -∗ C' σ') -∗ imodhandle κ σ C'; *)
-(* }. *)
-(* Global Arguments imodhandle {_ _ _}. *)
-
-(* Global Instance imodhandle_ne Σ S EV (J : iModHandler Σ S EV) n: *)
-(*   Proper ((=) ==> (=) ==> pointwise_relation S (dist n) ==> dist n) (imodhandle J). *)
-(* Proof. *)
-(*   move => ? κ -> ? σ -> ?? HC. *)
-(*   have Heq : (∀ C, imodhandle J κ σ C ⊣⊢ ∃ C', (∀ σ', C' σ' -∗ C σ') ∗ imodhandle J κ σ C'). *)
-(*   - move => C. apply (anti_symm (⊢)). *)
-(*     + iIntros "?". iExists _. iFrame. iIntros (?) "$". *)
-(*     + iIntros "(%C'&?&?)". by iApply (imodhandle_mono with "[$]"). *)
-(*   - rewrite !Heq. by repeat f_equiv. *)
-(* Qed. *)
-
-
-(* Definition subMH {Σ EV} `{!dimsumGS Σ} (m : mod_trans EV) (ts : tgt_src) (J : iModHandler Σ m.(m_state) EV) (Π : option EV → m.(m_state) → iProp Σ) : iProp Σ := *)
-(*   □ (∀ κ σ C, imodhandle J κ σ C -∗ handle_cont m ts Π κ σ C). *)
-
-(* Class inMH {Σ EV} `{!dimsumGS Σ} (m : mod_trans EV) (ts : tgt_src) (J : iModHandler Σ m.(m_state) EV) (Π : option EV → m.(m_state) → iProp Σ) := *)
-(*   is_inMH : ⊢ subMH m ts J Π. *)
-
-(* Global Hint Mode inMH + + + ! - ! ! : typeclass_instances. *)
-
-(* Lemma inMH_apply {Σ EV} `{!dimsumGS Σ} {m} (J : iModHandler Σ _ EV) {Π} {ts} (H : inMH m ts J Π) κ σ C : *)
-(*   imodhandle J κ σ C -∗ *)
-(*   handle_cont m ts Π κ σ C. *)
-(* Proof. iIntros "?". by iApply (is_inMH (J:=J) (Π:=Π) with "[$]"). Qed. *)
-
-(* Lemma subMH_trans Σ S EV (J1 J2 J3 : iModHandler Σ S EV) : *)
-(*   subMH J1 J2 -∗ subMH J2 J3 -∗ subMH J1 J3. *)
-(* Proof. iIntros "#H1 #H2" (???) "!> HJ". iApply "H2". by iApply "H1". Qed. *)
-
-
-(* Global Program Instance iModHandler_union Σ S EV : Union (iModHandler Σ S EV) := λ J1 J2, {| *)
-(*   imodhandle κ σ C := imodhandle J1 κ σ C ∨ imodhandle J2 κ σ C; *)
-(* |}%I. *)
-(* Next Obligation. *)
-(*   iIntros (?????????) "[?|?] HC"; [iLeft|iRight]; by iApply (imodhandle_mono with "[$]"). *)
-(* Qed. *)
-
-(* Lemma subMH_union_l Σ S EV (J1 J2 : iModHandler Σ S EV) : *)
-(*   ⊢ subMH J1 (J1 ∪ J2). *)
-(* Proof. iIntros "!>" (???) "HJ". by iLeft. Qed. *)
-
-(* Lemma subMH_union_r Σ S EV (J1 J2 : iModHandler Σ S EV) : *)
-(*   ⊢ subMH J2 (J1 ∪ J2). *)
-(* Proof. iIntros "!>" (???) "HJ". by iRight. Qed. *)
-
-(* Program Definition nopMH {Σ S EV} : iModHandler Σ S EV := {| *)
-(*   imodhandle κ σ C := ⌜κ = None⌝ ∗ C σ; *)
-(* |}%I. *)
-(* Next Obligation. iIntros (???????) "[-> ?] HC". iSplit; [done|]. by iApply "HC". Qed. *)
-
-(* Program Definition directMH {Σ EV} {Λ : mod_lang EV Σ} `{!dimsumGS Σ} ts Π : iModHandler Σ (Λ.(m_state)) EV := {| *)
-(*   imodhandle κ σ C := (∀ σ', C σ' -∗ σ' ≈{ts, Λ}≈> Π) -∗ Π κ σ; *)
-(* |}%I. *)
-(* Next Obligation. *)
-(*   iIntros (??????????) "HΠ HC". iIntros "Hw". iApply "HΠ". iIntros (?) "?". *)
-(*   iApply "Hw". by iApply "HC". *)
-(* Qed. *)
-
-
-(* Program Definition sim_tgtMH {Σ EV} {m1 : mod_trans EV} `{!dimsumGS Σ} *)
-(*   γσ_t γσ_s γκ m1_full Pκ m2 Π *)
-(*   : iModHandler Σ (m1.(m_state)) EV := {| *)
-(*   imodhandle κ σ C := *)
-(*      (∀ σ', C σ' -∗ σ' ≈{m1}≈>ₜ Π) -∗ *)
-(*         Pκ κ σ (λ σ_full : m_state m1_full, sim_tgt_constP (m_t:=m1_full) (m_s := m2) γσ_t γσ_s γκ κ σ_full) |}%I. *)
-(* Next Obligation. *)
-(*   iIntros (???????????????) "HΠ HC". iIntros "Hw". iApply "HΠ". iIntros (?) "?". *)
-(*   iApply "Hw". by iApply "HC". *)
-(* Qed. *)
-
-(* Program Definition switchMH {Σ EV} {m1 : mod_trans EV} `{!dimsumGS Σ} Π Pκ *)
-(*   : iModHandler Σ (m1.(m_state)) EV := {| *)
-(*   imodhandle κ σ C := *)
-(*      (∀ σ', C σ' -∗ σ' ≈{m1}≈>ₜ Π) -∗ *)
-(*       Pκ κ σ (λ ts' (m2 : mod_trans EV) σ2 Π2, σ2 ≈{ts', m2}≈> Π2) |}%I. *)
-(* Next Obligation. *)
-(*   iIntros (??????????)  "HΠ HC". iIntros "Hw". iApply "HΠ". iIntros (?) "?". *)
-(*   iApply "Hw". by iApply "HC". *)
-(* Qed. *)
 
 (** * [sim_gen_expr] *)
 Section sim_gen_expr.
@@ -435,6 +362,16 @@ Qed.
     iIntros "HΦ". rewrite sim_gen_expr_unfold. iIntros (???) "?".
     iApply (sim_gen_wand with "[-]"). { by iApply "HΦ". }
     iIntros (??) "?". iRight. done.
+  Qed.
+
+  Lemma sim_gen_expr_None e Π Φ :
+    (∀ σ K, ⌜mexpr_rel Λ σ (mfill Λ K e)⌝ -∗ mstate_interp Λ σ -∗
+          switch_id ts Λ Π None σ (λ σ'',
+             ∃ e', ⌜mexpr_rel Λ σ'' (mfill Λ K e')⌝ ∗ mstate_interp Λ σ'' ∗ WP{ts} e' @ Π {{Φ}})) -∗
+    WP{ts} e @ Π {{ Φ }}.
+  Proof.
+    iIntros "HΦ". iApply sim_gen_expr_steps. iIntros (???) "?".
+    iApply sim_gen_stop. by iApply "HΦ".
   Qed.
 
   (* Lemma sim_gen_expr_None e os Π Φ : *)
