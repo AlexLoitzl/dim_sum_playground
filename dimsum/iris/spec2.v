@@ -2,44 +2,44 @@ From dimsum.core Require Export spec_mod.
 From dimsum.core.iris Require Export sim expr2.
 Set Default Proof Using "Type".
 
-Definition spec_state_interp {Σ EV S} (state_interp : S → iProp Σ) : (spec EV S void * S) → option S → iProp Σ :=
-  λ s os, if os is Some s' then ⌜s.2 = s'⌝%I else state_interp s.2.
+Class specGS := SpecGS {
+  spec_state_name : gname;
+}.
 
-Arguments spec_state_interp _ _ _ _ _ !_ /.
+Definition spec_state {Σ S} `{!specGS} `{!mstateG Σ} (s : S) : iProp Σ :=
+  spec_state_name ⤳ s.
 
-Program Definition spec_mod_lang {Σ} (EV S : Type) (state_interp : S → iProp Σ)  : mod_lang EV Σ := {|
+Program Definition spec_mod_lang {Σ} `{!mstateG Σ} `{!specGS} (EV S : Type) : mod_lang EV Σ := {|
   mexpr := spec EV S void;
   mectx := unit;
-  mstate := S;
   mfill _ := id;
   mcomp_ectx _ _:= tt;
   mtrans := spec_trans EV S;
   mexpr_rel σ t := σ.1 ≡ t;
-  mstate_interp := spec_state_interp state_interp;
+  mstate_interp σ := spec_state σ.2;
 |}.
 Next Obligation. done. Qed.
-
-Definition spec_mod_lang_unit {Σ} (EV : Type) : mod_lang EV Σ :=
-  spec_mod_lang EV unit (λ _, True%I).
+Canonical Structure spec_mod_lang.
 
 Section spec.
-  Context `{!dimsumGS Σ} {EV S : Type} {state_interp : S → iProp Σ}.
+  Context `{!dimsumGS Σ} `{!specGS} {EV S : Type}.
 
   Global Instance sim_gen_expr_spec_proper ts J :
-    Proper ((≡) ==> (=) ==> (=) ==> (⊣⊢)) (sim_gen_expr (Λ:=spec_mod_lang EV S state_interp) ts J).
+    Proper ((≡) ==> (=) ==> (⊣⊢)) (sim_gen_expr (Λ:=spec_mod_lang EV S) ts J).
   Proof.
-    move => ?? ? ?? -> ?? ->.
+    move => ?? ? ?? ->.
     rewrite !sim_gen_expr_unfold /sim_gen_expr_pre/=. by repeat f_equiv.
   Qed.
 
-  Let X := (spec_mod_lang EV _ state_interp).
-  Local Canonical Structure X.
-
-  Lemma sim_gen_TVis ts k Π Φ e os :
-    (∀ s, ▷ₒ?ts handle_cont (spec_trans _ _) ts Π (Some e) (k tt, s) (λ σ', spec_state_interp state_interp σ' os ∗ WP{ts} σ'.1 @ ? os, Π {{ Φ }})) -∗
-    WP{ts} (Spec.bind (TVis e) k) @ ? os, Π {{ Φ }}.
+  Lemma sim_gen_TVis ts (k : _ → spec EV S void) Π Φ e :
+    (∀ s, spec_state s -∗
+         ▷ₒ?ts switch_id ts (spec_trans _ S) Π (Some e) (k tt, s) (λ σ',
+          spec_state σ'.2 ∗ WP{ts} σ'.1 @ Π {{ Φ }})) -∗
+    WP{ts} (Spec.bind (TVis e) k) @ Π {{ Φ }}.
   Proof.
     iIntros "Hsim". rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
+    iApply sim_gen_expr_steps => /=. iIntros (???) "?".
+    iApply (sim_gen_step_end with "[-]").
   Admitted.
     (* iApply sim_tgt_expr_step. iIntros (?[??]?? Heq Hstep) "Hs". simplify_eq/=. iModIntro. *)
     (* inv/= Hstep. *)
@@ -60,12 +60,18 @@ Section spec.
   (*   iApply "Hsim". iIntros (?) "?". by iApply ("HΦ" with "[//] [$]"). *)
   (* Qed. *)
 
-  (* TODO: This is missing lemmas for going from @ ? None to @ ? Some and back. *)
-  Lemma sim_gen_TGet ts k Π Φ s :
-    (▷ₒ?ts WP{ts} (k s) @ s, Π {{ Φ }}) -∗
-    WP{ts} (Spec.bind TGet k) @ s, Π {{ Φ }}.
+  Lemma sim_gen_TGet ts (k : _ → spec EV S _) Π Φ s :
+    (spec_state s ∧ ▷ₒ?ts WP{ts} (k s) @ Π {{ Φ }}) -∗
+    WP{ts} (Spec.bind TGet k) @ Π {{ Φ }}.
   Proof.
     iIntros "Hsim". rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
+    iApply sim_gen_expr_steps => /=. iIntros (???) "Hs".
+    iAssert (⌜σ.2 = s⌝)%I as %<-. {
+      iDestruct "Hsim" as "[? _]".
+      by iDestruct (mstate_var_merge with "[$] [$]") as (?) "?".
+    }
+    iDestruct "Hsim" as "[_ Hsim]".
+    iApply (sim_gen_step_end with "[-]").
   Admitted.
   (*   iApply sim_tgt_expr_step_None. iIntros (?[??]?? Heq Hstep ?). simplify_eq/=. iModIntro. *)
   (*   inv/= Hstep. *)
@@ -84,11 +90,15 @@ Section spec.
   (*   iIntros ([??] ?) "!>". simplify_eq. iSplit!. by iFrame. *)
   (* Qed. *)
 
-  Lemma sim_gen_TPut ts k Π Φ s s' :
-    (▷ₒ?ts WP{ts} (k tt) @ s', Π {{ Φ }}) -∗
-    WP{ts} (Spec.bind (TPut s') k) @ s, Π {{ Φ }}.
+  Lemma sim_gen_TPut ts (k : _ → spec EV S void) Π Φ (s : S) s' :
+    spec_state s -∗
+    (spec_state s' -∗ ▷ₒ?ts WP{ts} (k tt) @ Π {{ Φ }}) -∗
+    WP{ts} (Spec.bind (TPut s') k) @ Π {{ Φ }}.
   Proof.
-    iIntros "Hsim". rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
+    iIntros "? Hsim". rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
+    iApply sim_gen_expr_steps => /=. iIntros (???) "Hs".
+    iDestruct (mstate_var_merge with "[$] [$]") as (?) "?".
+    iApply (sim_gen_step_end with "[-]").
   Admitted.
   (*   iApply sim_tgt_expr_step_None. iIntros (?[??]?? Heq Hstep ?). simplify_eq/=. iModIntro. *)
   (*   inv/= Hstep. *)
@@ -107,20 +117,20 @@ Section spec.
   (*   iIntros ([??] ?) "!>". simplify_eq. iSplit!. by iFrame. *)
   (* Qed. *)
 
-  Lemma sim_gen_TAll {T} ts k Π Φ os :
-    (∃/∀{ts} x, ▷ₒ?ts WP{ts} (k x) @ ? os, Π {{ Φ }}) -∗
-    WP{ts} (Spec.bind (TAll T) k) @ ? os, Π {{ Φ }}.
+  Lemma sim_gen_TAll {T} ts (k : _ → spec EV S void) Π Φ :
+    (∃/∀{ts} x, ▷ₒ?ts WP{ts} (k x) @ Π {{ Φ }}) -∗
+    WP{ts} (Spec.bind (TAll T) k) @ Π {{ Φ }}.
   Proof.
     iIntros "Hsim". rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
   Admitted.
 
-  Lemma sim_tgt_TAll {T} x k Π Φ os :
-    (▷ₒ TGT (k x) @ ? os, Π {{ Φ }}) -∗
-    TGT (Spec.bind (TAll T) k) @ ? os, Π {{ Φ }}.
+  Lemma sim_tgt_TAll {T} x (k : _ → spec EV S void) Π Φ :
+    (▷ₒ TGT (k x) @ Π {{ Φ }}) -∗
+    TGT (Spec.bind (TAll T) k) @ Π {{ Φ }}.
   Proof. iIntros "Hsim". iApply sim_gen_TAll => /=. by iExists _. Qed.
-  Lemma sim_src_TAll {T} k Π Φ os :
-    (∀ x, SRC (k x) @ ? os, Π {{ Φ }}) -∗
-    SRC (Spec.bind (TAll T) k) @ ? os, Π {{ Φ }}.
+  Lemma sim_src_TAll {T} (k : _ → spec EV S void) Π Φ :
+    (∀ x, SRC (k x) @ Π {{ Φ }}) -∗
+    SRC (Spec.bind (TAll T) k) @ Π {{ Φ }}.
   Proof. iIntros "Hsim". by iApply sim_gen_TAll => /=. Qed.
 
   (* Lemma sim_src_TAll {T} k Π Φ os : *)
@@ -133,20 +143,20 @@ Section spec.
   (*   iIntros ([??] [??]) "!>". simplify_eq. iSplit!. iFrame. iApply "Hsim". *)
   (* Qed. *)
 
-  Lemma sim_gen_TExist {T} ts k Π Φ os :
-    (∀/∃{ts} x, ▷ₒ?ts WP{ts} (k x) @ ? os, Π {{ Φ }}) -∗
-    WP{ts} (Spec.bind (TExist T) k) @ ? os, Π {{ Φ }}.
+  Lemma sim_gen_TExist {T} ts (k : _ → spec EV S void) Π Φ :
+    (∀/∃{ts} x, ▷ₒ?ts WP{ts} (k x) @ Π {{ Φ }}) -∗
+    WP{ts} (Spec.bind (TExist T) k) @ Π {{ Φ }}.
   Proof.
     iIntros "Hsim". rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
   Admitted.
 
-  Lemma sim_tgt_TExist {T} k Π Φ os :
-    (∀ x, ▷ₒ TGT (k x) @ ? os, Π {{ Φ }}) -∗
-    TGT (Spec.bind (TExist T) k) @ ? os, Π {{ Φ }}.
+  Lemma sim_tgt_TExist {T} (k : _ → spec EV S void) Π Φ :
+    (∀ x, ▷ₒ TGT (k x) @ Π {{ Φ }}) -∗
+    TGT (Spec.bind (TExist T) k) @ Π {{ Φ }}.
   Proof. iIntros "Hsim". by iApply sim_gen_TExist => /=. Qed.
-  Lemma sim_src_TExist {T} x k Π Φ os :
-    (SRC (k x) @ ? os, Π {{ Φ }}) -∗
-    SRC (Spec.bind (TExist T) k) @ ? os, Π {{ Φ }}.
+  Lemma sim_src_TExist {T} x (k : _ → spec EV S void) Π Φ :
+    (SRC (k x) @ Π {{ Φ }}) -∗
+    SRC (Spec.bind (TExist T) k) @ Π {{ Φ }}.
   Proof. iIntros "Hsim". iApply sim_gen_TExist => /=. by iExists _. Qed.
 
   (* Lemma sim_tgt_TExist {T} k Π Φ os : *)
@@ -172,8 +182,8 @@ Section spec.
   (* Qed. *)
 
   (* TODO: Can these proofs be derived from the proofs before? *)
-  Lemma sim_tgt_TNb T (k : T → _) Π Φ os :
-    ⊢ TGT (Spec.bind TNb k) @ ? os , Π {{ Φ }}.
+  Lemma sim_tgt_TNb T (k : T → spec EV S void) Π Φ :
+    ⊢ TGT (Spec.bind TNb k) @ Π {{ Φ }}.
   Proof.
     rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
   Admitted.
@@ -183,8 +193,8 @@ Section spec.
     (* move => /spec_equiv_inv //= [? Heq2]. simplify_eq/=. destruct_all void. *)
   (* Qed. *)
 
-  Lemma sim_tgt_TNb_end Π Φ os :
-    ⊢ TGT TNb @ ? os, Π {{ Φ }}.
+  Lemma sim_tgt_TNb_end Π Φ :
+    ⊢ TGT (TNb :> spec EV S _) @ Π {{ Φ }}.
   Proof.
   Admitted.
     (* iApply sim_tgt_expr_step_None. iIntros (?[??]?? Heq Hstep) "Hs". simplify_eq/=. iModIntro. *)
@@ -193,8 +203,8 @@ Section spec.
     (* move => /spec_equiv_inv //= [? Heq2]. simplify_eq/=. destruct_all void. *)
   (* Qed. *)
 
-  Lemma sim_src_TUb T (k : T → _) Π Φ os :
-    ⊢ SRC (Spec.bind TUb k) @ ? os, Π {{ Φ }}.
+  Lemma sim_src_TUb T (k : T → spec EV S void) Π Φ :
+    ⊢ SRC (Spec.bind TUb k) @ Π {{ Φ }}.
   Proof.
   Admitted.
     (* rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl. *)
@@ -203,8 +213,8 @@ Section spec.
     (* iIntros ([??] [??]) "!>". destruct_all void. *)
   (* Qed. *)
 
-  Lemma sim_src_TUb_end Π Φ os :
-    ⊢ SRC TUb @ ? os, Π {{ Φ }}.
+  Lemma sim_src_TUb_end Π Φ :
+    ⊢ SRC (TUb :> spec EV S void) @ Π {{ Φ }}.
   Proof.
   Admitted.
     (* iApply sim_src_expr_step_None. iIntros (?[??]?) "?". simplify_eq/=. iModIntro. *)
@@ -212,21 +222,21 @@ Section spec.
     (* iIntros ([??] [??]) "!>". destruct_all void. *)
   (* Qed. *)
 
-  Lemma sim_gen_TAssume ts k Π Φ (P : Prop) os :
-    (⌜P⌝ ∗/-∗{ts} ▷ₒ?ts WP{ts} (k tt) @ ? os, Π {{ Φ }}) -∗
-    WP{ts} (Spec.bind (TAssume P) k) @ ? os, Π {{ Φ }}.
+  Lemma sim_gen_TAssume ts (k : _ → spec EV S void) Π Φ (P : Prop) :
+    (⌜P⌝ ∗/-∗{ts} ▷ₒ?ts WP{ts} (k tt) @ Π {{ Φ }}) -∗
+    WP{ts} (Spec.bind (TAssume P) k) @ Π {{ Φ }}.
   Proof.
     iIntros "Hsim". rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
   Admitted.
 
-  Lemma sim_tgt_TAssume k Π Φ (P : Prop) os :
+  Lemma sim_tgt_TAssume (k : _ → spec EV S void) Π Φ (P : Prop) :
     P →
-    (▷ₒ TGT (k tt) @ ? os, Π {{ Φ }}) -∗
-    TGT (Spec.bind (TAssume P) k) @ ? os, Π {{ Φ }}.
+    (▷ₒ TGT (k tt) @ Π {{ Φ }}) -∗
+    TGT (Spec.bind (TAssume P) k) @ Π {{ Φ }}.
   Proof. iIntros (?) "?". iApply sim_gen_TAssume. by iFrame. Qed.
-  Lemma sim_src_TAssume k Π Φ (P : Prop) os :
-    (⌜P⌝ -∗ SRC (k tt) @ ? os, Π {{ Φ }}) -∗
-    SRC (Spec.bind (TAssume P) k) @ ? os, Π {{ Φ }}.
+  Lemma sim_src_TAssume (k : _ → spec EV S void) Π Φ (P : Prop) :
+    (⌜P⌝ -∗ SRC (k tt) @ Π {{ Φ }}) -∗
+    SRC (Spec.bind (TAssume P) k) @ Π {{ Φ }}.
   Proof. iIntros "?". by iApply sim_gen_TAssume. Qed.
   (*   iIntros (?) "Hsim". rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl. *)
   (*   iApply sim_tgt_expr_step_None. iIntros (?[??]?? Heq Hstep) "Hs". simplify_eq/=. iModIntro. *)
@@ -247,21 +257,21 @@ Section spec.
   (*   iIntros ([??] [??]) "!>". simplify_eq. iSplit!. iFrame. by iApply "Hsim". *)
   (* Qed. *)
 
-  Lemma sim_gen_TAssert ts k Π Φ (P : Prop) os :
-    (⌜P⌝ -∗/∗{ts} ▷ₒ?ts WP{ts} (k tt) @ ? os, Π {{ Φ }}) -∗
-    WP{ts} (Spec.bind (TAssert P) k) @ ? os, Π {{ Φ }}.
+  Lemma sim_gen_TAssert ts (k : _ → spec EV S void) Π Φ (P : Prop) :
+    (⌜P⌝ -∗/∗{ts} ▷ₒ?ts WP{ts} (k tt) @ Π {{ Φ }}) -∗
+    WP{ts} (Spec.bind (TAssert P) k) @ Π {{ Φ }}.
   Proof.
     iIntros "Hsim". rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
   Admitted.
 
-  Lemma sim_tgt_TAssert k Π Φ (P : Prop) os :
-    (⌜P⌝ -∗ ▷ₒ TGT (k tt) @ ? os, Π {{ Φ }}) -∗
-    TGT (Spec.bind (TAssert P) k) @ ? os, Π {{ Φ }}.
+  Lemma sim_tgt_TAssert (k : _ → spec EV S void) Π Φ (P : Prop) :
+    (⌜P⌝ -∗ ▷ₒ TGT (k tt) @ Π {{ Φ }}) -∗
+    TGT (Spec.bind (TAssert P) k) @ Π {{ Φ }}.
   Proof. iIntros "?". by iApply sim_gen_TAssert. Qed.
-  Lemma sim_src_TAssert k Π Φ (P : Prop) os :
+  Lemma sim_src_TAssert (k : _ → spec EV S void) Π Φ (P : Prop) :
     P →
-    (SRC (k tt) @ ? os, Π {{ Φ }}) -∗
-    SRC (Spec.bind (TAssert P) k) @ ? os, Π {{ Φ }}.
+    (SRC (k tt) @ Π {{ Φ }}) -∗
+    SRC (Spec.bind (TAssert P) k) @ Π {{ Φ }}.
   Proof. iIntros (?) "?". iApply sim_gen_TAssert. by iFrame. Qed.
 
   (* Lemma sim_tgt_TAssert k Π Φ (P : Prop) os : *)
@@ -288,15 +298,15 @@ Section spec.
   (*   Unshelve. done. *)
   (* Qed. *)
 
-  Lemma sim_tgt_TAssumeOpt {T} o (x : T) k Π Φ os :
+  Lemma sim_tgt_TAssumeOpt {T} o (x : T) (k : _ → spec EV S void) Π Φ :
     o = Some x →
-    TGT k x @ ? os , Π {{ Φ }} -∗
-    TGT (Spec.bind (TAssumeOpt o) k) @ ? os , Π {{ Φ }}.
+    TGT k x @ Π {{ Φ }} -∗
+    TGT (Spec.bind (TAssumeOpt o) k) @ Π {{ Φ }}.
   Proof. iIntros (->) "Hsim". simpl. by rewrite unfold_bind/=. Qed.
 
-  Lemma sim_src_TAssumeOpt {T} (o : option T) k Π Φ os :
-    (∀ x, ⌜o = Some x⌝ -∗ SRC k x @ ? os, Π {{ Φ }}) -∗
-    SRC (Spec.bind (TAssumeOpt o) k) @ ? os, Π {{ Φ }}.
+  Lemma sim_src_TAssumeOpt {T} (k : _ → spec EV S void) (o : option T) Π Φ :
+    (∀ x, ⌜o = Some x⌝ -∗ SRC k x @ Π {{ Φ }}) -∗
+    SRC (Spec.bind (TAssumeOpt o) k) @ Π {{ Φ }}.
   Proof.
     iIntros "Hsim".
     destruct o => /=.
@@ -304,9 +314,9 @@ Section spec.
     - iApply sim_src_TUb.
   Qed.
 
-  Lemma sim_tgt_TAssertOpt {T} (o : option T) k Π Φ os :
-    (∀ x, ⌜o = Some x⌝ -∗ TGT k x @ ? os, Π {{ Φ }}) -∗
-    TGT (Spec.bind (TAssertOpt o) k) @ ? os, Π {{ Φ }}.
+  Lemma sim_tgt_TAssertOpt {T} (o : option T) (k : _ → spec EV S void) Π Φ :
+    (∀ x, ⌜o = Some x⌝ -∗ TGT k x @ Π {{ Φ }}) -∗
+    TGT (Spec.bind (TAssertOpt o) k) @ Π {{ Φ }}.
   Proof.
     iIntros "Hsim".
     destruct o => /=.
@@ -314,9 +324,9 @@ Section spec.
     - iApply sim_tgt_TNb.
   Qed.
 
-  Lemma sim_src_TAssertOpt {T} o (x : T) k Π Φ os :
+  Lemma sim_src_TAssertOpt {T} o (x : T) (k : _ → spec EV S void) Π Φ :
     o = Some x →
-    SRC k x @ ? os, Π {{ Φ }} -∗
-    SRC (Spec.bind (TAssertOpt o) k) @ ? os, Π {{ Φ }}.
+    SRC k x @ Π {{ Φ }} -∗
+    SRC (Spec.bind (TAssertOpt o) k) @ Π {{ Φ }}.
   Proof. iIntros (->) "Hsim". simpl. by rewrite unfold_bind/=. Qed.
 End spec.
