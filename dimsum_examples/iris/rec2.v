@@ -13,7 +13,7 @@ Notation "'let*' x , .. , z := t 'in' f" :=
     (at level 200, x closed binder, z closed binder) : stdpp_scope.
 Notation "'let*' := t 'in' f" := (t f) (only parsing, at level 200) : stdpp_scope.
 
-(* TODO: Rename Π to position and add Type of parameters and nop requirement? *)
+(* TODO: Rename Π to position or event handler and add Type of parameters and nop requirement and parametrize by ts? *)
 
 
 (* TODO: upstream *)

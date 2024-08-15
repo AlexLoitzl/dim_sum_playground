@@ -3,11 +3,47 @@ From dimsum.core.iris Require Import sat.
 From dimsum.core.iris Require Export sim.
 Set Default Proof Using "Type".
 
+(* Definition embedP {Σ EV1 EV2} `{!dimsumGS Σ} {m1 : mod_trans EV1} {m2 : mod_trans EV2} *)
+(*   (Π : option EV2 → m_state m2 → iProp Σ) (f : m1.(m_state) → m2.(m_state)) : *)
+(*   option EV1 → m_state m1 → iProp Σ := λ κ σ1, *)
+(*   if κ is Some e then *)
+(*     (∀ σ1' Pσ1', ⌜m_step m1 σ1' (Some e) Pσ1'⌝ -∗ ⌜Pσ1' σ1⌝ -∗ f σ1' ≈{m2}≈>ₜ Π)%I *)
+(*   else *)
+(*     Π None (f σ1). *)
+
+(* Definition embedP {Σ EV1 EV2} `{!dimsumGS Σ} {m1 : mod_trans EV1} {m2 : mod_trans EV2} *)
+(*   (ts : tgt_src) (Π : option EV2 → m_state m2 → iProp Σ) (f : m1.(m_state) → m2.(m_state)) : *)
+(*   option EV1 → m_state m1 → iProp Σ := λ κ σ1, *)
+(*   (∀ σ1', σ1' ≈{ts, m1}≈> (λ κ' σ1', ⌜κ = κ'⌝ ∗ ⌜σ1 = σ1'⌝) -∗ *)
+(*     f σ1' ≈{ts, m2}≈> Π)%I. *)
+
 (** * map_mod *)
 
 Section map.
   Context {Σ : gFunctors} {EV1 EV2 : Type} {S : Type} `{!dimsumGS Σ}.
   Implicit Types (f : map_mod_fn EV1 EV2 S).
+
+(*   Lemma sim_map_embed ts m f σ σf Π : *)
+(*     (σ ≈{ts, m}≈> embedP (m2:=map_trans _ _) ts Π (λ σ, (σ, (σf, true)))) -∗ *)
+(*     (σ, (σf, true)) ≈{ts, map_trans m f}≈> Π. *)
+(*   Proof. *)
+(*     iIntros "Hsim". *)
+(*     iApply (sim_gen_include (map_trans _ _) (λ σ, (σ, (σf, true))) with "Hsim"). *)
+(*     iIntros "!>" (??) "Hsim". iIntros "HΠ". *)
+(*     iApply (sim_gen_ctx with "[-]"). iIntros "?". *)
+(*     iApply (fupd_sim_gen with "[-]"). *)
+(*     iMod ("Hsim" with "[$]") as "[HP| Hs]". { *)
+(*       iModIntro. iApply ("HΠ" with "HP"). iApply (sim_gen_stop with "[-]"). iSplit!. *)
+(*     } *)
+(*     iModIntro. *)
+(*     iApply *)
+(* iApply (sim_gen_step with "[-]"). *)
+(*     destruct ts. 2: admit. *)
+(*     iIntros (?? Hstep). inv_all/= @m_step. *)
+(*     all: iMod ("Hs" with "[//]") as (??) "Hs"; iModIntro; iExists (_, _); iSplit!; [done|]. *)
+(*     all: iModIntro; iMod "Hs"; iModIntro. *)
+(*     - do 2 case_match; simplify_eq/=. iRight. iSplit!. by iApply "Hs". *)
+(*     - iLeft. iSpecialize ("HΠ" with "Hs"). unfold embedP. *)
 
   Lemma sim_tgt_map m f σ σf Π :
     (σ ≈{m}≈>ₜ λ κ σ',

@@ -2,6 +2,47 @@ From dimsum.core Require Import module trefines.
 From dimsum.core.itree Require Import upstream events.
 Import ITreeStdppNotations.
 
+(* From ITree.Props Require Import Finite.  *)
+(*
+Inductive all_finite {E} {A: Type} : itree E A -> Type :=
+ | all_finiteRet: forall a t,
+    observe t = RetF a ->
+   all_finite t
+ | all_finiteTau: forall t u,
+   observe t = TauF u ->
+   all_finite u ->
+   all_finite t
+ | all_finiteVis: forall {X : TypeState} (e: E X) t k,
+   observe t = VisF e k ->
+   (forall x, all_finite (k x)) ->
+   all_finite t
+.
+
+Fixpoint itree_to_state {E} (t : itree E void) (HP: all_finite t) : TypeState :=
+  match HP with
+  | all_finiteRet x _ _ => match x with end
+  | all_finiteTau _ u _ F => itree_to_state u F
+  | @all_finiteVis _ _ X e _ k _ F => () + { x : X & itree_to_state (k x) (F x) }
+  end.
+(* TODO: combine this with a function from states to itrees? *)
+(* TODO: define itree_to_state as a coinductive type? Is there a way to express this?
+E.g. something like the following? *)
+Section itree_state.
+  Context {E : Type -> Type}.
+  Variant itree_stateF (t : itree E void) (itree_state : itree E void → TypeState) : TypeState :=
+  | RetState (r : void) (_ : observe t = RetF r)
+  | TauState (_ : ∃ t', observe t = TauF t')
+      (c : itree_state (match observe t with | TauF t' => t' | _ => ITree.spin end))
+  | VisState (_ : ∃ X (e : E X) k, observe t = VisF e k)
+      (* TODO *)
+      (c : itree_state (match observe t with | TauF t' => t' | _ => ITree.spin end)).
+
+  CoInductive itree_state (t : itree E void) : TypeState := go
+  { _observe : itree_stateF t itree_state }.
+
+**)
+
+
 (** * [irefines] *)
 Inductive ihas_trace {EV S} : itree (moduleE_big EV S) void → S → trace EV → (itree (moduleE_big EV S) void → S → Prop) → Prop :=
 | ITraceTau t t' σ κs Pσ:
