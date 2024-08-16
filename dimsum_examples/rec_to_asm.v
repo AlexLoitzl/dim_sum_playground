@@ -1033,7 +1033,7 @@ Proof.
     iDestruct (r2a_mem_range with "[$] [$]") as %?.
     iPureIntro. apply elem_of_seqZ. move: Hall => /Forall_forall. naive_solver lia.
   }
-  move: Hsub => /submseteq_length_Permutation ->. 2: { rewrite seqZ_length. lia. }
+  move: Hsub => /submseteq_length_Permutation ->. 2: { rewrite length_seqZ. lia. }
   have [n [-> ->]]: ∃ n : nat, sp' - sp = Z.of_nat n ∧ sp' = sp + Z.of_nat n.
   { eexists (Z.to_nat (sp' - sp)). lia. }
   iApply (r2a_mem_delete with "[$] [$]"). lia.
@@ -1347,7 +1347,7 @@ Proof.
        rewrite list_lookup_fmap fmap_Some. setoid_rewrite lookup_replicate. unlock. lia. }
   iDestruct "Hm" as "[$ ?]".
   have {3} ->: (Z.of_N ssz) = length $ replicate (N.to_nat ssz) 0.
-  { rewrite replicate_length. lia. }
+  { rewrite length_replicate. lia. }
   by iApply r2a_mem_uninit_alt2.
 Qed.
 

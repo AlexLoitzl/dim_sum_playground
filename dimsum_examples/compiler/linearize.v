@@ -427,8 +427,8 @@ Proof.
   rewrite !subst_l_subst_map; [|lia..].
   tstep_both => ???.
   tstep_s. split!; [done|] => ?. tend. split!.
-  opose proof* heap_alloc_list_length as Hl; [done|]. rewrite fmap_length in Hl.
-  rewrite /subst_static !subst_l_subst_map; [|rewrite ?fmap_length ?imap_length; lia..].
+  opose proof* heap_alloc_list_length as Hl; [done|]. rewrite length_fmap in Hl.
+  rewrite /subst_static !subst_l_subst_map; [|rewrite ?length_fmap ?length_imap; lia..].
   rewrite -!subst_map_subst_map.
   apply tsim_mono_b_false.
   have ->: ∀ K ls e, expr_fill K (FreeA ls e) = expr_fill (FreeACtx ls :: K) e by [].

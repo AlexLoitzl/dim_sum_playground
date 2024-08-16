@@ -68,7 +68,7 @@ Definition static_locs {A} f (svars : list A) : list loc := (λ p, (p, 0)) <$> s
 
 Lemma static_provs_length A f (l : list A) :
   length (static_provs f l) = length l.
-Proof. by rewrite /static_provs imap_length. Qed.
+Proof. by rewrite /static_provs length_imap. Qed.
 
 Lemma static_provs_lookup A f (svars : list A) (i : nat) :
   static_provs f svars !! i = (λ _ : A, ProvStatic f i) <$> (svars !! i).
@@ -1212,7 +1212,7 @@ Proof.
   apply map_eq => ?. apply option_eq => ?.
   rewrite !fd_init_heap_lookup_Some.
   setoid_rewrite static_provs_lookup_Some.
-  have -> : length s1 = length s2 by rewrite -(fmap_length snd) Heq fmap_length.
+  have -> : length s1 = length s2 by rewrite -(length_fmap snd) Heq length_fmap.
   split; move => [i [[? b] [?[[??]?]]]]; simplify_eq.
   - have : s2.*2 !! i = Some b by rewrite -Heq list_lookup_fmap_Some; naive_solver.
     move => /list_lookup_fmap_Some[?[??]]. naive_solver.

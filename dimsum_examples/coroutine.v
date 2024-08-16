@@ -165,8 +165,8 @@ Proof. move => ?. rewrite /coro_regs_mem coro_regs_mem_n_lookup_Some //. Qed.
 Lemma coro_regs_mem_n_lookup_None rs i j:
   coro_regs_mem_n rs i !! j = None ↔ j < coro_state_addr ∨ coro_state_addr + (i `min` 13) ≤ j.
 Proof.
-  rewrite /coro_regs_mem_n lookup_map_seqZ_None fmap_length take_length.
-  rewrite /coro_get_regs fmap_length coro_saved_regs_length. lia.
+  rewrite /coro_regs_mem_n lookup_map_seqZ_None length_fmap length_take.
+  rewrite /coro_get_regs length_fmap coro_saved_regs_length. lia.
 Qed.
 
 Lemma coro_regs_mem_n_insert rs (i : nat) v r:

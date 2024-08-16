@@ -1901,8 +1901,8 @@ Proof.
   tstep_i => ???. split!.
   have Hlen1 := (heap_alloc_list_length _ (heap_fresh_list _ _ _) _ _ ltac:(done)).
   have Hlen2 := (heap_alloc_list_length _ _ _ _ ltac:(done)).
-  rewrite fmap_length in Hlen1, Hlen2.
-  rewrite /subst_static !subst_l_subst_map ?fmap_length ?imap_length ?fmap_length -?subst_map_subst_map //.
+  rewrite length_fmap in Hlen1, Hlen2.
+  rewrite /subst_static !subst_l_subst_map ?length_fmap ?length_imap ?length_fmap -?subst_map_subst_map //.
   apply: (rec_heap_bij_sim_refl_static INV); last first.
   - iSatMonoBupd. iIntros "(? & Hvs & #HINV & r & $)".
     iMod (heap_bij_inv_alloc_list with "[$]") as "[$ Hl]"; [done..|iCombine "Hl" as "#Hl"].
@@ -1910,7 +1910,7 @@ Proof.
     rewrite -!list_to_map_app. iFrame "HINV".
     iCombine "Hl r" as "r". iSplitR "r"; [| iAccu].
     iApply big_sepM2_list_to_map_2;
-      rewrite ?fmap_app ?fst_zip ?snd_zip ?fmap_length ?imap_length ?fmap_length //; try lia.
+      rewrite ?fmap_app ?fst_zip ?snd_zip ?length_fmap ?length_imap ?length_fmap //; try lia.
     iApply (big_sepL2_app with "[Hvs]"); [done|].
     iApply big_sepL2_app; [| by rewrite big_sepL2_fmap_l big_sepL2_fmap_r].
     iClear "Hl". iApply big_sepL_sepL2_diag.
@@ -1922,11 +1922,11 @@ Proof.
     tstep_i.
     iSatStart. iIntros!.
     iDestruct (heap_bij_inv_free_list with "[$] [$]") as (??) "?"; [done|..]; last (iSatStop; split!; [done|]).
-    all: rewrite ?snd_zip ?fst_zip ?fmap_length //; try lia.
+    all: rewrite ?snd_zip ?fst_zip ?length_fmap //; try lia.
     apply: Hret; [done|].
     iSatMono. iFrame.
   - done.
-  - rewrite !dom_union_L !dom_list_to_map_L !fst_zip ?fmap_length ?imap_length ?fmap_length //; lia.
+  - rewrite !dom_union_L !dom_list_to_map_L !fst_zip ?length_fmap ?length_imap ?length_fmap //; lia.
 Qed.
 
 (** ** Adequacy *)

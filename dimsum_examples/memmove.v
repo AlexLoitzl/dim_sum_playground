@@ -345,7 +345,7 @@ Proof.
       rewrite Z.sub_succ_r Z.sub_succ_l Z.pred_succ. split!; [|lia].
       rewrite /offset_loc/=. f_equal. lia.
   - destruct (snoc_inv hvs) as [|[v[hvs' ?]]]; [naive_solver|]. simplify_eq. tstep_i.
-    move: Hhvs Halive. rewrite app_length /=.
+    move: Hhvs Halive. rewrite length_app /=.
     have -> : (- (length hvs' + 1)%nat + 1) = - length hvs' by lia.
     move => Hhvs Halive.
     have := Hhvs (length hvs') v.
@@ -372,7 +372,7 @@ Proof.
     } { move => ???. apply heap_alive_update. apply: Halive. apply lookup_app_Some; naive_solver. }
     simpl. tstep_i. split!.
     move: Hcont.
-    rewrite /= heap_update_big_update app_length /=.
+    rewrite /= heap_update_big_update length_app /=.
     have -> : (- (length hvs' + 1)%nat + 1) = - length hvs' by lia.
     rewrite map_seqZ_app /= kmap_union kmap_insert kmap_empty offset_loc_add_sub //.
     move => ?. apply: tsim_mono; [done|]. etrans; [|done]. apply o_le_S.
