@@ -679,7 +679,7 @@ Qed.
 
 Lemma deep_to_asm_instrs_is_Some a dins pc:
   is_Some (deep_to_asm_instrs a dins !! pc) ↔ a ≤ pc < a + length dins.
-Proof. by rewrite lookup_map_seqZ_is_Some fmap_length. Qed.
+Proof. by rewrite lookup_map_seqZ_is_Some length_fmap. Qed.
 
 Lemma deep_to_asm_instrs_subseteq_range a1 di1 a2 di2:
   deep_to_asm_instrs a1 di1 ⊆ deep_to_asm_instrs a2 di2 →

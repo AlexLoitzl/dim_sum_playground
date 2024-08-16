@@ -37,7 +37,7 @@ Proof. move => ?. by rewrite /statics_offset take_app_le. Qed.
 Lemma statics_offset_app_length {A} (s1 : list (A * Z)) s2 :
  statics_offset (s1 ++ s2) (length s1 + length s2) =
    statics_offset s1 (length s1) + statics_offset s2 (length s2).
-Proof. by rewrite /statics_offset !take_ge ?app_length// sum_listZ_with_app. Qed.
+Proof. by rewrite /statics_offset !take_ge ?length_app// sum_listZ_with_app. Qed.
 
 Lemma statics_offset_ge_0 {A} (statics : list (A * Z)) i :
   Forall (λ z, 0 ≤ z) statics.*2 →
@@ -1398,7 +1398,7 @@ Proof.
       iApply (to_sim with "[Hcont Hp Hv] [%] Hrf [$]"). 2: {
         simplify_map_eq'. etrans; [|done].
         rewrite deep_to_asm_instrs_app Z.add_assoc.
-        apply: map_union_subseteq_r. apply map_seqZ_disjoint. rewrite fmap_length. lia. }
+        apply: map_union_subseteq_r. apply map_seqZ_disjoint. rewrite length_fmap. lia. }
       2: { iDestruct "Hinv" as "(%&?&?&?)". iExists _. iFrame. iApply cr2a_regs_inv_mono_insert; [compute_done|done]. }
 
       iApply ("Hcont" with "[%] [//] [$]"); [by simplify_map_eq'|].
@@ -1407,7 +1407,7 @@ Proof.
     + iApply (to_sim with "[Hcont Hp] [%] Hrf [$]"). 2: {
         simplify_map_eq'. etrans; [|done].
         rewrite deep_to_asm_instrs_app.
-        apply: map_union_subseteq_r'. { apply map_seqZ_disjoint. rewrite fmap_length. lia. }
+        apply: map_union_subseteq_r'. { apply map_seqZ_disjoint. rewrite length_fmap. lia. }
         rewrite deep_to_asm_instrs_cons.
         etrans; [|apply insert_subseteq; apply lookup_map_seqZ_None; lia].
         apply: subseteq_eq. f_equal. lia.
@@ -1497,14 +1497,14 @@ Lemma init_mem_statics_ext b s1 s2 :
 Proof.
   move => Heq. apply map_eq => ?. apply option_eq => ?.
   rewrite !init_mem_statics_lookup_Some.
-  rewrite -(fmap_length snd) Heq fmap_length.
+  rewrite -(length_fmap snd) Heq length_fmap.
   by erewrite statics_offset_ext.
 Qed.
 
 Lemma init_mem_statics_disj b1 s1 b2 s2:
  b1 + statics_offset s1 (length s1) ≤ b2 ∨ b2 + statics_offset s2 (length s2) ≤ b1 →
  init_mem_statics b1 s1 ##ₘ init_mem_statics b2 s2.
-Proof. move => ?. apply map_seqZ_disjoint. rewrite !replicate_length. lia. Qed.
+Proof. move => ?. apply map_seqZ_disjoint. rewrite !length_replicate. lia. Qed.
 
 Lemma init_mem_statics_app base s1 s2 :
   Forall (λ z, 0 ≤ z) s1.*2 →
@@ -1514,7 +1514,7 @@ Lemma init_mem_statics_app base s1 s2 :
 Proof.
   move => ??.
   apply map_eq => i. apply option_eq => z.
-  rewrite lookup_union_Some ?init_mem_statics_lookup_Some ?app_length ?statics_offset_app_length.
+  rewrite lookup_union_Some ?init_mem_statics_lookup_Some ?length_app ?statics_offset_app_length.
   2: apply init_mem_statics_disj; lia.
   have ?:= statics_offset_ge_0 s1 (length s1).
   have ?:= statics_offset_ge_0 s2 (length s2).
@@ -1620,7 +1620,7 @@ Proof.
 
   iApply (move_sp_correct); [done|].
   iIntros (???). simplify_eq.
-  rewrite /subst_static !subst_l_subst_map ?fmap_length ?static_provs_length //.
+  rewrite /subst_static !subst_l_subst_map ?length_fmap ?static_provs_length //.
   rewrite -!subst_map_subst_map right_id_L.
   rewrite map_union_assoc.
   rewrite map_union_comm ?map_union_assoc. 2: {
@@ -1655,7 +1655,7 @@ Proof.
       set (pc2 := rs0 !!! "PC") in *. clearbody pc1 pc2.
       match goal with | |- context [length ?l] => destruct (decide (pc2 = pc1 + length l - 1)); [|lia] end.
       subst. exfalso. move: Hi. clear. rewrite lookup_map_seqZ. case_guard => //.
-      rewrite list_lookup_fmap. rewrite !lookup_app_r ?app_length /=; [|lia..].
+      rewrite list_lookup_fmap. rewrite !lookup_app_r ?length_app /=; [|lia..].
       move => /fmap_Some[?[]]. rewrite lookup_cons_Some. naive_solver lia.
     - apply map_scramble_insert_r_in; [compute_done|].
       apply map_scramble_insert_r_in; [compute_done|done].
@@ -1695,7 +1695,7 @@ Proof.
   tstep_s => ? Hfree.
   iSatStartBupd.
   iMod (r2a_heap_free_list_shared with "Hh [Hlas]") as "[Hlas Hh]"; [done|..];
-    rewrite ?fst_zip ?snd_zip ?fmap_length //; try lia.
+    rewrite ?fst_zip ?snd_zip ?length_fmap //; try lia.
   iModIntro.
 
   iSatStop.
@@ -1721,17 +1721,17 @@ Proof.
       apply Forall_forall => ? /elem_of_list_join[?[Hin/(elem_of_lookup_zip_with _ _ _ _)[?[?[?[?[??]]]]]]].
       subst. move: Hin => /elem_of_seqZ?.
       have := Forall2_lookup_lr _ _ _ _ _ _ Hsple ltac:(done) ltac:(done). lia.
-    + rewrite app_length fmap_length app_length fmap_length.
+    + rewrite length_app length_fmap length_app length_fmap.
       have ->: length (mjoin (zip_with (λ a n, seqZ a n) las (lfd_vars fn).*2)) =
                sum_list_with Z.to_nat (lfd_vars fn).*2;[ |lia].
-      rewrite join_length (sum_list_with_sum_list (Z.to_nat)). f_equal.
+      rewrite length_join (sum_list_with_sum_list (Z.to_nat)). f_equal.
       apply list_eq => {}i. apply option_eq => ?.
       rewrite 2!list_lookup_fmap !fmap_Some.
       setoid_rewrite lookup_zip_with_Some.
       split => ?; destruct!.
-      * split!. by rewrite seqZ_length.
+      * split!. by rewrite length_seqZ.
       * opose proof* @Forall2_lookup_r; [done..|]. destruct!.
-        split!. by rewrite seqZ_length.
+        split!. by rewrite length_seqZ.
     + iFrame.
   - unfold r2a_regs_ret. simplify_map_eq'. split!.
     + etrans; [symmetry; apply: Hrs2; set_unfold; naive_solver |].

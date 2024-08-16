@@ -1396,7 +1396,7 @@ Proof.
         iDestruct (r2a_f2i_full_singleton with "[$] [$]") as %?.
         by iSatStop.
     + iSatMono HPb. iIntros!. rewrite heap_of_event_event_set_vals_heap vals_of_event_event_set_vals_heap.
-      2: { rewrite fmap_length. destruct b; simplify_eq/=; destruct!/=; done. }
+      2: { rewrite length_fmap. destruct b; simplify_eq/=; destruct!/=; done. }
       iDestruct select (heap_bij_statics _) as "#Hag".
       iFrame. iSplit!.
       * etrans; [eassumption|]. eassumption.

@@ -86,10 +86,10 @@ Lemma pass_state ren s e :
   (pass ren e s).1 = (s + N.of_nat (length (assigned_vars (static_expr_to_expr e))))%N.
 Proof.
   revert ren s. induction e => //= ren s; try lia.
-  all: rewrite ?IHe1 ?IHe2 ?IHe3 ?app_length; try lia.
+  all: rewrite ?IHe1 ?IHe2 ?IHe3 ?length_app; try lia.
   rewrite IHe Nat2N.inj_add N.add_assoc. move: ren (s + _)%N.
   revert select (Forall _ _). elim; csimpl; [lia|].
-  move => ?? IH1 _ IH2 ??. rewrite IH1 IH2 app_length. lia.
+  move => ?? IH1 _ IH2 ??. rewrite IH1 IH2 length_app. lia.
 Qed.
 
 Lemma pass_vars ren s e :
@@ -215,7 +215,7 @@ Lemma pass_fn_args_NoDup fn:
   NoDup (sfd_args (pass_fn fn) ++ (sfd_static_vars (pass_fn fn)).*1 ++ (sfd_vars (pass_fn fn)).*1).
 Proof.
   apply NoDup_alt => /= ???.
-  rewrite !lookup_app_Some ?fmap_length ?imap_length ?list_lookup_fmap ?fmap_Some.
+  rewrite !lookup_app_Some ?length_fmap ?length_imap ?list_lookup_fmap ?fmap_Some.
   setoid_rewrite list_lookup_imap_Some.
   naive_solver lia.
 Qed.
@@ -226,9 +226,9 @@ Lemma pass_fn_vars f :
 Proof.
   rewrite !imap_app. f_equal. f_equal; last f_equal.
   - rewrite imap_fmap fmap_imap.
-    apply imap_ext => * /=. f_equal. by rewrite imap_length.
-  - rewrite fmap_imap imap_fmap. apply imap_ext. move => * /=. rewrite fmap_length !imap_length. f_equal. lia.
-  - rewrite pass_vars !fmap_length. apply imap_ext. move => * /=. f_equal. lia.
+    apply imap_ext => * /=. f_equal. by rewrite length_imap.
+  - rewrite fmap_imap imap_fmap. apply imap_ext. move => * /=. rewrite length_fmap !length_imap. f_equal. lia.
+  - rewrite pass_vars !length_fmap. apply imap_ext. move => * /=. f_equal. lia.
 Qed.
 
 Lemma pass_fn_correct f fn :
@@ -237,12 +237,12 @@ Lemma pass_fn_correct f fn :
 Proof.
   apply rec_proof. { move => ?. rewrite !lookup_fmap !fmap_None !lookup_insert_None. naive_solver. }
   move => ????? vs ?. rewrite /subst_static !fmap_insert !fmap_empty /=.
-  move => /lookup_insert_Some[[??]|[??]]; simplify_map_eq. split!. { by rewrite imap_length. }
-  rewrite !imap_length. move => ?? Hret.
+  move => /lookup_insert_Some[[??]|[??]]; simplify_map_eq. split!. { by rewrite length_imap. }
+  rewrite !length_imap. move => ?? Hret.
   tstep_both => ls ? Hl. rewrite fmap_imap (imap_const snd) in Hl.
   tstep_s. split!; [done|] => ?. tend. rewrite !fmap_imap (imap_const snd). split!.
-  opose proof* heap_alloc_list_length as Hlen; [done|]. rewrite fmap_length in Hlen.
-  rewrite !subst_l_subst_map; [| rewrite ?fmap_length ?imap_length; lia..].
+  opose proof* heap_alloc_list_length as Hlen; [done|]. rewrite length_fmap in Hlen.
+  rewrite !subst_l_subst_map; [| rewrite ?length_fmap ?length_imap; lia..].
   rewrite -!subst_map_subst_map. apply tsim_mono_b_false.
   apply: pass_correct; [done|..].
   - move => i v /lookup_union_Some_raw.
@@ -278,7 +278,7 @@ Proof.
         have [|??]:= lookup_lt_is_Some_2 vs i; [lia|]. by split!.
       * move => j' ???.
         have ?:= lookup_lt_Some (sfd_static_vars fn) j _ ltac:(done).
-        have [|??]:= lookup_lt_is_Some_2 ((sfd_static_vars fn).*2) j'; [rewrite fmap_length; lia|].
+        have [|??]:= lookup_lt_is_Some_2 ((sfd_static_vars fn).*2) j'; [rewrite length_fmap; lia|].
         destruct!/=. revert select (∀ j y, _ → _ → _ ≠ _). apply; [|done]. split!.
       * right. split! => //.
         -- move => ?. destruct!/=.
@@ -288,7 +288,7 @@ Proof.
            specialize (Hneq j'' x1.1).
            simplify_eq. destruct!/=.
            have ?:= lookup_lt_Some (sfd_static_vars fn) j _ ltac:(done).
-           have [|??]:= lookup_lt_is_Some_2 ((sfd_static_vars fn).*2) j''; [rewrite fmap_length; lia|].
+           have [|??]:= lookup_lt_is_Some_2 ((sfd_static_vars fn).*2) j''; [rewrite length_fmap; lia|].
            apply Hneq; split!.
     + split!; right; split! => //.
       * rename select (¬ _) into Hneg. contradict Hneg. destruct!/=.

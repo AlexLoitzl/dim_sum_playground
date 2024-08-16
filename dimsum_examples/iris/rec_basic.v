@@ -225,7 +225,7 @@ Section lemmas.
       { iExists []. iSplit!. } 2: { lia. }
       rewrite seqZ_succ // big_sepL_app /=. iDestruct "Hl" as "[Hl [[%v Hv] _]]". rewrite Z.add_0_l.
       iDestruct ("IH" with "[//] [$]") as (vs ?) "?". subst.
-      iExists (vs ++ [v]). iSplit; [iPureIntro; rewrite app_length /=; lia|].
+      iExists (vs ++ [v]). iSplit; [iPureIntro; rewrite length_app /=; lia|].
       rewrite array_app array_cons array_nil. iApply (big_sepM_union_2 with "[$]").
       by iApply (big_sepM_insert_2 with "[Hv]").
     }

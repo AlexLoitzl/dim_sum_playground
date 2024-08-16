@@ -307,12 +307,12 @@ Section fresh_map.
     rewrite -elem_of_list_to_map.
     - move => /(elem_of_zip_with _ _ _ _)[?[?[?[??]]]]. simplify_eq. split; [set_solver|].
       by apply: fresh_list_is_fresh.
-    - rewrite fst_zip ?fresh_list_length //. apply NoDup_elements.
+    - rewrite fst_zip ?length_fresh_list //. apply NoDup_elements.
   Qed.
 
   Lemma fresh_map_lookup_None (S : gset A) (X : gset B) i:
     fresh_map S X !! i = None ↔ i ∉ S.
-  Proof. rewrite -not_elem_of_list_to_map. rewrite fst_zip; [set_solver|]. by rewrite fresh_list_length. Qed.
+  Proof. rewrite -not_elem_of_list_to_map. rewrite fst_zip; [set_solver|]. by rewrite length_fresh_list. Qed.
 
 
   Lemma fresh_map_bij S X i1 i2 j :
@@ -321,8 +321,8 @@ Section fresh_map.
     i1 = i2.
   Proof.
     rewrite -!elem_of_list_to_map.
-    2: { rewrite fst_zip ?fresh_list_length //. apply NoDup_elements. }
-    2: { rewrite fst_zip ?fresh_list_length //. apply NoDup_elements. }
+    2: { rewrite fst_zip ?length_fresh_list //. apply NoDup_elements. }
+    2: { rewrite fst_zip ?length_fresh_list //. apply NoDup_elements. }
     move => /elem_of_lookup_zip_with[i1'[?[?[?[??]]]]].
     move => /elem_of_lookup_zip_with[i2'[?[?[?[??]]]]]. simplify_eq.
     have ? : i1' = i2'  by apply: NoDup_lookup; [eapply (NoDup_fresh_list _ X)|..]. subst.

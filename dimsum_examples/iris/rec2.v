@@ -301,7 +301,7 @@ Section memmove.
         * rewrite delete_insert_ne // delete_insert. 2: { apply array_lookup_None => /=. lia. }
           have ?: d.2 ≠ s.2. { destruct d, s; naive_solver. }
           rewrite (array_insert s ( d+ₗ1)) //=; [|naive_solver lia].
-          iApply ("IH" with "[%] [%] [//] [//] [%] Hm"). { lia. } { rewrite insert_length. done. } { simpl. naive_solver lia. }
+          iApply ("IH" with "[%] [%] [//] [//] [%] Hm"). { lia. } { rewrite length_insert. done. } { simpl. naive_solver lia. }
           iIntros "?". iSplit!. iApply ("HΦ" with "[-]").
           rewrite -insert_union_l. iApply (big_sepM_insert_2 with "[Hdv]"); [done|].
           rewrite -insert_union_r_Some //. apply array_lookup_is_Some. split!; naive_solver lia.
@@ -325,7 +325,7 @@ Section memmove.
         done.
     - destruct hvss as [|v hvss _] using rev_ind; [done|] => /=.
       destruct hvsd as [|vd hvsd _] using rev_ind; [simplify_eq/=; lia|] => /=.
-      rewrite app_length/=. rewrite !app_length/= in Hlen.
+      rewrite length_app/=. rewrite !length_app/= in Hlen.
       have -> : (- (length hvss + 1)%nat + 1) = - Z.of_nat (length hvss) by lia.
       rewrite !array_app /= !array_cons !array_nil.
       have -> : s +ₗ - length hvss +ₗ length hvss = s by apply loc_eq; split!; lia.
@@ -363,7 +363,7 @@ Section memmove.
         * rewrite delete_insert_ne // delete_insert. 2: { apply array_lookup_None => /=. lia. }
           have ?: d.2 ≠ s.2. { destruct d, s; naive_solver. }
           rewrite (array_insert s (d +ₗ - length hvss)) //=; [|naive_solver lia].
-          iApply ("IH" with "[%] [%] [%] [%] [%] Hm"). { lia. } { rewrite insert_length. lia. }
+          iApply ("IH" with "[%] [%] [%] [%] [%] Hm"). { lia. } { rewrite length_insert. lia. }
           { apply loc_eq; split!; lia. } { apply loc_eq; split!; lia. } { simpl. naive_solver lia. }
           iIntros "?". iSplit!. iApply ("HΦ" with "[-]").
           rewrite -(insert_union_r _ ∅). 2: { apply array_lookup_None => /=. lia. }

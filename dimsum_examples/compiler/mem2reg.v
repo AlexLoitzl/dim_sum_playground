@@ -570,7 +570,7 @@ Proof.
   intros (h2' & ls1 & ls2 & -> & Hlen2 & H1s & H2s)%heap_alloc_list_app.
   destruct H2s as (l' & ls2' & -> & Hfresh & H2s).
   assert (i = length ls1) as Hi.
-  { rewrite Hlen2. symmetry. eapply take_length_le. eapply lookup_lt_Some in Hlook2. lia. }
+  { rewrite Hlen2. symmetry. eapply length_take_le. eapply lookup_lt_Some in Hlook2. lia. }
   rewrite list_lookup_middle // in Hlook1.
   injection Hlook1 as ?; subst.
   rewrite delete_middle.
@@ -657,11 +657,11 @@ Proof.
     (* we clean up the substitutions *)
     rewrite /subst_static !subst_l_subst_map; first last.
     { eapply heap_alloc_list_length in Halloc.
-      revert Halloc. rewrite !fmap_length //.  }
-    { by rewrite ?fmap_length ?imap_length. }
+      revert Halloc. rewrite !length_fmap //.  }
+    { by rewrite ?length_fmap ?length_imap. }
     { done. }
-    { rewrite !fmap_length -Hlen !fmap_length //. }
-    { by rewrite ?fmap_length ?imap_length. }
+    { rewrite !length_fmap -Hlen !length_fmap //. }
+    { by rewrite ?length_fmap ?length_imap. }
     { done. }
     rewrite -!subst_map_subst_map.
     rewrite -!list_to_map_app /=.
@@ -673,7 +673,7 @@ Proof.
 
     destruct (ls !! i) as [l|] eqn: Hl; last first.
     { eapply lookup_lt_Some in Heq.
-      rewrite fmap_length in Hlen.
+      rewrite length_fmap in Hlen.
       rewrite Hlen in Heq.
       eapply lookup_lt_is_Some_2 in Heq as [].
       naive_solver. }
@@ -706,14 +706,14 @@ Proof.
       eapply Hcont; first done.
       iSatMono. iFrame.
     + eapply elem_of_list_to_map_1.
-      { rewrite !fmap_app !fst_zip ?Hlen2 ?fmap_length -?Hlen4 ?imap_length ?fmap_length //. }
+      { rewrite !fmap_app !fst_zip ?Hlen2 ?length_fmap -?Hlen4 ?length_imap ?length_fmap //. }
       do 2 (eapply elem_of_app; right). eapply (elem_of_list_lookup_2 _ i).
       eapply lookup_zip_with_Some. split!.
       { rewrite list_lookup_fmap Hl //. }
     + rewrite lookup_insert //.
     + rewrite dom_insert_L !dom_list_to_map_L.
       rewrite !fmap_app !list_to_set_app.
-      rewrite !fst_zip ?Hlen2 ?fmap_length ?Hlen1 -?Hlen4 -?Hlen3 ?imap_length ?fmap_length //.
+      rewrite !fst_zip ?Hlen2 ?length_fmap ?Hlen1 -?Hlen4 -?Hlen3 ?length_imap ?length_fmap //.
       rewrite list_fmap_delete.
       rewrite {1}(delete_Permutation vars.*1); last done.
       simpl. clear. set_solver.
@@ -728,14 +728,14 @@ Proof.
       rewrite delete_insert_delete.
       iModIntro. iSplit; first done.
 
-      rewrite fmap_length in Hlen3.
+      rewrite length_fmap in Hlen3.
       assert (x ∉ args) as Hx.
       { eapply NoDup_app in Hnodup as (_ & Hnd & _).
         intros ?. eapply Hnd; first done.
         apply elem_of_app; right.
         by eapply elem_of_list_lookup_2. }
       fold ls. clear -Hx Heq Hlen Hlen1 Hlen2. revert Hlen.
-      generalize ls. clear ls; intros ls. rewrite fmap_length. intros Hlen.
+      generalize ls. clear ls; intros ls. rewrite length_fmap. intros Hlen.
 
       rewrite !list_to_map_app !delete_union.
       rewrite !(delete_notin (list_to_map (zip args _))).
@@ -745,7 +745,7 @@ Proof.
       * iApply big_sepM2_list_to_map_2; [rewrite !fst_zip //; lia|].
         rewrite !snd_zip //; lia.
       * iApply big_sepM2_delete_2. iApply big_sepM2_list_to_map_2 => //=.
-        rewrite !snd_zip ?fmap_length ?static_provs_length //.
+        rewrite !snd_zip ?length_fmap ?static_provs_length //.
         iApply big_sepL_sepL2_diag. by iApply big_sepL_fmap => /=.
       * rewrite !list_fmap_delete. iClear "Hs Hvals".
         iDestruct "Hlocs" as "-#Hlocs".
@@ -753,8 +753,8 @@ Proof.
         destruct ls => //; simplify_eq/=. destruct i; simplify_eq/=.
         -- rewrite delete_insert_delete. iApply big_sepM2_delete_2.
            iDestruct (big_sepL2_length with "Hlocs") as %?.
-           iApply big_sepM2_list_to_map_2; [rewrite !fst_zip ?fmap_length //; lia|].
-           rewrite !snd_zip ?fmap_length //; [|lia..].
+           iApply big_sepM2_list_to_map_2; [rewrite !fst_zip ?length_fmap //; lia|].
+           rewrite !snd_zip ?length_fmap //; [|lia..].
            by rewrite big_sepL2_fmap_l big_sepL2_fmap_r.
         -- iDestruct (big_sepL2_cons_inv_r with "Hlocs") as (???) "[Hloc ?]".
            simplify_eq/=. destruct (decide (x = v.1)); simplify_eq.
