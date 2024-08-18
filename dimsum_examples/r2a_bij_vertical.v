@@ -1327,7 +1327,7 @@ Proof.
       iFrame.
       iDestruct (r2a_mem_uninit_alt2 with "[$]") as "Huninit". rewrite Hvslen Z2Nat.id; [|lia].
       iFrame "Huninit". rewrite -!(assoc bi_sep).
-      iSplit!. 3: iSplitL; [|iSplit!].
+      iSplit!.
       * rewrite h_provs_h'. set_solver.
       * move => l ?. rewrite r2a_rh_constant_union // r2a_rh_constant_fmap_shared left_id_L.
         move => Hih /=.
