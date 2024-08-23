@@ -153,6 +153,30 @@ Section tgt_src.
     iIntros "? Hwand". iApply (ts_step_wand_strong with "[$]").
     iIntros (??) "?". by iApply "Hwand".
   Qed.
+
+  Lemma ts_step_det ts m σ κ σ' Pσ Φ :
+    m.(m_step) σ κ Pσ →
+    (∀ σ'', Pσ σ'' → σ'' = σ') →
+    (∀ κ' Pσ', m.(m_step) σ κ' Pσ' → κ' = κ ∧ Pσ' σ') →
+    Φ κ σ' -∗
+    ts_step ts m σ Φ.
+  Proof.
+    iIntros (? Hs Ht) "HΦ". destruct ts => /=.
+    - iIntros (??[-> ?]%Ht) "!>". by iFrame.
+    - iSplit!; [done|]. by iIntros "!>" (? ->%Hs).
+  Qed.
+
+  Lemma ts_step_dem {m} P ts σ κ Pσ Φ :
+    m.(m_step) σ κ Pσ →
+    (∀ σ'', Pσ σ'' → P σ'') →
+    (∀ κ' Pσ', m.(m_step) σ κ' Pσ' → ∃ σ', κ' = κ ∧ P σ' ∧ Pσ' σ') →
+    (∀ σ', ⌜P σ'⌝ -∗ Φ κ σ') -∗
+    ts_step ts m σ Φ.
+  Proof.
+    iIntros (? Hs Ht) "HΦ". destruct ts => /=.
+    - iIntros (??[? [-> [??]]]%Ht) "!>". iSplit!; [done|]. by iApply "HΦ".
+    - iSplit!; [done|]. iIntros "!>" (? ?%Hs). by iApply "HΦ".
+  Qed.
 End tgt_src.
 
 (** * [sim_gen] *)

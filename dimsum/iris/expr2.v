@@ -59,7 +59,7 @@ Qed.
 Definition switch_external `{!dimsumGS Σ} {S EV} (Π : option EV → S → iProp Σ)
   (K : _) : iProp Σ :=
   switch Π (λ κ σ POST,
-    K σ (λ e m2 σ2 K2, ⌜κ = Some e⌝ ∗
+    K κ σ (λ m2 σ2 K2,
   POST Src m2 (λ σ_s Π_s,
     ⌜σ_s = σ2⌝ ∗
   switch Π_s (λ κ' σ_s2 POST,

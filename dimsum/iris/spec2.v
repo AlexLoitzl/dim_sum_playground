@@ -38,8 +38,17 @@ Section spec.
     WP{ts} (Spec.bind (TVis e) k) @ Π {{ Φ }}.
   Proof.
     iIntros "Hsim". rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
-    iApply sim_gen_expr_steps => /=. iIntros (???) "?".
+    iApply sim_gen_expr_steps => /=. iIntros ([t s] ? Hs) "?"; simplify_eq/=.
     iApply (sim_gen_step_end with "[-]").
+    iApply (ts_step_dem (m:=spec_trans _ _ ) (λ σ, σ.1 ≡ k () ∧ σ.2 = s)).
+    { by econs. } { naive_solver. } {
+      move => ?? Hstep. inv/= Hstep.
+      all: revert select (_ ≡ _); rewrite {1}Hs; move => /spec_equiv_inv//=.
+      move => [-> ?]. split!. }
+    iIntros (? [??]).
+    iMod ("Hsim" with "[$]") as "Hsim". iModIntro.
+    (* iApply (switch_id_mono with "Hsim [-]"). *)
+
   Admitted.
     (* iApply sim_tgt_expr_step. iIntros (?[??]?? Heq Hstep) "Hs". simplify_eq/=. iModIntro. *)
     (* inv/= Hstep. *)
