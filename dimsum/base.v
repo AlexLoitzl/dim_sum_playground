@@ -633,13 +633,13 @@ Lemma map_to_list_union `{FinMap K M} {A} (m1 m2 : (M A)) :
   m1 ##ₘ m2 →
   map_to_list (m1 ∪ m2) ≡ₚ map_to_list m1 ++ map_to_list m2.
 Proof.
-  apply: (map_fold_ind (λ l m, m ##ₘ m2 → map_to_list (m ∪ m2) ≡ₚ l ++ map_to_list m2)).
-  - by rewrite map_empty_union.
-  - intros f fn m l Hf IH Hdisj.
-    decompose_map_disjoint.
+  intros Hdisj.
+  induction m1 as [|k x m1 Hk Hf IH] using map_first_key_ind.
+  - by rewrite map_empty_union map_to_list_empty.
+  - decompose_map_disjoint.
     rewrite -insert_union_l.
     rewrite map_to_list_insert; last by apply lookup_union_None.
-    by rewrite /= IH.
+    by rewrite /= IH // map_to_list_insert_first_key.
 Qed.
 End theorems.
 
