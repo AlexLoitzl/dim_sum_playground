@@ -1167,7 +1167,7 @@ Lemma fds_init_heap_map_disjoint f s fns :
   fd_init_heap f s ##ₘ fds_init_heap fns.
 Proof.
   rewrite /fds_init_heap.
-  apply (map_fold_ind (λ x m, m !! f = None → fd_init_heap f s ##ₘ x)).
+  apply (map_fold_weak_ind (λ x m, m !! f = None → fd_init_heap f s ##ₘ x)).
   { move => ?. apply map_disjoint_empty_r. }
   move => ?????? /lookup_insert_None [??].
   apply map_disjoint_union_r_2; [|naive_solver].
@@ -1178,7 +1178,7 @@ Lemma fds_init_heap_lookup_Some fns p h :
   fds_init_heap fns !! p = Some h ↔ ∃ f statics, fns !! f = Some statics ∧ fd_init_heap f statics !! p = Some h.
 Proof.
   rewrite /fds_init_heap.
-  apply (map_fold_ind (λ x m, x !! p = Some h ↔ ∃ f statics, m !! f = Some statics ∧
+  apply (map_fold_weak_ind (λ x m, x !! p = Some h ↔ ∃ f statics, m !! f = Some statics ∧
      fd_init_heap f statics !! p = Some h)).
   { setoid_rewrite lookup_empty. naive_solver. }
   move => ????? IH.
