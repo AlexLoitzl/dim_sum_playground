@@ -405,15 +405,29 @@ Definition read_asm : gmap Z asm_instr :=
 Section read.
   Context `{!dimsumGS Σ} `{!asmGS Σ}.
 
+(* Definition lam1 {A B} (f : A → B) : A → B := f. *)
+
+(* Notation "'{{' x , v '}}'" := (lam1 (fun x => v))  *)
+    (* (x ident, at level 10). *)
+(* Notation "'λ' x , v" := (fun x => v)  *)
+    (* (only printing, x ident, at level 10). *)
+
   Lemma sim_read Π :
     ↪ₐ∗ read_asm -∗
     asm_spec Tgt Π (λ POST0,
-      ∃ ret r8, "PC" ↦ᵣ read_addr ∗ "R30" ↦ᵣ ret ∗ "R8" ↦ᵣ r8 ∗
+      ∃ ret r0 r8, "PC" ↦ᵣ read_addr ∗ "R30" ↦ᵣ ret ∗ "R0" ↦ᵣ r0 ∗ "R8" ↦ᵣ r8 ∗
     switch Π (λ κ σ POST,
-    POST Tgt asm_trans (λ _ _,
-    POST0 (∃ r8', "PC" ↦ᵣ ret ∗ "R30" ↦ᵣ ret ∗ "R8" ↦ᵣ r8')))).
+      ∃ args mem, ⌜κ = Some (Outgoing, EASyscallCall args mem)⌝ ∗
+        ⌜args !! 8%nat = Some __NR_READ⌝ ∗ ⌜args !! 0%nat = Some r0⌝ ∗
+    POST Tgt asm_trans (λ σ' Π',
+      ⌜σ' = σ⌝ ∗
+    switch Π' (λ κ σ POST,
+      ∃ r mem', ⌜κ = Some (Incoming, EASyscallRet r mem')⌝ ∗
+    POST Tgt asm_trans (λ σ' Π',
+      ⌜σ' = σ⌝ ∗ ⌜Π' = Π⌝ ∗ ⌜mem' = mem⌝ ∗
+    POST0 (∃ r8', "PC" ↦ᵣ ret ∗ "R30" ↦ᵣ ret ∗ "R0" ↦ᵣ r ∗ "R8" ↦ᵣ r8')))))).
   Proof.
-    iIntros "#Hins" (?). iDestruct 1 as (??) "(HPC&HR30&HR8&Hret)".
+    iIntros "#Hins" (?). iDestruct 1 as (???) "(HPC&HR30&HR0&HR8&Hret)".
     iApply (sim_Jump_internal with "HPC").
     { iApply (asm_instrs_big_lookup_deep 0 with "[$]"); [lia|simpl; done]. }
     iIntros "!> HPC" => /=.
@@ -430,8 +444,26 @@ Section read.
     iIntros "!> HPC" => /=.
     iApply sim_Syscall. iModIntro.
     iIntros (??). iDestruct 1 as (?? ->) "[? HC]". iApply "HC". iExists _. iSplit.
-    { iApply (learn_regs_reg with "HR8").
+    { iApply (learn_regs_reg with "HR0").
+      iApply (learn_regs_reg with "HR8").
       iApply learn_regs_done. }
-    iIntros ([? _]) "?".
-  Abort.
+    iIntros ([? [? _]]) "HC".
+    iApply "Hret". iSplit!. iIntros (??) "[-> Hret]".
+    iApply "HC". iSplit!. iFrame.
+    iIntros (??). iDestruct 1 as (?? ->) "[HR0 HC]". iApply "Hret". iSplit!.
+    iIntros (??) "[-> [-> [-> Hret]]]". iApply "HC". iSplit!. iFrame.
+    iApply sim_WriteReg. iSplit.
+    { iApply (learn_regs_reg with "HPC").
+      iApply learn_regs_done. }
+    iFrame. iIntros "!>" (? [-> _]) "HPC".
+
+    iApply (sim_Jump_internal with "HPC").
+    { iApply (asm_instrs_big_lookup_deep 2 with "[$]"); [lia|simpl; done]. }
+    iIntros "!> HPC" => /=.
+    iApply sim_WriteReg. iSplit.
+    { iApply (learn_regs_reg with "HR30").
+      iApply learn_regs_done. }
+    iFrame. iIntros "!>" (? [-> _]) "HPC".
+    iApply "Hret". iFrame.
+  Qed.
 End read.

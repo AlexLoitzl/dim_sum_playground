@@ -347,12 +347,12 @@ Section lifting.
          ∃ regs mem,
            ⌜κ = Some (Outgoing, EASyscallCall (extract_syscall_args regs) mem)⌝ ∗
            asm_mapsto_auth mem ∗ learn_regs_dual regs (
-       POST Tgt _ (λ σ' Π', ⌜σ' = σ⌝ ∗
+       POST Tgt _ (λ σ' Π', ∃ ret0, ⌜σ' = σ⌝ ∗ "R0" ↦ᵣ ret0 ∗
        switch Π' (λ κ σ POST,
-         ∃ ret mem', ⌜κ = Some (Incoming, EASyscallRet ret mem')⌝ ∗
+         ∃ ret mem',
+         ⌜κ = Some (Incoming, EASyscallRet ret mem')⌝ ∗ "R0" ↦ᵣ ret ∗
        POST Tgt _ (λ σ' Π',
-          ⌜σ' = σ⌝ ∗ ⌜Π' = Π⌝ ∗
-          asm_mapsto_auth mem' ∗ asm_reg_mapsto_auth (<["R0":=ret]>regs) ∗
+          ⌜σ' = σ⌝ ∗ ⌜Π' = Π⌝ ∗ asm_mapsto_auth mem' ∗
           TGT es @ Π {{ Φ }})))))) -∗
     TGT Syscall :: es @ Π {{ Φ }}.
   Proof.
@@ -366,10 +366,11 @@ Section lifting.
       iDestruct "HX" as "[? _]". iApply (learn_regs_elim with "[$] [$]").
     }
     iDestruct "HX" as "[_ HX]". iApply "HX"; [done|].
-    iIntros (??) "[-> HΦ]".
+    iIntros (??) "[% [-> [HR0 HΦ]]]".
     iApply (sim_gen_step_end with "[-]") => /=.
-    iIntros (?? Hf). inv Hf. iModIntro. iSplit!. iModIntro. iModIntro.
-    iApply "HΦ". iSplit!. iIntros (??) "[-> [-> [? [? Hwp]]]]".
+    iIntros (?? Hf). inv Hf. iModIntro. iSplit!. iModIntro.
+    iMod (asm_reg_mapsto_update with "Hregs HR0") as "[??]". iModIntro.
+    iApply "HΦ". iSplit!. iFrame. iIntros (??) "[-> [-> [? Hwp]]]".
     iApply "HC". iSplit!. iFrame.
   Qed.
 
