@@ -56,11 +56,10 @@ Section map.
     iApply (sim_gen_include (map_trans _ _) (λ σ, (σ, (σf, true))) with "Hsim").
     iIntros "!>" (??) "Hsim". iIntros "HΠ".
     iApply (sim_gen_ctx with "[-]"). iIntros "?".
-    iApply (fupd_sim_gen with "[-]").
     iMod ("Hsim" with "[$]") as "[HP| Hs]". {
-      iModIntro. iApply (sim_gen_stop with "[-]"). by iApply ("HΠ" with "HP").
+      iApply (sim_gen_stop with "[-]"). by iApply ("HΠ" with "HP").
     }
-    iModIntro. iApply (sim_gen_step with "[-]"). iIntros (?? Hstep). inv_all/= @m_step.
+    iApply (sim_gen_step with "[-]"). iIntros (?? Hstep). inv_all/= @m_step.
     all: iMod ("Hs" with "[//]") as (??) "Hs"; iModIntro; iExists (_, _); iSplit!; [done|].
     all: iModIntro; iMod "Hs"; iModIntro.
     - do 2 case_match; simplify_eq/=. iRight. iSplit!. by iApply "Hs".
@@ -78,19 +77,18 @@ Section map.
     iApply (sim_gen_include (map_trans _ _) (λ σ, (σ, (σf, true))) with "Hsim").
     iIntros "!>" (??) "Hsim". iIntros "Hc".
     iApply (sim_gen_ctx with "[-]"). iIntros "?".
-    iApply (fupd_sim_gen with "[-]").
     iMod ("Hsim" with "[$]") as "[?| [%κ [% [% Hs]]] ]". {
-      iModIntro. iApply (sim_gen_stop with "[-]").
+      iApply (sim_gen_stop with "[-]").
       iDestruct ("Hc" with "[$]") as (???[?[??]]) "Hc". by simplify_eq.
     }
     destruct κ.
     - exploit vis_no_all; [done|] => -[σ'' ?].
-      iMod ("Hs" with "[%]") as ">Hs"; [naive_solver|]. iModIntro.
+      iMod ("Hs" with "[%]") as ">Hs"; [naive_solver|].
       iDestruct ("Hc" with "[$]") as (????) "Hs". simplify_eq/=.
       iApply (sim_gen_step_end with "[-]"). iExists _, _ => /=. iSplit; [iPureIntro|].
       { econs. { apply: ProductStepBoth; [done|]. by econs. } done. }
       iModIntro. iIntros ([σ' ?] [??]) "!>". have ? : σ' = σ'' by naive_solver. by simplify_eq.
-    - iModIntro. iApply (sim_gen_step with "[-]"). iExists _, _ => /=. iSplit; [iPureIntro|].
+    - iApply (sim_gen_step with "[-]"). iExists _, _ => /=. iSplit; [iPureIntro|].
       { econs; [by econs|done]. }
       iModIntro. iIntros ([??][??]). simplify_eq. iMod ("Hs" with "[//]") as ">HF". iModIntro.
       iRight. iSplit!. by iApply "HF".
@@ -130,12 +128,11 @@ Section seq_product.
     iApply (sim_gen_include (seq_product_trans m1 m2) (λ σ1, (Some SPLeft, σ1, σ2)) with "Hsim").
     iIntros "!>" (??) "Hsim". iIntros "Hc".
     iApply (sim_gen_ctx with "[-]"). iIntros "?".
-    iApply (fupd_sim_gen with "[-]").
     iMod ("Hsim" with "[$]") as "[HP| Hs ]". {
-      iModIntro. iDestruct ("Hc" with "[$] [//]") as "Hc".
+      iDestruct ("Hc" with "[$] [//]") as "Hc".
       by iApply (sim_gen_stop with "[-]").
     }
-    iModIntro. iApply (sim_gen_step with "[-]"). iIntros (?? Hstep). inv_all/= @m_step.
+    iApply (sim_gen_step with "[-]"). iIntros (?? Hstep). inv_all/= @m_step.
     iMod ("Hs" with "[//]") as (??) "Hs"; iModIntro.
     iExists (_, _, _). iSplit!; [done|]. iModIntro.
     iMod "Hs". iModIntro. case_match; simplify_eq/=.
@@ -154,12 +151,11 @@ Section seq_product.
     iApply (sim_gen_include (seq_product_trans m1 m2) (λ σ2, (Some SPRight, σ1, σ2)) with "Hsim").
     iIntros "!>" (??) "Hsim". iIntros "Hc".
     iApply (sim_gen_ctx with "[-]"). iIntros "?".
-    iApply (fupd_sim_gen with "[-]").
     iMod ("Hsim" with "[$]") as "[HP| Hs ]". {
-      iModIntro. iDestruct ("Hc" with "[$] [//]") as "Hc".
+      iDestruct ("Hc" with "[$] [//]") as "Hc".
       by iApply (sim_gen_stop with "[-]").
     }
-    iModIntro. iApply (sim_gen_step with "[-]"). iIntros (?? Hstep). inv_all/= @m_step.
+    iApply (sim_gen_step with "[-]"). iIntros (?? Hstep). inv_all/= @m_step.
     iMod ("Hs" with "[//]") as (??) "Hs"; iModIntro.
     iExists (_, _, _). iSplit!; [done|]. iModIntro.
     iMod "Hs". iModIntro. case_match; simplify_eq/=.
@@ -186,19 +182,18 @@ Section seq_product.
     iApply (sim_gen_include (seq_product_trans m1 m2) (λ σ1, (Some SPLeft, σ1, σ2)) with "Hsim").
     iIntros "!>" (??) "Hsim". iIntros "Hc".
     iApply (sim_gen_ctx with "[-]"). iIntros "?".
-    iApply (fupd_sim_gen with "[-]").
     iMod ("Hsim" with "[$]") as "[?| [%κ [% [% Hsim]]] ]". {
-      iModIntro. iDestruct ("Hc" with "[$]") as (??) "Hc".
+      iDestruct ("Hc" with "[$]") as (??) "Hc".
       iApply (sim_gen_stop with "[-]"). by simplify_eq/=.
     }
     destruct κ.
     - exploit vis_no_all; [done|] => -[σs1 ?].
-      iMod ("Hsim" with "[%]") as ">Hsim"; [naive_solver|]. iModIntro => /=.
+      iMod ("Hsim" with "[%]") as ">Hsim"; [naive_solver|] => /=.
       iDestruct ("Hc" with "[$]") as (s ?) "?".
       iApply (sim_gen_step with "[-]"). iExists _, _. iSplit.
       { iPureIntro. by apply: (SPLeftS _ _ _ _ _ s). }
       iIntros "!>" ([[? σs2]?] [?[??]]) "!>". iLeft. have ? : σs1 = σs2 by naive_solver. by simplify_eq/=.
-    - iModIntro. iApply (sim_gen_step with "[-]"). iExists _, _. iSplit.
+    - iApply (sim_gen_step with "[-]"). iExists _, _. iSplit.
       { iPureIntro. by econs. }
       iIntros "!>" ([[??] ?] [?[??]]). simplify_eq. iRight.
       iMod ("Hsim" with "[//]") as ">Hsim". iModIntro. simplify_eq/=. iSplit!. by iApply "Hsim".
@@ -214,19 +209,18 @@ Section seq_product.
     iApply (sim_gen_include (seq_product_trans m1 m2) (λ σ2, (Some SPRight, σ1, σ2)) with "Hsim").
     iIntros "!>" (??) "Hsim". iIntros "Hc".
     iApply (sim_gen_ctx with "[-]"). iIntros "?".
-    iApply (fupd_sim_gen with "[-]").
     iMod ("Hsim" with "[$]") as "[?| [%κ [% [% Hsim]]] ]". {
-      iModIntro. iDestruct ("Hc" with "[$]") as (??) "Hc".
+      iDestruct ("Hc" with "[$]") as (??) "Hc".
       iApply (sim_gen_stop with "[-]"). by simplify_eq/=.
     }
     destruct κ.
     - exploit vis_no_all; [done|] => -[σs1 ?].
-      iMod ("Hsim" with "[%]") as ">Hsim"; [naive_solver|]. iModIntro => /=.
+      iMod ("Hsim" with "[%]") as ">Hsim"; [naive_solver|] => /=.
       iDestruct ("Hc" with "[$]") as (s ?) "?".
       iApply (sim_gen_step with "[-]"). iExists _, _. iSplit.
       { iPureIntro. by apply: (SPRightS _ _ _ _ _ s). }
       iIntros "!>" ([[? ?]σs2] [?[??]]) "!>". iLeft. have ? : σs1 = σs2 by naive_solver. by simplify_eq/=.
-    - iModIntro. iApply (sim_gen_step with "[-]"). iExists _, _. iSplit.
+    - iApply (sim_gen_step with "[-]"). iExists _, _. iSplit.
       { iPureIntro. by econs. }
       iIntros "!>" ([[??] ?] [?[??]]). simplify_eq. iRight.
       iMod ("Hsim" with "[//]") as ">Hsim". iModIntro. simplify_eq/=. iSplit!. by iApply "Hsim".
@@ -255,11 +249,10 @@ Section state_transform.
     iApply (sim_gen_ind with "[] Hsim"). { solve_proper. }
     clear σ' σ HR. iIntros "!>" (σ'?) "Hsim". iIntros (σ HR) "Hc".
     iApply (sim_gen_ctx with "[-]"). iIntros "?".
-    iApply (fupd_sim_gen with "[-]").
     iMod ("Hsim" with "[$]") as "[HP| Hs]". {
-      iModIntro. iApply (sim_gen_stop with "[-]"). by iApply ("Hc" with "HP").
+      iApply (sim_gen_stop with "[-]"). by iApply ("Hc" with "HP").
     }
-    iModIntro. iApply (sim_gen_step with "[-]"). iIntros (?? Hstep). inv_all/= @m_step.
+    iApply (sim_gen_step with "[-]"). iIntros (?? Hstep). inv_all/= @m_step.
     have ?: σ' = σ'0 by naive_solver. subst.
     iMod ("Hs" with "[//]") as (??) "Hs"; iModIntro; simplify_eq/=.
     exploit HRstep; [done..|] => -[??].
@@ -286,11 +279,10 @@ Section state_transform.
     iApply (sim_gen_ind with "[] Hsim"). { solve_proper. }
     clear σ' σ HR. iIntros "!>" (σ'?) "Hsim". iIntros (σ HR) "Hc".
     iApply (sim_gen_ctx with "[-]"). iIntros "?".
-    iApply (fupd_sim_gen with "[-]").
     iMod ("Hsim" with "[$]") as "[?| [% [% [% Hs]]] ]". {
-      iModIntro. iApply (sim_gen_stop with "[-]"). by iApply ("Hc" with "[$]").
+      iApply (sim_gen_stop with "[-]"). by iApply ("Hc" with "[$]").
     }
-    iModIntro. iApply (sim_gen_step with "[-]").
+    iApply (sim_gen_step with "[-]").
     iExists _, _. iSplit; [iPureIntro; by econs|].
     iIntros "!>" (? [?[??]]). iMod ("Hs" with "[//]") as ">Hs". iModIntro.
     case_match.
@@ -636,10 +628,8 @@ Section link.
     (MLFRun (Some SPLeft), s, σ1, σ2) ≈{link_trans R m1 m2}≈>ₜ Π.
   Proof.
     iIntros "Hγ_s Hγ_σ2 Hsim".
-    iApply (@fupd_sim_gen with "[-]").
     iMod (mstate_var_split γ_s with "Hγ_s") as "[??]".
     iMod (mstate_var_split γ_σ2 with "Hγ_σ2") as "[??]".
-    iModIntro.
     iApply sim_tgt_link_left. iSpecialize ("Hsim" with "[$] [$]").
     iApply (sim_gen_wand with "Hsim"). iIntros (??) "Hsim".
     iApply ("Hsim" with "[$] [$]").

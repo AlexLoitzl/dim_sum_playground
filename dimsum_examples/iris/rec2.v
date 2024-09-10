@@ -71,10 +71,10 @@ Section lifting.
       rec_fn_auth fns -∗
       rec_mapsto_auth (h_heap h) -∗
       rec_alloc_auth (dom (h_heap h)) -∗
-      ▷ₒ switch_id Tgt rec_trans Π (Some (Outgoing, ERReturn v h)) (Rec (expr_fill K (Waiting b)) h fns) (λ σ,
+      ▷ₒ switch_id Tgt rec_trans Π (Some (Outgoing, ERReturn v h)) (Rec (expr_fill K (Waiting b)) h fns) ({{ σ,
          ∃ e', ⌜st_expr σ = expr_fill K e'⌝ ∗ ⌜st_fns σ = fns⌝ ∗
          rec_mapsto_auth (h_heap (st_heap σ)) ∗
-         rec_alloc_auth (dom (h_heap (st_heap σ))) ∗ Φ e')) -∗
+         rec_alloc_auth (dom (h_heap (st_heap σ))) ∗ Φ e'}})) -∗
     TGT ReturnExt b (Val v) @ Π {{ Φ }}.
   Proof.
     iIntros "HΦ". iApply (sim_gen_expr_steps with "[-]") => /=.
@@ -117,10 +117,10 @@ Section lifting.
       rec_mapsto_auth (h_heap h) -∗
       rec_alloc_auth (dom (h_heap h)) -∗
       ▷ₒ switch_id Tgt rec_trans Π (Some (Outgoing, ERCall f vs h))
-        (Rec (expr_fill K (Waiting true)) h fns) (λ σ,
+        (Rec (expr_fill K (Waiting true)) h fns) ({{ σ,
           ∃ e', ⌜st_expr σ = expr_fill K e'⌝ ∗ ⌜st_fns σ = fns⌝ ∗
            rec_mapsto_auth (h_heap (st_heap σ)) ∗
-      rec_alloc_auth (dom (h_heap (st_heap σ))) ∗ Φ e')) -∗
+      rec_alloc_auth (dom (h_heap (st_heap σ))) ∗ Φ e'}})) -∗
     TGT Call (Val (ValFn f)) es @ Π {{ Φ }}.
   Proof.
     destruct AsVals0. iIntros "Hfn HΦ". iApply (sim_gen_expr_steps with "[-]") => /=.

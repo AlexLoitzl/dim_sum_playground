@@ -7,6 +7,50 @@ From dimsum.core Require Export module trefines.
 From dimsum.core.iris Require Export ord_later.
 Set Default Proof Using "Type".
 
+(** * curly_lambda *)
+(** These notations prevent the type of the argument being printed,
+which would blow up the context in many cases. See
+https://coq.zulipchat.com/#narrow/stream/237977-Coq-users/topic/Disable.20printing.20types.20of.20binders*)
+Definition curly_lambda1 {A B} (f : ∀ x : A, B x) : ∀ x : A, B x := f.
+Definition curly_lambda2 {A B} (f : ∀ x : A, B x) : ∀ x : A, B x := f.
+Definition curly_lambda3 {A B} (f : ∀ x : A, B x) : ∀ x : A, B x := f.
+Definition curly_lambda4 {A B} (f : ∀ x : A, B x) : ∀ x : A, B x := f.
+Arguments curly_lambda1 _ _ & _.
+Arguments curly_lambda2 _ _ & _.
+Arguments curly_lambda3 _ _ & _.
+Arguments curly_lambda4 _ _ & _.
+Arguments curly_lambda1 _ _ _ _ /.
+Arguments curly_lambda2 _ _ _ _ /.
+Arguments curly_lambda3 _ _ _ _ /.
+Arguments curly_lambda4 _ _ _ _ /.
+Strategy expand [curly_lambda1 curly_lambda2 curly_lambda3 curly_lambda4].
+
+(* TODO: Is it good to burn ({{ as a token or should we use something
+else? E.g ({λ x , v }) ? *)
+(** These notations are carefully designed such that they don't cause
+too much indentation. *)
+Notation "'({{' x , v } } )" := (curly_lambda1 (fun x => v))
+    (x name, at level 0, format "({{  x ,  '/' v  } } )") : stdpp_scope.
+Notation "'({{' x y , v } } )" := (curly_lambda2 (fun x y => v))
+    (x name, y name, at level 0, format "({{  x  y ,  '/' v } } )") : stdpp_scope.
+Notation "'({{' x y z , v } } )" := (curly_lambda3 (fun x y z => v))
+    (x name, y name, z name, at level 0,
+      format "({{  x  y  z ,  '/' v  } } )") : stdpp_scope.
+Notation "'({{' x y z a , v } } )" := (curly_lambda4 (fun x y z a => v))
+    (x name, y name, z name, a name, at level 0,
+      format "({{  x  y  z  a ,  '/' v  } } )") : stdpp_scope.
+(* The following notations cause too much of a right drift. *)
+(** By using level 200, we avoid parsing conflicts with the wp
+notation. It also means that the notation usually needs to be written
+as "({{ ... }})". *)
+(* Notation "'{{' x , v } }" := (curly_lambda1 (fun x => v)) *)
+(*     (x ident, at level 200, format "{{  x ,  '[' v ']' } }") : stdpp_scope. *)
+(* Notation "'{{' x y , v } }" := (curly_lambda2 (fun x y => v)) *)
+(*     (x ident, y ident, at level 200, format "{{  x  y ,  v } }") : stdpp_scope. *)
+(* Notation "'{{' x y z , v } }" := (curly_lambda3 (fun x y z => v)) *)
+(*     (x ident, y ident, z ident, at level 200, *)
+(*       format "{{  x  y  z ,  v } }") : stdpp_scope. *)
+
 (** * mstate_var *)
 Record mstate_var_type : TypeOrdinal := MstateVar {
   mstate_var_ty : TypeState;
@@ -351,6 +395,23 @@ Section sim_gen.
     σ ≈{ ts, m }≈> Π.
   Proof. iIntros "Hsim". rewrite sim_gen_unfold. iMod "Hsim". iApply "Hsim". Qed.
 
+  Global Instance elim_modal_fupd_sim_gen p P σ Π :
+    ElimModal True p false (|={∅}=> P) P (σ ≈{ ts, m }≈> Π) (σ ≈{ ts, m }≈> Π).
+  Proof.
+    iIntros (?) "[HP HT]". rewrite bi.intuitionistically_if_elim.
+    iApply fupd_sim_gen. iMod "HP". by iApply "HT".
+  Qed.
+
+  Global Instance elim_modal_bupd_sim_gen p P σ Π :
+    ElimModal True p false (|==> P) P (σ ≈{ ts, m }≈> Π) (σ ≈{ ts, m }≈> Π).
+  Proof.
+    iIntros (?) "[HP HT]". rewrite bi.intuitionistically_if_elim.
+    iApply fupd_sim_gen. iMod "HP". by iApply "HT".
+  Qed.
+
+  Global Instance is_except_0_fupd_sim_gen σ Π : IsExcept0 (σ ≈{ ts, m }≈> Π).
+  Proof. rewrite /IsExcept0. iIntros "?". iApply fupd_sim_gen. by rewrite -except_0_fupd -fupd_intro. Qed.
+
   Lemma sim_gen_ctx σ Π :
     (ord_later_ctx -∗ σ ≈{ ts, m }≈> Π) -∗
     σ ≈{ ts, m }≈> Π.
@@ -572,7 +633,24 @@ Section sim.
   Lemma fupd_sim σ_t σ_s :
     (|={∅}=> σ_t ⪯{m_t, m_s} σ_s) -∗
     σ_t ⪯{m_t, m_s} σ_s.
-  Proof. iIntros "Hsim". rewrite sim_unfold. by iApply fupd_sim_gen. Qed.
+  Proof. iIntros "Hsim". rewrite sim_unfold. by iMod "Hsim". Qed.
+
+  Global Instance elim_modal_fupd_sim p P σ_t σ_s :
+    ElimModal True p false (|={∅}=> P) P (σ_t ⪯{m_t, m_s} σ_s) (σ_t ⪯{m_t, m_s} σ_s).
+  Proof.
+    iIntros (?) "[HP HT]". rewrite bi.intuitionistically_if_elim.
+    iApply fupd_sim. iMod "HP". by iApply "HT".
+  Qed.
+
+  Global Instance elim_modal_bupd_sim p P σ_t σ_s :
+    ElimModal True p false (|==> P) P (σ_t ⪯{m_t, m_s} σ_s) (σ_t ⪯{m_t, m_s} σ_s).
+  Proof.
+    iIntros (?) "[HP HT]". rewrite bi.intuitionistically_if_elim.
+    iApply fupd_sim. iMod "HP". by iApply "HT".
+  Qed.
+
+  Global Instance is_except_0_fupd_sim σ_t σ_s : IsExcept0 (σ_t ⪯{m_t, m_s} σ_s).
+  Proof. rewrite /IsExcept0. iIntros "?". iApply fupd_sim. by rewrite -except_0_fupd -fupd_intro. Qed.
 
   Lemma sim_ctx σ_t σ_s :
     (ord_later_ctx -∗ σ_t ⪯{m_t, m_s} σ_s) -∗

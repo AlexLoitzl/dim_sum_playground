@@ -239,15 +239,15 @@ Section memmove.
 
   (* This spec does not require one to pick Π upfront *)
   Lemma sim_locle_spec2 `{!specGS} Π Φ :
-    switch Π (λ κ σ POST,
+    switch Π ({{ κ σ POST,
       ∃ f vs h, ⌜κ = Some (Incoming, ERCall f vs h)⌝ ∗
-    POST Tgt (spec_trans _ unit) (λ σ' Π',
+    POST Tgt (spec_trans _ unit) ({{ σ' Π',
       ∃ l1 l2, ⌜σ' = σ⌝ ∗ ⌜f = "locle"⌝ ∗ ⌜vs = [ValLoc l1; ValLoc l2]⌝ ∗
-    switch Π' (λ κ σ POST,
+    switch Π' ({{ κ σ POST,
       ∃ b, ⌜l1.1 = l2.1 → b = bool_decide (l1.2 ≤ l2.2)⌝ ∗
       ⌜κ = (Some (Outgoing, ERReturn (ValBool b) h))⌝ ∗ ⌜σ = (locle_spec, tt)⌝ ∗
       spec_state ()
-      ))) -∗
+      }})}})}}) -∗
     TGT locle_spec @ Π {{ Φ }}.
   Proof.
     iDestruct 1 as "HC". unfold locle_spec at 2. rewrite unfold_forever -/locle_spec.
@@ -272,22 +272,20 @@ Section memmove.
   Lemma sim_locle2 fns Π :
     rec_fn_auth fns -∗
     "locle" ↪ None -∗
-    switch_link Tgt Π (λ σ0 POST,
+    switch_link Tgt Π ({{ σ0 POST,
       ∃ vs h,
-    POST (ERCall "locle" vs h) (spec_trans _ _) (locle_spec, tt) (λ _ Πr,
-    switch_link Tgt Πr (λ σ POST,
+    POST (ERCall "locle" vs h) (spec_trans _ _) (locle_spec, tt) ({{ _ Πr,
+    switch_link Tgt Πr ({{ σ POST,
       ∃ v h', ⌜σ = (locle_spec, tt)⌝ ∗
-    POST (ERReturn v h') _ σ0 (λ _ Πx,
-      ⌜Πx = Π⌝)))) -∗
+    POST (ERReturn v h') _ σ0 ({{ _ Πx,
+      ⌜Πx = Π⌝}})}})}})}}) -∗
     rec_fn_spec_hoare Tgt Π "locle" locle_fn_spec.
   Proof.
     iIntros "#Hfns #Hf HΠ" (es Φ) "HΦ". iDestruct "HΦ" as (l1 l2 ->) "HΦ".
     iApply (sim_tgt_rec_Call_external with "[$]"). iIntros (???) "#??? !>".
     iIntros (??) "[% [% Hσ]]". subst. iApply "HΠ". iSplit!. iIntros (??) "[-> HΠi]".
-    iApply (fupd_sim_gen with "[-]").
     iMod (mstate_var_alloc unit) as (γ) "?".
     iMod (mstate_var_split γ tt with "[$]") as "[Hγ ?]".
-    iModIntro.
     pose (Hspec := SpecGS γ).
     iApply (sim_gen_expr_intro _ tt with "[Hγ]"); simpl; [done..|].
     iApply sim_locle_spec2 => /=. iIntros (??). iDestruct 1 as (????) "HC". subst.
@@ -416,10 +414,8 @@ Section memmove.
   Proof.
     set (X := (switch_external _) _).
     iIntros "#?#?#?#?#? Hσs". iIntros (??). iDestruct 1 as (?) "[#Hs Hend]".
-    iApply (fupd_sim_gen_expr with "[-]").
     iMod (mstate_var_alloc unit) as (γ) "?".
     iMod (mstate_var_split γ σ.2 with "[$]") as "[Hγ ?]".
-    iModIntro.
     pose (Hspec := SpecGS γ).
 
     iApply sim_main; [done..|]. iSplit!.
@@ -537,7 +533,6 @@ Section memmove.
       spec_trans rec_event ()} (main_spec, ()).
   Proof.
     iIntros "[#Hfns [Hh Ha]] /=".
-    iApply (fupd_sim with "[-]").
     iMod (mstate_var_alloc (m_state (spec_trans rec_event ()))) as (γσ_s) "Hγσ_s".
     iMod (mstate_var_alloc (m_state m_t)) as (γσ_t) "Hγσ_t".
     iMod (mstate_var_alloc (option rec_event)) as (γκ) "Hγκ".
@@ -545,7 +540,6 @@ Section memmove.
     (* iMod (mstate_var_alloc (m_state (spec_trans rec_event ()))) as (γσ_locle) "Hγσ_locle". *)
     iMod (mstate_var_alloc unit) as (γs) "?".
     iMod (mstate_var_split γs tt with "[$]") as "[Hγs ?]".
-    iModIntro.
     pose (Hspec := SpecGS γs).
 
     iApply (sim_tgt_constP_intro γσ_t γσ_s γκ with "Hγσ_t Hγσ_s Hγκ [-]"). iIntros "Hγσ_s".
@@ -576,9 +570,7 @@ Section memmove.
     iSplit; [|by iIntros].
     iIntros (???? Hin) "!>". iIntros (?). simplify_map_eq.
     iApply (sim_tgt_link_left with "[-]").
-    iApply fupd_sim_gen.
     iMod (rec_mapsto_alloc_big (h_heap h) with "Hh") as "[Hh _]". { apply map_disjoint_empty_r. }
-    iModIntro.
 
     iApply (sim_gen_expr_intro _ [] with "[Hh Ha]"). { done. }
     { rewrite /= /rec_state_interp dom_empty_L right_id_L /=. iFrame "#∗". by iApply rec_alloc_fake. }
@@ -642,8 +634,7 @@ Lemma memmove_refines_spec :
 Proof.
   eapply (sim_adequacy #[dimsumΣ; recΣ]); [eapply _..|].
   iIntros (??) "!>". simpl.
-  iApply (fupd_sim with "[-]").
-  iMod recgs_alloc as (?) "[?[??]]". iModIntro.
+  iMod recgs_alloc as (?) "[?[??]]".
   iApply memmove_sim. iFrame.
 Qed.
 

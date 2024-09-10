@@ -31,17 +31,19 @@ Definition switch `{!dimsumGS Σ} {S EV} (Π : option EV → S → iProp Σ)
 
 (* Lemma switch_mono `{!dimsumGS Σ} {S EV} (Π : option EV → S → iProp Σ) K1 K2 : *)
 (*   switch Π K1 -∗ *)
-(*   (∀ κ σ P1 P2, K2 κ σ P1 -∗ K1 κ σ P2) -∗ *)
+(*   (∀ κ σ P1 P2, K2 κ σ P1 -∗ (∀ ts m Q1 Q2, P1 ts m Q1 -∗ (∀ σ Π, Q2 σ Π -∗ Q1 σ Π) -∗ P2 ts m Q2) -∗ K1 κ σ P2) -∗ *)
 (*   switch Π K2. *)
 (* Proof. *)
 (*   iIntros "Hs Hmono" (??) "HK2". iApply "Hs". *)
-(*   iApply "Hmono". *)
+(*   iApply ("Hmono" with "HK2"). *)
+(*   iIntros (????) "HQ Hmono". iIntros (??) "?". iApply "HQ". by iApply "Hmono". *)
+(* Qed. *)
 
 Definition switch_id `{!dimsumGS Σ} {EV} (ts : tgt_src) (m : mod_trans EV)
   (Π : option EV → m.(m_state) → iProp Σ)
   (κ : option EV) (σ : m.(m_state)) (C : m.(m_state) → iProp Σ) : iProp Σ :=
-  switch Π (λ κs σs POST, ⌜κs = κ⌝ ∗ ⌜σs = σ⌝ ∗
-  POST ts m (λ σ' Πs, ⌜Πs = Π⌝ ∗ C σ'))%I.
+  switch Π ({{ κs σs POST, ⌜κs = κ⌝ ∗ ⌜σs = σ⌝ ∗
+  POST ts m ({{ σ' Πs, ⌜Πs = Π⌝ ∗ C σ'}})}})%I.
 
 Lemma switch_id_mono `{!dimsumGS Σ} {EV} ts (m : mod_trans EV)
   (Π : option EV → m.(m_state) → iProp Σ) κ σ C1 C2 :
@@ -58,26 +60,26 @@ Qed.
 (* TODO: Prove lemmas about this *)
 Definition switch_external `{!dimsumGS Σ} {S EV} (Π : option EV → S → iProp Σ)
   (K : _) : iProp Σ :=
-  switch Π (λ κ σ POST,
-    K κ σ (λ m2 σ2 K2,
-  POST Src m2 (λ σ_s Π_s,
+  switch Π ({{ κ σ POST,
+    K κ σ ({{ m2 σ2 K2,
+  POST Src m2 ({{ σ_s Π_s,
     ⌜σ_s = σ2⌝ ∗
-  switch Π_s (λ κ' σ_s2 POST,
+  switch Π_s ({{ κ' σ_s2 POST,
     ⌜κ' = κ⌝ ∗
-  POST Src _ (λ σ_s2' Π',
-    ⌜σ_s2' = σ_s2⌝ ∗ K2 σ_s2 Π')))))%I.
+  POST Src _ ({{ σ_s2' Π',
+    ⌜σ_s2' = σ_s2⌝ ∗ K2 σ_s2 Π'}})}})}})}})}})%I.
 
 (* Switching to a linked module *)
 Definition switch_link `{!dimsumGS Σ} {S EV} (ts : tgt_src) (Π : option (io_event EV) → S → iProp Σ)
   (K : _) : iProp Σ :=
-  switch Π (λ κ σ0 POST,
-    K σ0 (λ e m2 σ2 K2, ⌜κ = Some (Outgoing, e)⌝ ∗
-  POST ts m2 (λ σi Πi,
+  switch Π ({{ κ σ0 POST,
+    K σ0 ({{ e m2 σ2 K2, ⌜κ = Some (Outgoing, e)⌝ ∗
+  POST ts m2 ({{ σi Πi,
     ⌜σi = σ2⌝ ∗
-  switch Πi (λ κ' σ POST,
+  switch Πi ({{ κ' σ POST,
     ∃ e', ⌜κ' = Some (Incoming, e')⌝ ∗
-  POST ts m2 (λ σr Πr,
-    ⌜σr = σ⌝ ∗ ⌜e' = e⌝ ∗ K2 σ Πr)))))%I.
+  POST ts m2 ({{ σr Πr,
+    ⌜σr = σ⌝ ∗ ⌜e' = e⌝ ∗ K2 σ Πr}})}})}})}})}})%I.
 
 
 (** * [sim_gen_expr] *)
@@ -101,7 +103,7 @@ Section sim_gen_expr.
   Proof.
     move => ?? Hsim ?? -> ?? HΦ. rewrite /sim_gen_expr_pre.
     repeat (f_equiv || eapply Hsim || eapply HΦ || reflexivity).
-    move => ?? -> ?? ->. unfold switch_id, switch.
+    move => ?? -> ?? ->. unfold switch_id, curly_lambda2, curly_lambda3, switch.
     repeat (f_equiv || eapply Hsim || eapply HΦ || reflexivity).
   Qed.
 
@@ -331,6 +333,24 @@ Qed.
     iIntros (???) "?". iApply fupd_sim_gen.
     iMod "Hsim". by iApply "Hsim".
   Qed.
+
+  Global Instance elim_modal_fupd_sim_gen_expr p P e Π Φ :
+    ElimModal True p false (|={∅}=> P) P (WP{ts} e @ Π {{ Φ }}) (WP{ts} e @ Π {{ Φ }}).
+  Proof.
+    iIntros (?) "[HP HT]". rewrite bi.intuitionistically_if_elim.
+    iApply fupd_sim_gen_expr. iMod "HP". by iApply "HT".
+  Qed.
+
+  Global Instance elim_modal_bupd_sim_gen_expr p P e Π Φ :
+    ElimModal True p false (|==> P) P (WP{ts} e @ Π {{ Φ }}) (WP{ts} e @ Π {{ Φ }}).
+  Proof.
+    iIntros (?) "[HP HT]". rewrite bi.intuitionistically_if_elim.
+    iApply fupd_sim_gen_expr. iMod "HP". by iApply "HT".
+  Qed.
+
+  Global Instance is_except_0_fupd_sim_gen_expr e Π Φ : IsExcept0 (WP{ts} e @ Π {{ Φ }}).
+  Proof. rewrite /IsExcept0. iIntros "?". iApply fupd_sim_gen_expr. by rewrite -except_0_fupd -fupd_intro. Qed.
+
 
   Lemma sim_gen_expr_stop e Π Φ :
     Φ e -∗ WP{ts} e @ Π {{ Φ }}.

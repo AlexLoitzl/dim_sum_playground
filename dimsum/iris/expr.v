@@ -129,7 +129,8 @@ Lemma fupd_sim_gen_expr e Π Φ os :
   (|={∅}=> WP{ts} e @ ? os [{ Π }] {{ Φ }}) -∗
   WP{ts} e @ ? os [{ Π }] {{ Φ }}.
 Proof.
-  iIntros "Hsim" (?) "HΦ". iIntros (??) "#??". iApply fupd_sim_gen. iApply ("Hsim" with "[$] [//] [//] [$]").
+  iIntros "Hsim" (?) "HΦ". iIntros (??) "#??".
+  by iMod ("Hsim" with "[$] [//] [//] [$]").
 Qed.
 
 Lemma sim_gen_expr_bind K e Π Φ os :

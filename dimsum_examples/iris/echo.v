@@ -162,10 +162,8 @@ Section echo.
     iIntros (σ) "Hγσ_s %". iApply bi_loop_step. iIntros (?) "#HLOOP".
     iIntros (es ?). iDestruct 1 as (->) "HΦ".
 
-    iApply (fupd_sim_gen_expr with "[-]").
     iMod (mstate_var_alloc unit) as (γ) "?".
     iMod (mstate_var_split γ σ.2 with "[$]") as "[Hγ ?]".
-    iModIntro.
     pose (Hspec := SpecGS γ).
 
     iApply (sim_tgt_rec_Call_external); [done|].
@@ -251,14 +249,12 @@ Section echo.
     (rec_init echo_prog) ⪯{rec_trans, spec_trans rec_event ()} (echo_spec, ()).
   Proof.
     iIntros "[#Hfns [Hh Ha]] /=".
-    iApply (fupd_sim with "[-]").
     iMod (mstate_var_alloc (m_state (spec_trans rec_event ()))) as (γσ_s) "Hγσ_s".
     iMod (mstate_var_alloc (m_state rec_trans)) as (γσ_t) "Hγσ_t".
     iMod (mstate_var_alloc (option rec_event)) as (γκ) "Hγκ".
 
     iMod (mstate_var_alloc unit) as (γs) "?".
     iMod (mstate_var_split γs tt with "[$]") as "[Hγs ?]".
-    iModIntro.
     pose (Hspec := SpecGS γs).
 
     iApply (sim_tgt_constP_intro γσ_t γσ_s γκ with "Hγσ_t Hγσ_s Hγκ [-]"). iIntros "Hγσ_s".
@@ -288,9 +284,7 @@ Section echo.
     iApply (sim_src_constP_next with "[Hγσ_t] [Hγκ] [Hγσ_s] [%] [-]"); [done..|].
     iIntros "Hγσ_s".
 
-    iApply fupd_sim_gen.
     iMod (rec_mapsto_alloc_big (h_heap h) with "Hh") as "[Hh _]". { apply map_disjoint_empty_r. }
-    iModIntro.
 
     iApply (sim_gen_expr_intro _ [] with "[Hh Ha]"). { done. }
     { rewrite /= /rec_state_interp dom_empty_L right_id_L /=. iFrame "#∗". by iApply rec_alloc_fake. }
@@ -320,8 +314,7 @@ Lemma echo_refines_echo_spec :
 Proof.
   eapply (sim_adequacy #[dimsumΣ; recΣ]); [eapply _..|].
   iIntros (??) "!>". simpl.
-  iApply (fupd_sim with "[-]").
-  iMod recgs_alloc as (?) "[?[??]]". iModIntro.
+  iMod recgs_alloc as (?) "[?[??]]".
   iApply echo_spec_sim. iFrame.
 Qed.
 
@@ -405,27 +398,20 @@ Definition read_asm : gmap Z asm_instr :=
 Section read.
   Context `{!dimsumGS Σ} `{!asmGS Σ}.
 
-(* Definition lam1 {A B} (f : A → B) : A → B := f. *)
-
-(* Notation "'{{' x , v '}}'" := (lam1 (fun x => v))  *)
-    (* (x ident, at level 10). *)
-(* Notation "'λ' x , v" := (fun x => v)  *)
-    (* (only printing, x ident, at level 10). *)
-
   Lemma sim_read Π :
     ↪ₐ∗ read_asm -∗
-    asm_spec Tgt Π (λ POST0,
+    asm_spec Tgt Π ({{ POST0,
       ∃ ret r0 r8, "PC" ↦ᵣ read_addr ∗ "R30" ↦ᵣ ret ∗ "R0" ↦ᵣ r0 ∗ "R8" ↦ᵣ r8 ∗
-    switch Π (λ κ σ POST,
-      ∃ args mem, ⌜κ = Some (Outgoing, EASyscallCall args mem)⌝ ∗
+      switch Π ({{ κ σ POST,
+        ∃ args mem, ⌜κ = Some (Outgoing, EASyscallCall args mem)⌝ ∗
         ⌜args !! 8%nat = Some __NR_READ⌝ ∗ ⌜args !! 0%nat = Some r0⌝ ∗
-    POST Tgt asm_trans (λ σ' Π',
-      ⌜σ' = σ⌝ ∗
-    switch Π' (λ κ σ POST,
-      ∃ r mem', ⌜κ = Some (Incoming, EASyscallRet r mem')⌝ ∗
-    POST Tgt asm_trans (λ σ' Π',
-      ⌜σ' = σ⌝ ∗ ⌜Π' = Π⌝ ∗ ⌜mem' = mem⌝ ∗
-    POST0 (∃ r8', "PC" ↦ᵣ ret ∗ "R30" ↦ᵣ ret ∗ "R0" ↦ᵣ r ∗ "R8" ↦ᵣ r8')))))).
+      POST Tgt asm_trans ({{ σ' Π',
+        ⌜σ' = σ⌝ ∗
+      switch Π' ({{ κ σ POST,
+        ∃ r mem', ⌜κ = Some (Incoming, EASyscallRet r mem')⌝ ∗
+      POST Tgt asm_trans ({{ σ' Π',
+        ⌜σ' = σ⌝ ∗ ⌜Π' = Π⌝ ∗ ⌜mem' = mem⌝ ∗
+    POST0 (∃ r8', "PC" ↦ᵣ ret ∗ "R30" ↦ᵣ ret ∗ "R0" ↦ᵣ r ∗ "R8" ↦ᵣ r8') }}) }}) }}) }}) }}).
   Proof.
     iIntros "#Hins" (?). iDestruct 1 as (???) "(HPC&HR30&HR0&HR8&Hret)".
     iApply (sim_Jump_internal with "HPC").
