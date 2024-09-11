@@ -62,6 +62,32 @@ Local Open Scope Z_scope.
 (* TODO: upstream? *)
 Arguments subst_static _ !_ /.
 
+(*
+echo() = let c := getc(); putc(c); echo()
+
+getc_rec() = local l [1]; read(l, 1); return l[0]
+
+read_asm := mov R8, __NR_READ; syscall; ret
+
+putc_spec(c) = buffer += [c]; if * then write(buffer, len(buffer)); buffer = []
+
+
+One refinement:
+echo_spec (src) -> read -> getc_rec -> echo -> putc_spec -> echo_spec (src)
+
+Another refinement
+(src) -> read -> getc_rec -> dispatcher -> handler -> putc_spec -> (src)
+
+where dispatcher is an assembly implementation of a callback dispatcher that reads
+new input using getc and then dispatches it to all registered handlers.
+The handlers can then register new handlers or remove existing handlers,
+leading to some form of mutual recusion.
+The dispatcher needs to be implemented in asm such that it can use equality to compare function pointers (necessary for removing).
+Property to prove:
+- Safety monitor on input, i.e. checks that a certain string is never emitted / stops processing after that?
+  - might even prove a higher-order property where one gets a function pointer from the env at the beginning and then sanitises its input?
+*)
+
 
 Definition echo_rec : fndef := {|
   fd_args := [];
@@ -80,16 +106,16 @@ Section echo.
 
   Lemma sim_echo Π :
     "echo" ↪ Some echo_rec -∗
-    rec_fn_spec_hoare Tgt Π "echo" (λ es POST0, ⌜es = []⌝ ∗
-      bi_loop (λ LOOP _,
-        rec_fn_spec_hoare Tgt Π "getc" (λ es POST,
+    rec_fn_spec_hoare Tgt Π "echo" ({{ es POST0, ⌜es = []⌝ ∗
+      bi_loop ({{ LOOP _,
+        rec_fn_spec_hoare Tgt Π "getc" ({{ es POST,
           ⌜es = []⌝ ∗
-        POST (λ c,
-        rec_fn_spec_hoare Tgt Π "putc" (λ es POST,
+        POST ({{ c,
+        rec_fn_spec_hoare Tgt Π "putc" ({{ es POST,
           ⌜es = [Val c]⌝ ∗
-        POST (λ _,
+        POST ({{ _,
           LOOP tt
-        ))))) tt).
+        }})}})}})}})}}) tt}}).
   Proof.
     iIntros "#?". iApply rec_fn_spec_hoare_ctx. iIntros "#?".
     set BODY := (X in bi_loop X).
@@ -146,13 +172,13 @@ Section echo.
     "putc" ↪ None -∗
     γσ_s ⤳ σ -∗
     ⌜σ.1 ≡ Spec.forever echo_spec_body⌝ -∗
-    □ switch_external Π (λ _ σ POST,
+    □ switch_external Π ({{ _ σ POST,
         ∃ σ_s, γσ_s ⤳ σ_s ∗
-      POST (spec_trans _ unit) σ_s (λ _ Π',
-      switch Π' (λ κ σ_s' POST,
+      POST (spec_trans _ unit) σ_s ({{ _ Π',
+      switch Π' ({{ κ σ_s' POST,
        ⌜κ = None⌝ ∗
-      POST Tgt _ (λ σ' Π', ⌜σ' = σ⌝ ∗ ⌜Π' = Π⌝ ∗ γσ_s ⤳ σ_s')))) -∗
-    rec_fn_spec_hoare Tgt Π "echo" (λ es _, ⌜es = []⌝).
+      POST Tgt _ ({{ σ' Π', ⌜σ' = σ⌝ ∗ ⌜Π' = Π⌝ ∗ γσ_s ⤳ σ_s'}})}})}})}}) -∗
+    rec_fn_spec_hoare Tgt Π "echo" ({{ es _, ⌜es = []⌝}}).
   Proof.
     iIntros "#?#?#? Hγσ_s Hσ_s #Hswitch". iApply rec_fn_spec_hoare_ctx. iIntros "#?".
     iIntros (es Φ). iDestruct 1 as %->. iApply sim_echo; [done|]. iSplit!.
@@ -364,11 +390,11 @@ Section getc.
 
   Lemma sim_getc Π :
     "getc" ↪ Some getc_rec -∗
-    rec_fn_spec_hoare Tgt Π "getc" (λ es POST0, ⌜es = []⌝ ∗
-      rec_fn_spec_hoare Tgt Π "read" (λ es POST,
+    rec_fn_spec_hoare Tgt Π "getc" ({{ es POST0, ⌜es = []⌝ ∗
+      rec_fn_spec_hoare Tgt Π "read" ({{ es POST,
         ∃ l v, ⌜es = [Val $ ValLoc l; Val $ 1]⌝ ∗ l ↦ v ∗
-      POST (λ _,
-        ∃ c, l ↦ (ValNum c) ∗ POST0 (λ vr, ⌜vr = ValNum c⌝)))).
+      POST ({{ _,
+        ∃ c, l ↦ (ValNum c) ∗ POST0 ({{ vr, ⌜vr = ValNum c⌝}})}})}})}}).
   Proof.
     iIntros "#?".
     iIntros (es Φ). iDestruct 1 as (->) "HΦ".
@@ -453,3 +479,28 @@ Section read.
     iApply "Hret". iFrame.
   Qed.
 End read.
+
+Definition putc_spec : spec rec_event (list Z) void :=
+  Spec.forever (
+    '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
+    c ← TAll _;
+    TAssume (f = "putc");;
+    TAssume (vs = [ValNum c]);;
+    buffer ← TGet;
+    TPut (buffer ++ [c]);;
+    b ← TExist bool;
+    (if b then
+       l ← TExist _;
+       buffer ← TGet;
+       (* TODO: Is it realistic that the Rec heap does not change?
+       Probably not. Maybe we could allocate a fresh block in the rec
+       heap and delete it again afterwards? This could maybe be
+       justified using the Rec to Rec wrapper (but it would not allow
+       the implementation to reuse the buffer). *)
+       TAssert (array l (ValNum <$> (buffer :> list Z)) ⊆ h_heap h);;
+       '(c, h') ← TCallRet "write" [ValLoc l ; ValNum (length buffer)] h;
+       TAssume (h' = h);;
+       TPut []
+     else TRet ()
+    );;
+    TVis (Outgoing, ERReturn 0 h)).
