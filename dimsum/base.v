@@ -830,7 +830,7 @@ Lemma default_eq_neq {A} (x y : A) o:
 Proof. destruct o; naive_solver. Qed.
 
 (** * Strings and pretty *)
-Notation string_to_list := list_ascii_of_string.
+Notation string_to_list := String.list_ascii_of_string.
 
 Lemma string_list_eq s1 s2 :
   s1 = s2 ↔ string_to_list s1 = string_to_list s2.
