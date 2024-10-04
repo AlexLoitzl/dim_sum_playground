@@ -177,7 +177,7 @@ Section echo.
       POST (spec_trans _ unit) σ_s ({{ _ Π',
       switch Π' ({{ κ σ_s' POST,
        ⌜κ = None⌝ ∗
-      POST Tgt _ ({{ σ' Π', ⌜σ' = σ⌝ ∗ ⌜Π' = Π⌝ ∗ γσ_s ⤳ σ_s'}})}})}})}}) -∗
+      POST Tgt _ _ ({{ σ' Π', ⌜σ' = σ⌝ ∗ ⌜Π' = Π⌝ ∗ γσ_s ⤳ σ_s'}})}})}})}}) -∗
     rec_fn_spec_hoare Tgt Π "echo" ({{ es _, ⌜es = []⌝}}).
   Proof.
     iIntros "#?#?#? Hγσ_s Hσ_s #Hswitch". iApply rec_fn_spec_hoare_ctx. iIntros "#?".
@@ -431,11 +431,11 @@ Section read.
       switch Π ({{ κ σ POST,
         ∃ args mem, ⌜κ = Some (Outgoing, EASyscallCall args mem)⌝ ∗
         ⌜args !! 8%nat = Some __NR_READ⌝ ∗ ⌜args !! 0%nat = Some r0⌝ ∗
-      POST Tgt asm_trans ({{ σ' Π',
+      POST Tgt _ asm_trans ({{ σ' Π',
         ⌜σ' = σ⌝ ∗
       switch Π' ({{ κ σ POST,
         ∃ r mem', ⌜κ = Some (Incoming, EASyscallRet r mem')⌝ ∗
-      POST Tgt asm_trans ({{ σ' Π',
+      POST Tgt _ asm_trans ({{ σ' Π',
         ⌜σ' = σ⌝ ∗ ⌜Π' = Π⌝ ∗ ⌜mem' = mem⌝ ∗
     POST0 (∃ r8', "PC" ↦ᵣ ret ∗ "R30" ↦ᵣ ret ∗ "R0" ↦ᵣ r ∗ "R8" ↦ᵣ r8') }}) }}) }}) }}) }}).
   Proof.
@@ -480,27 +480,99 @@ Section read.
   Qed.
 End read.
 
-Definition putc_spec : spec rec_event (list Z) void :=
+Section getc_read.
+  Context `{!dimsumGS Σ} `{!recGS Σ} `{!asmGS Σ}.
+
+  Definition switch_r2a (mr : mod_trans rec_event) (ma : mod_trans asm_event) ts Πr K : iProp Σ :=
+      switch Πr ({{ κr σr POST,
+        (∃ f vs h, ⌜κr = Some (Outgoing, ERCall f vs h)⌝ ∗
+        K f vs h ({{ a K2,
+        (* replace this with f2i f a *) ⌜a = 1⌝ ∗
+      POST ts _ ma ({{ σa Πa,
+        K2 σa ({{ K3,
+
+      switch Πa ({{ κa σa POST,
+        ∃ regs mem, ⌜κa = Some (Incoming, EAJump regs mem)⌝ ∗
+        K3 ({{ K4,
+      POST ts _ ma ({{ σa Πa,
+        K4 σa Πa ({{ K5,
+      (* Permission to switch back *)
+      switch Πa ({{ κa σa' POST,
+        ∃ regs' mem', ⌜κa = Some (Outgoing, EAJump regs' mem')⌝ ∗
+        ⌜regs' !!! "PC" = regs !!! "R30"⌝ ∗
+        K5 ({{ K6,
+      POST ts _ mr ({{ σr' Πr',
+        ⌜Πr' = Πr⌝ ∗ K6 σr'
+      }}) }}) }}) }}) }}) }}) }}) }}) }}) }}) )%I }}).
+
+  Lemma sim_getc_read Π :
+    "getc" ↪ Some getc_rec -∗
+    "read" ↪ None -∗
+    ↪ₐ∗ read_asm -∗
+    rec_fn_spec_hoare Tgt Π "getc" ({{ es POST0, ⌜es = []⌝ ∗
+      switch_r2a rec_trans asm_trans Tgt Π ({{ f vs h POST,
+      POST read_addr ({{ σa ACCEPT,
+        ⌜asm_cur_instr σa = AWaiting⌝ ∗
+
+      ACCEPT ({{ POST,
+      POST ({{ σa Πa RET,
+      ⌜asm_cur_instr σa = ARunning []⌝ ∗
+      (* TODO: the following should maybe come from switch_r2a? *)
+        asm_state_interp σa ∗
+      ∃ ret r0 r8, "PC" ↦ᵣ read_addr ∗ "R30" ↦ᵣ ret ∗ "R0" ↦ᵣ r0 ∗ "R8" ↦ᵣ r8 ∗
+
+      (* TODO: define a switch syscall and use it here *)
+      RET ({{ POST,
+      POST ({{ σr', True
+      }}) }}) }}) }}) }}) }}) }}).
+  Proof.
+    iIntros "#? #? #?".
+    iIntros (es ?). iDestruct 1 as (->) "HC".
+    iApply (sim_getc with "[//]") => /=. iSplit!.
+    iIntros (es ?) => /=. iDestruct 1 as (?? ->) "[Hl HΦ]".
+    iApply sim_tgt_rec_Call_external. { done. }
+    iIntros (K h fns) "? ? ? !>".
+    iIntros (??) => /=. iDestruct 1 as (??) "HR". simplify_eq.
+    iApply "HC" => /=. iSplit!. { admit. }
+    iIntros ([i regs0 mem0 instrs]?) "[% HC]"; simplify_eq/=.
+    iApply sim_tgt_asm_Waiting.
+    iIntros (????). iModIntro.
+    iApply "HC" => /=. iSplit!. iIntros ([????] ?) "[% [? HC]]"; simplify_eq/=.
+    iApply (sim_gen_expr_intro (Λ:=asm_mod_lang) with "[$]"). { done. }
+    iApply sim_read; [done|] => /=.
+    iDestruct "HC" as (???) "(?&?&?&?&HC)". iFrame.
+  Admitted.
+
+End getc_read.
+
+
+Definition putc_buffer_prov : prov := ProvStatic "putc" 0.
+
+Definition putc_spec : spec rec_event (list Z * gmap Z val) void :=
   Spec.forever (
     '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
     c ← TAll _;
     TAssume (f = "putc");;
     TAssume (vs = [ValNum c]);;
-    buffer ← TGet;
-    TPut (buffer ++ [c]);;
+    '(buffer, blk) ← TGet;
+    TAssume (heap_preserved {[putc_buffer_prov := blk]} h);;
+    blk' ← TExist _;
+    (* TODO: use something like heap_update_block putc_buffer_prov blk' h *)
+    let h := h in
+    TPut (buffer ++ [c], blk');;
     b ← TExist bool;
-    (if b then
+    h' ← (if b then
        l ← TExist _;
-       buffer ← TGet;
-       (* TODO: Is it realistic that the Rec heap does not change?
-       Probably not. Maybe we could allocate a fresh block in the rec
-       heap and delete it again afterwards? This could maybe be
-       justified using the Rec to Rec wrapper (but it would not allow
-       the implementation to reuse the buffer). *)
+       '(buffer, blk) ← TGet;
+       TAssert (l.1 = putc_buffer_prov);;
        TAssert (array l (ValNum <$> (buffer :> list Z)) ⊆ h_heap h);;
-       '(c, h') ← TCallRet "write" [ValLoc l ; ValNum (length buffer)] h;
-       TAssume (h' = h);;
-       TPut []
-     else TRet ()
-    );;
-    TVis (Outgoing, ERReturn 0 h)).
+       '(c, h') ← TCallRet "write" [ValLoc l; ValNum (length buffer)] h;
+       TAssume (h_block h' putc_buffer_prov = blk);;
+       blk' ← TExist _;
+       (* TODO: use something like heap_update_block putc_buffer_prov blk' h *)
+       let h := h in
+       TPut ([], blk');;
+       TRet h
+     else TRet h
+    );
+    TVis (Outgoing, ERReturn 0 h')).

@@ -235,6 +235,17 @@ Definition asm_spec `{!dimsumGS Σ} `{!asmGS Σ} (ts : tgt_src)
 Section lifting.
   Context `{!dimsumGS Σ} `{!asmGS Σ}.
 
+  Lemma sim_tgt_asm_Waiting regs instrs Π mem :
+    (∀ regs mem instr, ⌜instrs !! (regs !!! "PC") = Some instr⌝ -∗
+      ▷ₒ Π (Some (Incoming, EAJump regs mem))
+           (AsmState (ARunning []) regs mem instrs)) -∗
+    AsmState AWaiting regs mem instrs ≈{asm_trans}≈>ₜ Π.
+  Proof.
+    iIntros "HΠ". iApply (sim_tgt_step_end with "[-]"). iIntros (???). simplify_eq/=.
+    inv select (asm_step _ _ _). iModIntro. iSplit!.
+    iMod ("HΠ" with "[//]"). by iModIntro.
+  Qed.
+
   Lemma sim_Jump_internal Π ts Φ pc i :
     "PC" ↦ᵣ pc -∗
     pc ↪ₐ Some i -∗
@@ -248,6 +259,29 @@ Section lifting.
     iDestruct (asm_instrs_lookup with "Hinstrs Hpc") as %?.
     iApply ts_step_det. { by econs. } { naive_solver. } { inv 1. naive_solver. }
     iMod "HΦ". iModIntro. iFrame. iSplit!. iApply ("HΦ" with "[$]").
+  Qed.
+
+  Lemma sim_Jump_external Π ts Φ pc :
+    "PC" ↦ᵣ pc -∗
+    pc ↪ₐ None -∗
+    (∀ σ,
+      ⌜asm_cur_instr σ = AWaiting⌝ -∗
+      asm_state_interp σ -∗
+      "PC" ↦ᵣ pc -∗
+      ▷ₒ?ts switch_id ts asm_trans Π
+        (Some (Outgoing, EAJump (asm_regs σ) (asm_mem σ))) σ ({{ σ',
+        ∃ i, ⌜asm_cur_instr σ' = ARunning i⌝ ∗ asm_state_interp σ' ∗
+          WP{ts} i @ Π {{ Φ }} }})) -∗
+    WP{ts} [] @ Π {{ Φ }}.
+  Proof.
+    iIntros "HPC Hpc HΦ". iApply (sim_gen_expr_steps with "[-]") => /=.
+    iIntros ([? regs mem instrs] [] ?) "[Hinstrs [Hmem Hregs]]"; simplify_eq/=.
+    iApply (sim_gen_step_end with "[-]").
+    iDestruct (asm_reg_mapsto_lookup with "Hregs HPC") as %<-.
+    iDestruct (asm_instrs_lookup with "Hinstrs Hpc") as %?.
+    iApply ts_step_det. { by econs. } { naive_solver. } { inv 1. naive_solver. }
+    iMod ("HΦ" $! (AsmState _ _ _ _) with "[//] [$] [$]") as "HΦ". iModIntro.
+    iApply (switch_id_mono with "HΦ") => /=. iIntros (?) "$".
   Qed.
 
   Definition learn_regs (P : gmap string Z → Prop) : iProp Σ :=
@@ -342,21 +376,16 @@ Section lifting.
     iModIntro. iFrame. iSplit!. iApply ("HΦ" with "[$] [$] [$]").
   Qed.
 
-End lifting.
-
-Section lifting.
-  Context `{!dimsumGS Σ} `{!asmGS Σ}.
-
   Lemma sim_Syscall Π Φ (es : asm_instr) :
     (▷ₒ switch Π ({{ κ σ POST,
          ∃ regs mem,
            ⌜κ = Some (Outgoing, EASyscallCall (extract_syscall_args regs) mem)⌝ ∗
            asm_mapsto_auth mem ∗ learn_regs_dual regs (
-       POST Tgt _ ({{ σ' Π', ∃ ret0, ⌜σ' = σ⌝ ∗ "R0" ↦ᵣ ret0 ∗
+       POST Tgt _ _ ({{ σ' Π', ∃ ret0, ⌜σ' = σ⌝ ∗ "R0" ↦ᵣ ret0 ∗
        switch Π' ({{ κ σ POST,
          ∃ ret mem',
          ⌜κ = Some (Incoming, EASyscallRet ret mem')⌝ ∗ "R0" ↦ᵣ ret ∗
-       POST Tgt _ ({{ σ' Π',
+       POST Tgt _ _ ({{ σ' Π',
           ⌜σ' = σ⌝ ∗ ⌜Π' = Π⌝ ∗ asm_mapsto_auth mem' ∗
           TGT es @ Π {{ Φ }} }})}})}}))}})) -∗
     TGT Syscall :: es @ Π {{ Φ }}.

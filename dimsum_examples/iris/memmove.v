@@ -241,7 +241,7 @@ Section memmove.
   Lemma sim_locle_spec2 `{!specGS} Π Φ :
     switch Π ({{ κ σ POST,
       ∃ f vs h, ⌜κ = Some (Incoming, ERCall f vs h)⌝ ∗
-    POST Tgt (spec_trans _ unit) ({{ σ' Π',
+    POST Tgt _ (spec_trans _ unit) ({{ σ' Π',
       ∃ l1 l2, ⌜σ' = σ⌝ ∗ ⌜f = "locle"⌝ ∗ ⌜vs = [ValLoc l1; ValLoc l2]⌝ ∗
     switch Π' ({{ κ σ POST,
       ∃ b, ⌜l1.1 = l2.1 → b = bool_decide (l1.2 ≤ l2.2)⌝ ∗
@@ -400,15 +400,15 @@ Section memmove.
           ∃ e,
         switch Π' (λ κ'' σ_s3 POST,
           ⌜κ'' = Some (Incoming, e)⌝ ∗
-        POST Src _ (λ σ_s3' Π_s'',
+        POST Src _ _ (λ σ_s3' Π_s'',
           ⌜σ_s3' = σ_s3⌝ ∗
         switch Π_s'' (λ κ'' σ'' POST,
           ∃ v h', ⌜e = ERReturn v h'⌝ ∗ ⌜κ'' = None⌝ ∗
-        POST Tgt _ (λ σ' Π',
+        POST Tgt _ _ (λ σ' Π',
           ⌜σ' = σ⌝ ∗ γσ_s ⤳ σ'' ∗
         switch Π' (λ κ σ POST,
           ∃ e', ⌜κ = Some (Incoming, e')⌝ ∗
-        POST Tgt _ (λ σ' Π',
+        POST Tgt _ _ (λ σ' Π',
           ⌜σ' = σ⌝ ∗ ⌜e = e'⌝ ∗ ⌜Π = Π'⌝)))))))) ∗
       POST (λ vr, ∃ σ_s, γσ_s ⤳ σ_s ∗ (∀ Π, σ_s ≈{ spec_trans rec_event () }≈>ₛ Π) ∗ ⌜vr = 0⌝)).
   Proof.
