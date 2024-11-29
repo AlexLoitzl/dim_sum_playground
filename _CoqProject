@@ -3,6 +3,8 @@
 # Cannot use non-canonical projections as it causes massive unification failures
 # (https://github.com/coq/coq/issues/6294).
 -arg -w -arg -redundant-canonical-projection
+# this gets triggered by coq-record-update?!
+-arg -w -arg -notation-incompatible-prefix
 
 dimsum/base.v
 dimsum/axioms.v

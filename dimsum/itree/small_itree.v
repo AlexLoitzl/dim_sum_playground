@@ -75,7 +75,7 @@ Section to_itree.
     : observing eq (to_itree t) (to_itree_ t).
   Proof. constructor; reflexivity. Qed.
 End to_itree.
-
+Global Opaque to_itree.
 
 Lemma from_to_itree E R `{!ShrinkEvents E} (i : ITreeDefinition.itree E R) :
   to_itree (from_itree i) ≅ i.
