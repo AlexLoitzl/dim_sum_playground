@@ -1,3 +1,5 @@
+This is just a playground to experiment with dim sum: The actual development is hosted at https://gitlab.mpi-sws.org/iris/dimsum
+
 # Coq development for DimSum: A Decentralized Approach to Multi-language Semantics and Verification
 
 This folder contains the Coq development for the paper "DimSum: A Decentralized Approach to Multi-language Semantics and Verification".
