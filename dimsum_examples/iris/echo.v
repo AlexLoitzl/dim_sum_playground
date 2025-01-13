@@ -1,6 +1,7 @@
 From iris.bi.lib Require Import fixpoint.
 From iris.proofmode Require Import proofmode.
 
+(* NOTE - BI the logic of "bunched implications" *)
 Section bi_loop.
   Context {PROP : bi} {A : Type} (body : (A → PROP) → (A → PROP)).
 
@@ -43,7 +44,11 @@ Section bi_loop.
   Local Existing Instance bi_loop_pre_monotone.
   Lemma bi_loop_eq a:
     bi_loop body a ⊣⊢ bi_loop_pre body (bi_loop body) a.
-  Proof. rewrite /bi_loop. apply: greatest_fixpoint_unfold. Qed.
+  Proof. rewrite /bi_loop.
+         (* apply greatest_fixpoint_unfold. typeclasses eauto. *)
+         (* NOTE never seen this colon notation. *)
+         apply: greatest_fixpoint_unfold.
+  Qed.
 
   Lemma bi_loop_step a:
     (∀ Φ, □ (∀ a, bi_loop body a -∗ Φ a) -∗ body Φ a) ⊢ bi_loop body a.
@@ -60,6 +65,9 @@ Set Default Proof Using "Type".
 Local Open Scope Z_scope.
 
 (* TODO: upstream? *)
+(* NOTE
+   Unfold function if it is applied to at least the arguments before "/". In this case all.
+   Unfold function if arguments marked with "!" unfold to constructor *)
 Arguments subst_static _ !_ /.
 
 (*
@@ -96,14 +104,16 @@ Definition echo_rec : fndef := {|
   fd_body := LetE "c" (rec.Call (Val (ValFn "getc")) []) $
              LetE "_" (rec.Call (Val (ValFn "putc")) [Var "c"]) $
              rec.Call (Val (ValFn "echo")) [];
-  fd_static := I
+  fd_static := I                (* Appearantly I don't understand why this is an I *)
 |}.
 Definition echo_prog : gmap string fndef :=
   <["echo" := echo_rec]> $ ∅.
 
 Section echo.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
-
+  (* NOTE (Π : option rec_event → _ → iProp Σ) *)
+  (* NOTE What is Tgt *)
+  (* NOTE What is the hooked arrow and how can I go look for it *)
   Lemma sim_echo Π :
     "echo" ↪ Some echo_rec -∗
     rec_fn_spec_hoare Tgt Π "echo" ({{ es POST0, ⌜es = []⌝ ∗
@@ -117,9 +127,13 @@ Section echo.
           LOOP tt
         }})}})}})}})}}) tt}}).
   Proof.
-    iIntros "#?". iApply rec_fn_spec_hoare_ctx. iIntros "#?".
+    iIntros "#?". iApply rec_fn_spec_hoare_ctx.
+    (* NOTE What's up with the ordinal later stuff - recursion *)
+    iIntros "#?".
     set BODY := (X in bi_loop X).
-    iApply ord_loeb; [done|]. iIntros "!> #IH".
+    iApply ord_loeb. (*; [done|]*)
+    { iAssumption. }
+    iIntros "!> #IH".
     iIntros (es Φ). iDestruct 1 as (->) "HΦ".
     iApply sim_tgt_rec_Call_internal. 2: { done. } { done. }
     iModIntro => /=.

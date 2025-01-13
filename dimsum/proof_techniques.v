@@ -343,6 +343,7 @@ Proof.
   - apply: HP'. by etrans.
 Qed.
 
+(* Induction principle *)
 Lemma tsim_remember {EV} {mi ms : mod_trans EV} (Pσ : _ → _ → _ → Prop) σi σs b n :
   Pσ n σi σs →
   (∀ n n' σi σs, oS?b n' ⊆ n → Pσ n σi σs → Pσ n' σi σs) →
