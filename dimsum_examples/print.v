@@ -118,7 +118,7 @@ Proof.
     σa.(asm_instrs) = print_asm'). }
   { split!. } { done. }
   move => n _ Hloop [????] [??] ?. destruct!/=.
-  tstep_i => ?? rs' mem' ? Hi. tstep_s. rewrite -/print_spec. go.
+  tstep_i => ?? rs' mem' ? Hi. tstep_s. rewrite -/print_spec'. go.
   go_s. eexists (_, _). go.
   (* Set Typeclasses Debug. *)
   go_s. split!. go.
@@ -128,15 +128,16 @@ Proof.
   tstep_i.
   tstep_i.
   tstep_i => ??. simplify_map_eq'.
-  set args := (extract_syscall_args (<["PC":=print_addr + 1 + 1]> (<["R8":=__NR_PRINT]> rs'))).
-  go_s. eexists args. go.
+  go_s.
+  (* set args := (extract_syscall_args (<["PC":=print_addr + 1 + 1]> (<["R8":=__NR_PRINT]> rs'))). *)
+  eexists. go.
   go_s. split; [shelve|]. go.
   (* Noop *)
   tstep_i. tstep_i. tstep_i => ??. simplify_map_eq'.
   (* Set Typeclasses Debug. *)
   tstep_i.
   go_s. split!.
-  { f_equal. subst args. unfold extract_syscall_args. simpl. rewrite Z.add_0_r. by simplify_map_eq'. }
+  (* { f_equal. subst args. unfold extract_syscall_args. simpl. rewrite Z.add_0_r. by simplify_map_eq'. } *)
   go. tstep_i => ? ?.
   go_s. eexists (_, _). go.
   go_s. split!. go.
@@ -146,5 +147,5 @@ Proof.
   go.
   by apply: Hloop.
   Unshelve.
-  - subst args. split; [done| by simplify_map_eq'].
+  - split. done. rewrite Z.add_0_r. by simplify_map_eq'.
 Qed.
