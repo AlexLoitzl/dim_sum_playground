@@ -97,6 +97,28 @@ Property to prove:
 *)
 
 
+Definition ret_one_rec : fndef := {|
+  fd_args := [];
+  fd_static_vars := [];
+  fd_vars := [];
+  fd_body := Val 1;
+  fd_static := I
+|}.
+Definition ret_one_prog : gmap string fndef :=
+  <["ret_one" := ret_one_rec]> $ ∅.
+
+Definition ret_one_spec : spec rec_event unit void :=
+  Spec.forever(
+  '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
+  TAssume (f = "ret_one");;
+  TAssume (vs = []);;
+  TVis (Outgoing, ERReturn (ValNum 1) h)).
+
+Lemma echo_refines_echo_spec_direct :
+  trefines (rec_mod ret_one_prog) (spec_mod ret_one_spec tt).
+Proof.
+  Abort.
+
 Definition echo_rec : fndef := {|
   fd_args := [];
   fd_static_vars := [];
@@ -112,7 +134,6 @@ Definition echo_prog : gmap string fndef :=
 Section echo.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
   (* NOTE (Π : option rec_event → _ → iProp Σ) *)
-  (* NOTE What is Tgt *)
   (* NOTE What is the hooked arrow and how can I go look for it *)
   Lemma sim_echo Π :
     "echo" ↪ Some echo_rec -∗
@@ -177,11 +198,39 @@ Definition echo_spec : spec rec_event unit void :=
   TAssume (vs = []);;
   Spec.forever echo_spec_body.
 
+Local Ltac go :=
+  clear_spec.
+Local Ltac go_s :=
+  tstep_s; go.
+Local Ltac go_i :=
+  tstep_i; go.
+
 Lemma echo_refines_echo_spec_direct :
-  trefines (rec_mod echo_prog) (spec_mod echo_spec tt).
+  trefines (rec_mod echo_prog) (spec_mod echo_spec ∅).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
-  (* TODO: proof with tstep_i / go_s *)
+  tstep_s. eexists. go.
+  tstep_i.
+  tstep_i. (* TODO, where is the second case coming from? *)
+  split! => ?????.
+  tstep_s. eexists (_, _, _). go.
+  tstep_s. split!. go.
+  tstep_s => ?. go. tstep_s => ?. go.
+  tstep_i. split!.
+  go_s => ??.
+  tstep_i. split!. move => ?????.
+  tstep_s.
+  tstep_i. split!.
+  move => ?????.
+  tstep_s. eexists. go.
+  tstep_s. split!. reflexivity.
+  reflexivit
+  tstep_i. split.
+
+  tstep_s.
+  tstep_i.
+  eapply tsim_remember .
+  (* TODO 1: proof with tstep_i / go_s *)
 Abort.
 
 
@@ -395,7 +444,6 @@ switching:
  *)
 
 
-
 Definition getc_rec : fndef := {|
   fd_args := [];
   fd_static_vars := [];
@@ -483,12 +531,13 @@ Section read_mem.
       }})}}).
   Proof.
     iIntros (Hlpos) "#?".
-    (* TODO: proof *)
+    (* TODO 2: proof *)
   Abort.
 
 End read_mem.
 
-(* TODO: compose sim_getc and sim_read_mem *)
+(* TODO 3/4: compose sim_getc and sim_read_mem
+    And define a specification that makes sense*)
 
 
 Definition __NR_READ : Z := 0.
@@ -627,6 +676,7 @@ End getc_read.
 
 Definition putc_buffer_prov : prov := ProvStatic "putc" 0.
 
+(* TODO: 4 Can this be done differently, or what's the issue *)
 Definition putc_spec : spec rec_event (list Z * gmap Z val) void :=
   Spec.forever (
     '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
