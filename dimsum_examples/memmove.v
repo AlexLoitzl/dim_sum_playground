@@ -17,12 +17,15 @@ Definition locle_asm : gmap Z asm_instr :=
       Aret
     ].
 
+(* NOTE What's going on here *)
 Definition locle_fns : gset string :=
   {["locle" ]}.
 
 Definition locle_f2i : gmap string Z :=
   <["locle" := locle_addr]> $ ∅.
 
+(* Events are parameterized by mapping from provenances to adresses? *)
+(* The internal state is not at all fixed for rec. It can vary from program to program *)
 Definition locle_spec_strong : spec rec_event (gmap prov Z) void :=
   Spec.forever (
       '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
@@ -31,12 +34,15 @@ Definition locle_spec_strong : spec rec_event (gmap prov Z) void :=
       TAssume (vs = [ValLoc l1; ValLoc l2]);;
       ps ← TGet;
       z1 ← TExist Z;
+      (* NOTE - If ps has already mapped provenance of l1, z1 is that otherwise True *)
       TAssert (z1 = default z1 (ps !! l1.1));;
       TPut (<[l1.1 := z1]> ps);;
+
       ps ← TGet;
       z2 ← TExist Z;
       TAssert (z2 = default z2 (ps !! l2.1));;
       TPut (<[l2.1 := z2]> ps);;
+
       TVis (Outgoing, ERReturn (ValBool (bool_decide (z1 + l1.2 ≤ z2 + l2.2))) h)
     ).
 
@@ -46,6 +52,16 @@ Local Ltac go_s :=
   tstep_s; go.
 Local Ltac go_i :=
   tstep_i; go.
+
+(* NOTE: What does this Lemma mean:
+    ⟦locle⟧ < ⎡⟦locle_spec⟧⎤
+    Wrapper needs arguments:
+    1: Probaly almost length?
+    2: Where are the function definitions
+    3: Mapping of (part of) the memory that is required
+    4: Mapping of (part of) the heap that is required
+    5: spec_module (which in turn takes specifaction and (in the case of locle) a mapping of provenances to their location in memory)
+ *)
 
 Lemma locle_asm_refines_spec_strong :
   trefines (asm_mod locle_asm)
