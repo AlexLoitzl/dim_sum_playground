@@ -163,6 +163,14 @@ Definition echo_spec : spec rec_event unit void :=
   TAssume (vs = []);;
   Spec.forever echo_spec_body.
 
+Lemma echo_refines_echo_spec_direct :
+  trefines (rec_mod echo_prog) (spec_mod echo_spec tt).
+Proof.
+  apply: tsim_implies_trefines => n0 /=.
+  (* TODO: proof with tstep_i / go_s *)
+Abort.
+
+
 Section echo.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
 
@@ -411,6 +419,63 @@ Section getc.
   Qed.
 
 End getc.
+
+Definition read_mem_rec : fndef := {|
+  fd_args := ["l"; "c"];
+  fd_static_vars := [("pos", 1)];
+  fd_vars := [];
+  fd_body :=
+(*
+global pos = 0;
+read (l, c) {
+  if (c <= 0) {
+    return 0;
+  } else {
+    l <- pos;
+    pos <- *pos + 1;
+    ret = read(l + 1, c + (-1));
+    return ret + 1;
+  }
+}
+*)
+
+    If (BinOp (Var "c") LeOp (Val 0))
+      (Val 0)
+      (LetE "_" (Store (Var "l") (Load (Var "pos"))) $
+       LetE "_" (Store (Var "pos") (BinOp (Load (Var "pos")) AddOp (Val 1))) $
+       LetE "ret" (rec.Call (Val (ValFn "read")) [
+                       BinOp (Var "l") OffsetOp (Val 1);
+                       BinOp (Var "c") AddOp (Val (-1))]) $
+       (BinOp (Var "ret") AddOp (Val 1)));
+  fd_static := I
+|}.
+Definition read_mem_prog : gmap string fndef :=
+  <["read" := read_mem_rec]> $ ∅.
+
+Section read_mem.
+  Context `{!dimsumGS Σ} `{!recGS Σ}.
+
+  Lemma sim_read_mem Π (lpos : loc) :
+    lpos = (ProvStatic "read" 0, 0) →
+    "read" ↪ Some read_mem_rec -∗
+    rec_fn_spec_hoare Tgt Π "read" ({{ es POST0, ∃ l vs (pos : Z),
+      ⌜es = [Val (ValLoc l); Val (length vs)]⌝ ∗
+      lpos ↦ pos ∗
+      ([∗ map] l↦v∈array l vs, l ↦ v) ∗
+      POST0 ({{ vret,
+        ⌜vret = ValNum (length vs)⌝ ∗
+        lpos ↦ (pos + length vs) ∗
+        ([∗ map] l↦v∈array l (ValNum <$> seqZ pos (length vs)), l ↦ v)
+      }})}}).
+  Proof.
+    iIntros (Hlpos) "#?".
+    (* TODO: proof *)
+  Abort.
+
+End read_mem.
+
+(* TODO: compose sim_getc and sim_read_mem *)
+
 
 Definition __NR_READ : Z := 0.
 Definition read_addr : Z := 500.
