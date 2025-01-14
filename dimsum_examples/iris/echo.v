@@ -97,27 +97,64 @@ Property to prove:
 *)
 
 
-Definition ret_one_rec : fndef := {|
+Definition retOne_rec : fndef := {|
   fd_args := [];
   fd_static_vars := [];
   fd_vars := [];
   fd_body := Val 1;
   fd_static := I
 |}.
-Definition ret_one_prog : gmap string fndef :=
-  <["ret_one" := ret_one_rec]> $ ∅.
+Definition retOne_prog : gmap string fndef :=
+  <["retOne" := retOne_rec]> $ ∅.
 
-Definition ret_one_spec : spec rec_event unit void :=
+Definition retOne_spec : spec rec_event unit void :=
   Spec.forever(
   '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
-  TAssume (f = "ret_one");;
+  TAssume (f = "retOne");;
   TAssume (vs = []);;
   TVis (Outgoing, ERReturn (ValNum 1) h)).
 
-Lemma echo_refines_echo_spec_direct :
-  trefines (rec_mod ret_one_prog) (spec_mod ret_one_spec tt).
+Local Ltac go :=
+  clear_spec.
+Local Ltac go_s :=
+  tstep_s; go.
+Local Ltac go_i :=
+  tstep_i; go.
+
+(* TODO What exactly does the false capture for waiting *)
+Lemma retOne_refines_retOne_spec_direct :
+  trefines (rec_mod retOne_prog) (spec_mod retOne_spec tt).
 Proof.
-  Abort.
+  apply: tsim_implies_trefines => n0 /=.
+  unshelve eapply tsim_remember. { simpl. exact (λ _ '(Rec e _ f) (*σi*) '(t, _),
+    t ≡ retOne_spec ∧
+    e = Waiting false ∧
+    f = retOne_prog). }
+    (* σi.(st_fns) = ret_one_prog). } *)
+  { split!. }. { done. }.
+  move => n _ Hloop [???] [??] [??] /=. destruct!/=.
+  (* Step in implementation to introduce arguments *)
+  tstep_i.
+  (* NOTE - Where is the second case coming from. If I'm in waiting state, what are my two options *)
+  split!. move => ???? H.
+  tstep_s. rewrite -/retOne_spec. go.
+  tstep_s. eexists (_, _, _). go.
+  (* Unify evars *)
+  tstep_s. split!. go.
+  (* Here deal with assumptions *)
+  tstep_s => ?. go.
+  tstep_s => ?. go. destruct!.
+  (* Now, step through implementation *)
+  tstep_i. split!.
+  move => ??. destruct!.
+  rewrite /retOne_prog in H. simplify_map_eq. split!.
+  (* Stack Frame *)
+  tstep_i => ?? [-> ->]. split!.
+  tstep_i. eexists. split!.
+  tstep_i.
+  tstep_s. split!. go.
+  by apply Hloop.
+Qed.
 
 Definition echo_rec : fndef := {|
   fd_args := [];
@@ -173,6 +210,7 @@ Section echo.
 End echo.
 
 (* Call with direct return *)
+(* TODO: What is this here? *)
 Definition TCallRet {S} (f : string) (vs : list val) (h : heap_state) :
   spec rec_event S (val * heap_state) :=
   TVis (Outgoing, ERCall f vs h);;
@@ -198,22 +236,23 @@ Definition echo_spec : spec rec_event unit void :=
   TAssume (vs = []);;
   Spec.forever echo_spec_body.
 
-Local Ltac go :=
-  clear_spec.
-Local Ltac go_s :=
-  tstep_s; go.
-Local Ltac go_i :=
-  tstep_i; go.
-
 Lemma echo_refines_echo_spec_direct :
-  trefines (rec_mod echo_prog) (spec_mod echo_spec ∅).
+  trefines (rec_mod echo_prog) (spec_mod echo_spec tt).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
-  tstep_s. eexists. go.
+  (* What should the first step be? *)
+
+
+  tstep_i. split! => ?????.
+  tstep_s. eexists (_, _, _). go.
+  tstep_s. split!. go.
+  go_s => ?. go. tstep_s => ?. go.
   tstep_i.
+  tstep_s => ???.
+  tstep_s. eexists (_, _, _). go.
   tstep_i. (* TODO, where is the second case coming from? *)
   split! => ?????.
-  tstep_s. eexists (_, _, _). go.
+  tstep_s. split!. reflexivity. eexists (_, _, _). go.
   tstep_s. split!. go.
   tstep_s => ?. go. tstep_s => ?. go.
   tstep_i. split!.
