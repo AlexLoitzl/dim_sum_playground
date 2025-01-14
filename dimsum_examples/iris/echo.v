@@ -641,3 +641,30 @@ Definition putc_spec : spec rec_event (list Z * gmap Z val) void :=
      else TRet h
     );
     TVis (Outgoing, ERReturn 0 h')).
+
+(* TODO: Can one implement a spec like this without copying the buffer
+to a fresh allocation when it is passed to write? E.g. by making the
+rec_to_rec wrapper more generic? *)
+Definition putc_spec_alt : spec rec_event (list Z) void :=
+  Spec.forever (
+    '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
+    c ← TAll _;
+    TAssume (f = "putc");;
+    TAssume (vs = [ValNum c]);;
+    buffer ← TGet;
+    TPut (buffer ++ [c]);;
+    b ← TExist bool;
+    h' ← (if b then
+       l ← TExist _;
+       buffer ← TGet;
+       (* TODO: add array l (ValNum <$> (buffer :> list Z)) to h *)
+       let h := h in
+       '(c, h) ← TCallRet "write" [ValLoc l; ValNum (length buffer)] h;
+       (* TODO: Assume that everything except something is unchanged?
+       Or not and rely on wrapper? *)
+       (* TODO: Remove l from the heap? *)
+       TPut [];;
+       TRet h
+     else TRet h
+    );
+    TVis (Outgoing, ERReturn 0 h')).
