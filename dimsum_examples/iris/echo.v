@@ -251,11 +251,12 @@ Proof.
   (* Now prove the body by induction *)
   (* TODO: unclear if I have to specify expression and what I have to specify it as *)
   unshelve eapply tsim_remember. { simpl. exact (λ _ '(Rec e _ f) '(t, _),
+    exists K,
     t ≡ Spec.forever echo_spec_body ∧
-    e = (ReturnExt false (Call (Val (ValFn "echo")) (Val <$> []))) ∧
+    e = expr_fill K ((Call (Val (ValFn "echo"))) (Val <$> [])) ∧
     f = echo_prog). }
-  { split!. }. { done. }.
-  move => n _ Hloop [???] [??] [??] /=. destruct!/=.
+  { eexists [ReturnExtCtx false]. split!. }. { done. }.
+  move => n _ Hloop [???] [??] [ctx[?[??]]] /=. destruct!/=.
   go_s.
   tstep_s. eexists. go.         (* NOTE: Introducing Heap *)
   tstep_i. split!.
@@ -281,7 +282,7 @@ Proof.
   tstep_s. split!. go.
   tstep_s => ?. go.
   (* NOTE: Start of putc *)
-  tstep_s. eexists. go.         (* TODO: Again, introducing Heap? Figure out where getc and putc are handled *)
+  tstep_s. eexists. go.
   tstep_i. tstep_i. split!. move => ?.
   tstep_s. split!. go.
   tstep_i. split!.
@@ -297,12 +298,10 @@ Proof.
   rewrite bind_ret_l. (* TODO: Is this the way to do it, stolen from some iris proof *)
   go. simplify_eq.
   tstep_i.
-  Set Typeclasses Debug.
-  tstep_i.
-
-
-Admitted.
-
+  eapply Hloop. { done. }
+  eexists ([FreeACtx []] ++ ctx).
+  split!.
+Qed.
 
 Section echo.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
