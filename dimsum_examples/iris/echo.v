@@ -121,7 +121,6 @@ Local Ltac go_s :=
 Local Ltac go_i :=
   tstep_i; go.
 
-(* TODO What exactly does the false capture for waiting *)
 Lemma retOne_refines_retOne_spec_direct :
   trefines (rec_mod retOne_prog) (spec_mod retOne_spec tt).
 Proof.
@@ -130,13 +129,10 @@ Proof.
     t ≡ retOne_spec ∧
     e = Waiting false ∧
     f = retOne_prog). }
-    (* σi.(st_fns) = ret_one_prog). } *)
   { split!. }. { done. }.
   move => n _ Hloop [???] [??] [??] /=. destruct!/=.
   (* Step in implementation to introduce arguments *)
   tstep_i.
-  (* NOTE: Where is the second case coming from. If I'm in waiting state, what are my two options *)
-  (* Is it a call out of my domain? *)
   split!. move => ???? H.
   tstep_s. rewrite -/retOne_spec. go.
   tstep_s. eexists (_, _, _). go.
@@ -171,8 +167,6 @@ Definition echo_prog : gmap string fndef :=
 
 Section echo.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
-  (* NOTE (Π : option rec_event → _ → iProp Σ) *)
-  (* NOTE What is the hooked arrow and how can I go look for it *)
   Lemma sim_echo Π :
     "echo" ↪ Some echo_rec -∗
     rec_fn_spec_hoare Tgt Π "echo" ({{ es POST0, ⌜es = []⌝ ∗
@@ -249,8 +243,9 @@ Proof.
   tstep_s => ?. go.
   tstep_s => ?. go. destruct!.
   (* Now prove the body by induction *)
-  (* TODO: unclear if I have to specify expression and what I have to specify it as *)
   unshelve eapply tsim_remember. { simpl. exact (λ _ '(Rec e _ f) '(t, _),
+    (* TODO: How does Michael think about this, I guess typically I would phrase an induction hypothesis
+      using an arbitrary kontext here *)
     exists K,
     t ≡ Spec.forever echo_spec_body ∧
     e = expr_fill K ((Call (Val (ValFn "echo"))) (Val <$> [])) ∧
@@ -260,15 +255,12 @@ Proof.
   go_s.
   tstep_s. eexists. go.         (* NOTE: Introducing Heap *)
   tstep_i. split!.
-  (* TODO: Why do I always get this twice :/ *)
   move => ??. destruct!/=.
   rewrite /echo_prog in H. simplify_map_eq. split!.
   (* NOTE: Start of getc *)
-  (* FIXME: Here a Free appears *)
   tstep_i => ?? [??]. simplify_eq. split!.
   tstep_i. split!. move => ?.              (* NOTE - split between internal and external call *)
   (* NOTE: Here we now have `Waiting true` *)
-  (* TODO: What exactly happens here and why can't I step in implementation *)
   tstep_s. split!. go.
   tstep_i.
   split.
