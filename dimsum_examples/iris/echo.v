@@ -263,6 +263,7 @@ Proof.
   move => ??. destruct!/=.
   rewrite /echo_prog in H. simplify_map_eq. split!.
   (* NOTE: Start of getc *)
+  (* FIXME: Here a Free appears *)
   tstep_i => ?? [??]. simplify_eq. split!.
   tstep_i. split!. move => ?.              (* NOTE - split between internal and external call *)
   (* NOTE: Here we now have `Waiting true` *)
@@ -292,12 +293,12 @@ Proof.
   move => ???.
   tstep_s. eexists. go.
   tstep_s. split!. go.
-  tstep_s => ?. go. simplify_eq.
+  tstep_s => ?.
+  rewrite bind_ret_l. (* TODO: Is this the way to do it, stolen from some iris proof *)
+  go. simplify_eq.
   tstep_i.
-  (* TODO: Now the automation is going too far. I just want to remove the return and the the Free *)
-  tstep_s. go.
-  (* I can refold the forever (probably)*)
-
+  Set Typeclasses Debug.
+  tstep_i.
 
 
 Admitted.
