@@ -135,7 +135,8 @@ Proof.
   move => n _ Hloop [???] [??] [??] /=. destruct!/=.
   (* Step in implementation to introduce arguments *)
   tstep_i.
-  (* NOTE - Where is the second case coming from. If I'm in waiting state, what are my two options *)
+  (* NOTE: Where is the second case coming from. If I'm in waiting state, what are my two options *)
+  (* Is it a call out of my domain? *)
   split!. move => ???? H.
   tstep_s. rewrite -/retOne_spec. go.
   tstep_s. eexists (_, _, _). go.
@@ -240,37 +241,66 @@ Lemma echo_refines_echo_spec_direct :
   trefines (rec_mod echo_prog) (spec_mod echo_spec tt).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
-  (* What should the first step be? *)
-
-
-  tstep_i. split! => ?????.
-  tstep_s. eexists (_, _, _). go.
-  tstep_s. split!. go.
-  go_s => ?. go. tstep_s => ?. go.
+  (* Handle the initial call from the environment *)
   tstep_i.
-  tstep_s => ???.
+  split! => ???? H.
   tstep_s. eexists (_, _, _). go.
-  tstep_i. (* TODO, where is the second case coming from? *)
-  split! => ?????.
-  tstep_s. split!. reflexivity. eexists (_, _, _). go.
   tstep_s. split!. go.
-  tstep_s => ?. go. tstep_s => ?. go.
+  tstep_s => ?. go.
+  tstep_s => ?. go. destruct!.
+  (* Now prove the body by induction *)
+  (* TODO: unclear if I have to specify expression and what I have to specify it as *)
+  unshelve eapply tsim_remember. { simpl. exact (λ _ '(Rec e _ f) '(t, _),
+    t ≡ Spec.forever echo_spec_body ∧
+    e = (ReturnExt false (Call (Val (ValFn "echo")) (Val <$> []))) ∧
+    f = echo_prog). }
+  { split!. }. { done. }.
+  move => n _ Hloop [???] [??] [??] /=. destruct!/=.
+  go_s.
+  tstep_s. eexists. go.         (* NOTE: Introducing Heap *)
   tstep_i. split!.
-  go_s => ??.
-  tstep_i. split!. move => ?????.
-  tstep_s.
-  tstep_i. split!.
-  move => ?????.
+  (* TODO: Why do I always get this twice :/ *)
+  move => ??. destruct!/=.
+  rewrite /echo_prog in H. simplify_map_eq. split!.
+  (* NOTE: Start of getc *)
+  tstep_i => ?? [??]. simplify_eq. split!.
+  tstep_i. split!. move => ?.              (* NOTE - split between internal and external call *)
+  (* NOTE: Here we now have `Waiting true` *)
+  (* TODO: What exactly happens here and why can't I step in implementation *)
+  tstep_s. split!. go.
+  tstep_i.
+  split.
+  { (* NOTE: Here I now am getting a call back from the external call, i.e., because of TCallRet immediate UB *)
+    move => ?????.
+    tstep_s. eexists. go.
+    tstep_s. split!. go.
+    by tstep_s. }
+  move => ???.
   tstep_s. eexists. go.
-  tstep_s. split!. reflexivity.
-  reflexivit
-  tstep_i. split.
-
-  tstep_s.
+  tstep_s. split!. go.
+  tstep_s => ?. go.
+  (* NOTE: Start of putc *)
+  tstep_s. eexists. go.         (* TODO: Again, introducing Heap? Figure out where getc and putc are handled *)
+  tstep_i. tstep_i. split!. move => ?.
+  tstep_s. split!. go.
+  tstep_i. split!.
+  { (* NOTE: Here I now am getting a call back from the external call, i.e., because of TCallRet immediate UB *)
+    move => ?????.
+    tstep_s. eexists. go.
+    tstep_s. split!. go.
+    by tstep_s. }
+  move => ???.
+  tstep_s. eexists. go.
+  tstep_s. split!. go.
+  tstep_s => ?. go. simplify_eq.
   tstep_i.
-  eapply tsim_remember .
-  (* TODO 1: proof with tstep_i / go_s *)
-Abort.
+  (* TODO: Now the automation is going too far. I just want to remove the return and the the Free *)
+  tstep_s. go.
+  (* I can refold the forever (probably)*)
+
+
+
+Admitted.
 
 
 Section echo.
