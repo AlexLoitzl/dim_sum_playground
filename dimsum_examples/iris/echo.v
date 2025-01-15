@@ -45,8 +45,6 @@ Section bi_loop.
   Lemma bi_loop_eq a:
     bi_loop body a ⊣⊢ bi_loop_pre body (bi_loop body) a.
   Proof. rewrite /bi_loop.
-         (* apply greatest_fixpoint_unfold. typeclasses eauto. *)
-         (* NOTE never seen this colon notation. *)
          apply: greatest_fixpoint_unfold.
   Qed.
 
@@ -167,6 +165,10 @@ Definition echo_prog : gmap string fndef :=
 
 Section echo.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
+  (* TODO: Parse this syntactically:
+    Π: What does it do?
+    How do the POST tokens work. I cannot find this notation
+   *)
   Lemma sim_echo Π :
     "echo" ↪ Some echo_rec -∗
     rec_fn_spec_hoare Tgt Π "echo" ({{ es POST0, ⌜es = []⌝ ∗
@@ -205,7 +207,6 @@ Section echo.
 End echo.
 
 (* Call with direct return *)
-(* TODO: What is this here? *)
 Definition TCallRet {S} (f : string) (vs : list val) (h : heap_state) :
   spec rec_event S (val * heap_state) :=
   TVis (Outgoing, ERCall f vs h);;
@@ -297,7 +298,7 @@ Qed.
 
 Section echo.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
-
+  (* TODO: What's going on here? *)
   Lemma sim_echo_spec Π γσ_s (σ : m_state (spec_trans _ unit)) :
     "echo" ↪ Some echo_rec -∗
     "getc" ↪ None -∗
@@ -518,6 +519,8 @@ Definition getc_prog : gmap string fndef :=
 
 Section getc.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
+  (* TODO: Does it make sense to think about it this way
+    { args = [] * ({ ∃ l v, ⌜es = [Val $ ValLoc l; Val $ 1]⌝ ∗ l ↦ v } read { ∃ c, l ↦ c}) } getc { ~res~ = c } *)
 
   Lemma sim_getc Π :
     "getc" ↪ Some getc_rec -∗
@@ -561,7 +564,6 @@ read (l, c) {
   }
 }
 *)
-
     If (BinOp (Var "c") LeOp (Val 0))
       (Val 0)
       (LetE "_" (Store (Var "l") (Load (Var "pos"))) $
@@ -591,8 +593,23 @@ Section read_mem.
         ([∗ map] l↦v∈array l (ValNum <$> seqZ pos (length vs)), l ↦ v)
       }})}}).
   Proof.
-    iIntros (Hlpos) "#?".
-    (* TODO 2: proof *)
+    iIntros "%Hlpos #? %es %Φ HΦ/=".
+    (* NOTE: Do I want to start Induction here? *)
+    iLöb as "IH" forall (es). (* TODO: Figure out what to generalize *)
+    iDestruct "HΦ" as (? ? c) "[? [? [? H]]]".
+    (* NOTE: Probably don't need to case split this early*)
+    (* TODO: This can probably done more straightforward *)
+    destruct (Z_lt_le_dec 0 c) as [Hc | Hc]; cycle 1.
+    (* Base Case *)
+    - iDestruct!.
+      iApply sim_tgt_rec_Call_internal. 2: { done. } { done. }
+      (* FIXME: Maybe I can use this to try fiddling with auto indentation *)
+      iModIntro.
+      iApply sim_tgt_rec_AllocA; [done|]. iIntros (args) "Hargs /=".
+      iModIntro.
+      admit.
+    - admit.
+
   Abort.
 
 End read_mem.
