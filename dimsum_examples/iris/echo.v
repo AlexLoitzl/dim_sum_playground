@@ -595,11 +595,12 @@ Section read_mem.
   Proof.
     iIntros "%Hlpos #? %es %Φ HΦ/=".
     (* NOTE: Do I want to start Induction here? *)
+    (* TODO: I probably need to use something different here *)
     iLöb as "IH" forall (es). (* TODO: Figure out what to generalize *)
-    iDestruct "HΦ" as (? ? c) "[? [? [? H]]]".
+    iDestruct "HΦ" as (? ? addr) "[? [? [? H]]]".
     (* NOTE: Probably don't need to case split this early*)
     (* TODO: This can probably done more straightforward *)
-    destruct (Z_lt_le_dec 0 c) as [Hc | Hc]; cycle 1.
+    destruct (Z_lt_le_dec 0 (length vs)) as [Hc | Hc]; cycle 1.
     (* Base Case *)
     - iDestruct!.
       iApply sim_tgt_rec_Call_internal. 2: { done. } { done. }
@@ -607,6 +608,15 @@ Section read_mem.
       iModIntro.
       iApply sim_tgt_rec_AllocA; [done|]. iIntros (args) "Hargs /=".
       iModIntro.
+      (* NOTE: Bind the BinOp *)
+      iApply (sim_gen_expr_bind _ [IfCtx _ _] with "[-]") => /=.
+      iApply sim_tgt_rec_BinOp. { reflexivity. } iModIntro.
+      iApply sim_tgt_rec_If. iModIntro.
+      case_bool_decide. 2 : { contradiction. }
+
+      iApply sim_tgt_rec_Val.
+      simpl.
+      iApply sim_gen_expr_bind.
       admit.
     - admit.
 
