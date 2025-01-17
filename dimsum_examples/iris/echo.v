@@ -627,9 +627,9 @@ Section read_mem.
       iExists 0.
       iSplit; [done|].
       iSplitL "Hlcl".
-      + by destruct lcl.
-      + iApply "H". rewrite Z.add_0_r.
-        iSplit!.
+      { by destruct lcl. }
+      iApply "H". rewrite Z.add_0_r.
+      iSplit!.
     - (* STORE 1 *)
       iApply (sim_gen_expr_bind _ [LetECtx _ _]).
       iApply (sim_gen_expr_bind _ [StoreRCtx _]).
@@ -672,24 +672,42 @@ Section read_mem.
       iApply (sim_tgt_rec_BinOp). { reflexivity. } iModIntro.
       iExists (_).
       iSplit. done.
-      iSplitL "Hlcl".
-      + by destruct lcl.
-      + iApply "H".
-        rewrite! Nat2Z.inj_succ.
-        iSplit. { done. }
-        iSplitL "Hlpos". { rewrite <-Z.add_assoc, Z.add_1_l. iApply "Hlpos". }
-        (* TODO: Rewrite at doesn't work *)
-        rewrite (seqZ_cons _ (Z.succ _)) => /=. 2 : { lia. }
-        rewrite array_cons.
-        (* FIXME: Why does iRewrite not work? *)
-        rewrite big_sepM_insert Z.pred_succ -Z.add_1_r. 2: { rewrite array_lookup_None. naive_solver lia. }
-        iFrame.
+      iSplitL "Hlcl". {by destruct lcl. }
+      iApply "H".
+      rewrite! Nat2Z.inj_succ.
+      iSplit. { done. }
+      iSplitL "Hlpos". { rewrite <-Z.add_assoc, Z.add_1_l. iApply "Hlpos". }
+      (* TODO: Rewrite at doesn't work *)
+      rewrite (seqZ_cons _ (Z.succ _)) => /=. 2 : { lia. }
+      rewrite array_cons.
+      (* FIXME: Why does iRewrite not work? *)
+      rewrite big_sepM_insert Z.pred_succ -Z.add_1_r. 2: { rewrite array_lookup_None. naive_solver lia. }
+      iFrame.
   Qed.
 
 End read_mem.
 
 (* TODO 3/4: compose sim_getc and sim_read_mem
     And define a specification that makes sense*)
+
+Definition combined_prog : gmap string fndef :=
+  <["read" := read_mem_rec]> $ <["getc" := getc_rec]> $ ∅.
+
+Section combined.
+  Context `{!dimsumGS Σ} `{!recGs Σ}.
+
+Lemma sim_combined Π (lpos : loc) :
+  forall v,
+  (* Given a static/global variable which holds the buffer (index into) *)
+  lpos = (ProvStatic "read" 0, v) →
+  (* "read" points to the function we defined (internal) *)
+  "read" ↪ Some read_mem_rec -∗
+  "getc" ↪ Some getc_rec -∗
+  rec_fn_spec_hoare Tgt Π "getc" ({{ es POST, ⌜es = []⌝ ∗
+    POST ({{ vr, ⌜vr = ValNum v⌝}})}}).
+Proof. Admitted.
+
+End combined.
 
 
 Definition __NR_READ : Z := 0.
