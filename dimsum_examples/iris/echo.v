@@ -697,14 +697,15 @@ Section combined.
   Context `{!dimsumGS Σ} `{!recGs Σ}.
 
 Lemma sim_combined Π (lpos : loc) :
-  forall v,
   (* Given a static/global variable which holds the buffer (index into) *)
-  lpos = (ProvStatic "read" 0, v) →
+  lpos = (ProvStatic "read" 0, 0) →
   (* "read" points to the function we defined (internal) *)
   "read" ↪ Some read_mem_rec -∗
   "getc" ↪ Some getc_rec -∗
-  rec_fn_spec_hoare Tgt Π "getc" ({{ es POST, ⌜es = []⌝ ∗
-    POST ({{ vr, ⌜vr = ValNum v⌝}})}}).
+  rec_fn_spec_hoare Tgt Π "getc" ({{ es POST, ∃ (pos : Z),
+    ⌜es = []⌝ ∗
+    lpos ↦ pos ∗
+    POST ({{ vr, ⌜vr = ValNum pos⌝ ∗ lpos ↦ (pos + 1)}})}}).
 Proof. Admitted.
 
 End combined.
