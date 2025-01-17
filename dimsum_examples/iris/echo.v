@@ -546,6 +546,8 @@ Section getc.
 
 End getc.
 
+(* Does returning the length make any sense? (In DimSum) *)
+(* Read the sequence 0...c into l and return the length? *)
 Definition read_mem_rec : fndef := {|
   fd_args := ["l"; "c"];
   fd_static_vars := [("pos", 1)];
@@ -566,6 +568,7 @@ read (l, c) {
 *)
     If (BinOp (Var "c") LeOp (Val 0))
       (Val 0)
+      (* NOTE: There is no sequencing *)
       (LetE "_" (Store (Var "l") (Load (Var "pos"))) $
        LetE "_" (Store (Var "pos") (BinOp (Load (Var "pos")) AddOp (Val 1))) $
        LetE "ret" (rec.Call (Val (ValFn "read")) [
@@ -581,48 +584,107 @@ Section read_mem.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
 
   Lemma sim_read_mem Π (lpos : loc) :
+    (* Given a static/global variable *)
     lpos = (ProvStatic "read" 0, 0) →
+    (* "read" points to the function (internal) *)
     "read" ↪ Some read_mem_rec -∗
     rec_fn_spec_hoare Tgt Π "read" ({{ es POST0, ∃ l vs (pos : Z),
+      (* Arguments are a location and length of a list *)
       ⌜es = [Val (ValLoc l); Val (length vs)]⌝ ∗
+      (* We own the global pointer *)
       lpos ↦ pos ∗
+      (* We own the array [vs[0], vs[1], ... , vs[vs.length - 1]] *)
       ([∗ map] l↦v∈array l vs, l ↦ v) ∗
       POST0 ({{ vret,
+        (* We return the length of the list *)
         ⌜vret = ValNum (length vs)⌝ ∗
+        (* The global pointer has been increased by length of the list *)
         lpos ↦ (pos + length vs) ∗
+        (* We own the array [pos + 0, pos +1, ..., pos + (vs.length - 1)] *)
         ([∗ map] l↦v∈array l (ValNum <$> seqZ pos (length vs)), l ↦ v)
       }})}}).
   Proof.
-    iIntros "%Hlpos #? %es %Φ HΦ/=".
-    (* NOTE: Do I want to start Induction here? *)
-    (* TODO: I probably need to use something different here *)
-    iLöb as "IH" forall (es). (* TODO: Figure out what to generalize *)
-    iDestruct "HΦ" as (? ? addr) "[? [Hlpos [? H]]]".
-    (* NOTE: Probably don't need to case split this early*)
-    (* TODO: This can probably done more straightforward *)
-    destruct (Z_lt_le_dec 0 (length vs)) as [Hc | Hc]; cycle 1.
-    (* Base Case *)
-    - iDestruct!.
-      iApply sim_tgt_rec_Call_internal. 2: { done. } { done. }
-      (* FIXME: Maybe I can use this to try fiddling with auto indentation *)
-      iModIntro.
-      iApply sim_tgt_rec_AllocA; [done|]. iIntros (args) "Hargs /=".
-      iModIntro.
-      (* NOTE: Bind the BinOp *)
-      iApply (sim_gen_expr_bind _ [IfCtx _ _] with "[-]") => /=.
-      iApply sim_tgt_rec_BinOp. { reflexivity. } iModIntro.
-      iApply sim_tgt_rec_If. iModIntro.
-      case_bool_decide. 2 : { contradiction. }
-      iApply (sim_gen_expr_stop).
+    iIntros "%Hlpos #?". iApply rec_fn_spec_hoare_ctx. iIntros "#?".
+    iApply ord_loeb. { iAssumption. } iModIntro.
+    iIntros "#IH %es %Φ HΦ/=".
+    iDestruct "HΦ" as (? ? count) "[? [Hlpos [Hl H]]]".
+    (* (* TODO: This can probably done more straightforward *) *)
+    (* destruct (Z_lt_le_dec 0 (length vs)) as [Hc | Hc]; cycle 1. *)
+    (* (* Base Case *) *)
+    iDestruct!.
+    iApply sim_tgt_rec_Call_internal. 2: { done. } { done. }
+    (* FIXME: Maybe I can use this to try fiddling with auto indentation *)
+    iModIntro.
+    iApply sim_tgt_rec_AllocA; [done|]. iIntros (lcl) "Hlcl /=".
+    iModIntro.
+    (* NOTE: Bind the BinOp *)
+    iApply (sim_gen_expr_bind _ [IfCtx _ _]).
+    iApply sim_tgt_rec_BinOp. { reflexivity. } iModIntro.
+    iApply sim_tgt_rec_If. iModIntro.
+    (* Split into base and recursive case *)
+    destruct vs; simpl.
+    - iApply sim_gen_expr_stop.
       iExists 0.
       iSplit; [done|].
-      iSplitR "H Hlpos".
-      + by destruct args.
-      + have Hvs : 0%nat = length vs. { by destruct vs. }
-        iApply "H". rewrite <-Hvs, Z.add_0_r.
+      iSplitL "Hlcl".
+      + by destruct lcl.
+      + iApply "H". rewrite Z.add_0_r.
         iSplit!.
-    - admit.
-  Abort.
+    - (* STORE 1 *)
+      iApply (sim_gen_expr_bind _ [LetECtx _ _]).
+      iApply (sim_gen_expr_bind _ [StoreRCtx _]).
+      iApply (sim_tgt_rec_Load with "Hlpos"). iIntros "Hlpos". iModIntro => /=.
+      (* NOTE: I need to unroll the separating conjunction and pass ownership of the first location *)
+      (* FIXME Why can't I use iRewrite *)
+      (* rewrite array_cons. iRewrite big_sepM_insert  in "Hl". *)
+      rewrite array_cons big_sepM_insert. 2 : { rewrite array_lookup_None. naive_solver lia. }
+      iDestruct "Hl" as "[Hl Hl']".
+      iApply (sim_tgt_rec_Store with "Hl"). iIntros. iModIntro.
+      iApply sim_tgt_rec_LetE. iModIntro. simpl.
+      (* STORE 2 *)
+      iApply (sim_gen_expr_bind _ [LetECtx _ _]).
+      iApply (sim_gen_expr_bind _ [StoreRCtx _]).
+      iApply (sim_gen_expr_bind _ [BinOpLCtx _ _]).
+      iApply (sim_tgt_rec_Load with "Hlpos"). iIntros "Hlpos !> /=".
+      iApply sim_tgt_rec_BinOp. { reflexivity. } iModIntro.
+      iApply (sim_tgt_rec_Store with "Hlpos"). iIntros "Hlpos !>".
+      iApply sim_tgt_rec_LetE. iModIntro. simpl.
+      (* Call + RETURN *)
+      iApply (sim_gen_expr_bind _ [LetECtx _ _]).
+      (* Handle arguments *)
+      iApply (sim_gen_expr_bind _ [CallCtx _ [] _]) => /=.
+      iApply sim_tgt_rec_BinOp. { reflexivity. } iModIntro.
+      iApply (sim_gen_expr_bind _ [CallCtx _ [_] _]).
+      iApply sim_tgt_rec_BinOp => /=.
+      (* FIXME: Why is this so hard :/ *)
+      { instantiate (1 := length vs). f_equal. rewrite Nat2Z.inj_succ.
+        change (_ + -1) with (Z.pred (Z.succ (length vs))). rewrite Z.pred_succ. reflexivity. } iModIntro.
+      (* Induction *)
+      iApply "IH". simpl.
+      (* TODO: That's a little awkward *)
+      do 3 iExists (_).
+      iSplit. { done. }
+      iSplitL "Hlpos". iAssumption.
+      iSplitL "Hl'". iAssumption.
+      iIntros (v') "[-> [Hlpos ?]]".
+      iApply sim_tgt_rec_LetE => /=. iModIntro.
+      (* TODO: Whatch out here, this might be an issue to use it here *)
+      iApply (sim_tgt_rec_BinOp). { reflexivity. } iModIntro.
+      iExists (_).
+      iSplit. done.
+      iSplitL "Hlcl".
+      + by destruct lcl.
+      + iApply "H".
+        rewrite! Nat2Z.inj_succ.
+        iSplit. { done. }
+        iSplitL "Hlpos". { rewrite <-Z.add_assoc, Z.add_1_l. iApply "Hlpos". }
+        (* TODO: Rewrite at doesn't work *)
+        rewrite (seqZ_cons _ (Z.succ _)) => /=. 2 : { lia. }
+        rewrite array_cons.
+        (* FIXME: Why does iRewrite not work? *)
+        rewrite big_sepM_insert Z.pred_succ -Z.add_1_r. 2: { rewrite array_lookup_None. naive_solver lia. }
+        iFrame.
+  Qed.
 
 End read_mem.
 
