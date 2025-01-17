@@ -597,7 +597,7 @@ Section read_mem.
     (* NOTE: Do I want to start Induction here? *)
     (* TODO: I probably need to use something different here *)
     iLöb as "IH" forall (es). (* TODO: Figure out what to generalize *)
-    iDestruct "HΦ" as (? ? addr) "[? [? [? H]]]".
+    iDestruct "HΦ" as (? ? addr) "[? [Hlpos [? H]]]".
     (* NOTE: Probably don't need to case split this early*)
     (* TODO: This can probably done more straightforward *)
     destruct (Z_lt_le_dec 0 (length vs)) as [Hc | Hc]; cycle 1.
@@ -613,13 +613,15 @@ Section read_mem.
       iApply sim_tgt_rec_BinOp. { reflexivity. } iModIntro.
       iApply sim_tgt_rec_If. iModIntro.
       case_bool_decide. 2 : { contradiction. }
-
-      iApply sim_tgt_rec_Val.
-      simpl.
-      iApply sim_gen_expr_bind.
-      admit.
+      iApply (sim_gen_expr_stop).
+      iExists 0.
+      iSplit; [done|].
+      iSplitR "H Hlpos".
+      + by destruct args.
+      + have Hvs : 0%nat = length vs. { by destruct vs. }
+        iApply "H". rewrite <-Hvs, Z.add_0_r.
+        iSplit!.
     - admit.
-
   Abort.
 
 End read_mem.
