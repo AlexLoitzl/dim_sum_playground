@@ -93,26 +93,26 @@ Proof. solve_inG. Qed.
 Section definitions.
   Context `{!ord_laterGS Σ}.
 
-  Definition ord_later_auth_def (n : ordinal) : iProp Σ :=
+  Definition ord_later_auth_def (n : ordinal_max) : iProp Σ :=
     own ord_later_name (mono_ord_auth 1 n).
   Definition ord_later_auth_aux : seal (@ord_later_auth_def). Proof. by eexists. Qed.
   Definition ord_later_auth := ord_later_auth_aux.(unseal).
   Definition ord_later_auth_eq : @ord_later_auth = @ord_later_auth_def := ord_later_auth_aux.(seal_eq).
 
-  Definition ord_later_ub_def (n : ordinal) : iProp Σ :=
+  Definition ord_later_ub_def (n : ordinal_max) : iProp Σ :=
     own ord_later_name (mono_ord_ub n).
   Definition ord_later_ub_aux : seal (@ord_later_ub_def). Proof. by eexists. Qed.
   Definition ord_later_ub := ord_later_ub_aux.(unseal).
   Definition ord_later_ub_eq : @ord_later_ub = @ord_later_ub_def := ord_later_ub_aux.(seal_eq).
 
   Definition ord_later_ctx_def : iProp Σ :=
-    ∃ n, ord_later_ub n.
+    ord_later_ub OrdMaxMax.
   Definition ord_later_ctx_aux : seal (@ord_later_ctx_def). Proof. by eexists. Qed.
   Definition ord_later_ctx := ord_later_ctx_aux.(unseal).
   Definition ord_later_ctx_eq : @ord_later_ctx = @ord_later_ctx_def := ord_later_ctx_aux.(seal_eq).
 
   Definition ord_later_def (P : iProp Σ) : iProp Σ :=
-    ord_later_ctx -∗ ∃ n, ord_later_ub n ∗ ∀ n', ⌜oS n' ⊆ n⌝ -∗ ord_later_ub n' -∗ P.
+    ord_later_ctx -∗ ∃ n, ord_later_ub n ∗ ∀ n', ⌜ord_max_lt n' n⌝ -∗ ord_later_ub n' -∗ P.
     (* Old version: *)
     (* ∀ n, ord_later_auth n -∗ ord_later_auth n ∗ (∀ n', ⌜oS n' ⊆ n⌝ -∗ ord_later_auth n' -∗ ord_later_auth n' ∗ P). *)
   Definition ord_later_aux : seal (@ord_later_def). Proof. by eexists. Qed.
@@ -132,7 +132,7 @@ Local Ltac unseal := rewrite
 
 Section lemmas.
   Context `{!ord_laterGS Σ}.
-  Implicit Types (n : ordinal).
+  Implicit Types (n : ordinal_max).
 
   Global Instance ord_later_auth_timeless n : Timeless (ord_later_auth n).
   Proof. unseal. apply _. Qed.
@@ -155,7 +155,7 @@ Section lemmas.
   Lemma ord_later_intro P:
     P ⊢ ▷ₒ P.
   Proof.
-    unseal. iIntros "HP [% Hctx]".
+    unseal. iIntros "HP Hctx".
     iExists _. iFrame. by iIntros.
   Qed.
 
@@ -179,7 +179,14 @@ Section lemmas.
 
   Lemma ord_later_ctx_alloc n :
     ord_later_auth n ⊢ ord_later_ctx.
-  Proof. unseal. rewrite {1}mono_ord_auth_ub_op. iIntros "[??]". iExists _. iFrame. Qed.
+  Proof.
+    unseal. apply own_mono. rewrite {1}mono_ord_auth_ub_op.
+    etrans; [|apply cmra_included_r]. by apply mono_ord_ub_mono.
+  Qed.
+
+  Lemma ord_later_ctx_intro:
+    ⊢ |==> ord_later_ctx.
+  Proof. unseal. iApply own_unit. Qed.
 
   Lemma ord_later_update n n':
      n' ⊆ n →
@@ -194,11 +201,15 @@ Section lemmas.
     unseal. iIntros "[HP1 HP2] #Hctx".
     iDestruct ("HP1" with "Hctx") as (n1) "[Hn1 HP1]".
     iDestruct ("HP2" with "Hctx") as (n2) "[Hn2 HP2]".
-    iExists (o_min n1 n2).
+    iExists (ord_max_min n1 n2).
     iCombine "Hn1 Hn2" as "Hn". rewrite mono_ord_ub_op. iFrame.
     iIntros (??) "#?".
-    iDestruct ("HP1" with "[%] [$]") as "$". { etrans; [done|]. apply o_min_le_l. }
-    iDestruct ("HP2" with "[%] [$]") as "$". { etrans; [done|]. apply o_min_le_r. }
+    iDestruct ("HP1" with "[%] [$]") as "$". {
+      apply: ord_max_lt_mono; [done| |done]. apply ord_max_min_le_l.
+    }
+    iDestruct ("HP2" with "[%] [$]") as "$". {
+      apply: ord_max_lt_mono; [done| |done]. apply ord_max_min_le_r.
+    }
   Qed.
 
   Lemma ord_later_pers P :
@@ -222,12 +233,14 @@ Section lemmas.
     rewrite bi.and_exist_r. iDestruct "HPQ" as (n1) "HPQ".
     iAssert (own ord_later_name (mono_ord_ub n1)) as "#Hn1". { iDestruct "HPQ" as "[[$ _] _]". }
     iAssert (own ord_later_name (mono_ord_ub n2)) as "#Hn2". { iDestruct "HPQ" as "[_ [$ _]]". }
-    iExists (o_min n1 n2).
+    iExists (ord_max_min n1 n2).
     iCombine "Hn1 Hn2" as "Hn". rewrite mono_ord_ub_op. iFrame "#".
     iIntros (??) "#Hn'".
     iSplit.
-    - iDestruct "HPQ" as "[[_ HP] _]". iApply ("HP" with "[%] Hn'"). etrans; [done|]. apply o_min_le_l.
-    - iDestruct "HPQ" as "[_ [_ HP]]". iApply ("HP" with "[%] Hn'"). etrans; [done|]. apply o_min_le_r.
+    - iDestruct "HPQ" as "[[_ HP] _]". iApply ("HP" with "[%] Hn'").
+      apply: ord_max_lt_mono; [done| |done]. apply ord_max_min_le_l.
+    - iDestruct "HPQ" as "[_ [_ HP]]". iApply ("HP" with "[%] Hn'").
+      apply: ord_max_lt_mono; [done| |done]. apply ord_max_min_le_r.
   Qed.
 
   Lemma ord_loeb P:
@@ -235,8 +248,10 @@ Section lemmas.
     □ (□ ▷ₒ P -∗ P) -∗
     P.
   Proof.
-    unseal. iDestruct 1 as (n) "#Hub". iIntros "#Hl".
-    iInduction n as [] "IH" using o_lt_ind.
+    unseal. iDestruct 1 as "#Hub". iIntros "#Hl".
+    iAssert (∃ n, own ord_later_name (mono_ord_ub n))%I as (n) "Hn".
+    { by iExists _. }
+    iInduction n as [] "IH" using ord_max_lt_ind.
     iApply "Hl". iModIntro. iIntros "_".
     iExists _. iFrame "#".
     iIntros (??) "#?". iApply "IH"; [done|]. by iModIntro.
@@ -252,7 +267,7 @@ Section lemmas.
   Lemma ord_later_elim P Q n:
     ▷ₒ P -∗
     ord_later_auth n -∗
-    (ord_later_auth n ==∗ ∃ n', ⌜oS n' ⊆ n⌝ ∗ ord_later_auth n' ∗ (ord_later_auth n' -∗ P ==∗ Q)) -∗
+    (ord_later_auth n ==∗ ∃ n', ⌜ord_max_lt n' n⌝ ∗ ord_later_auth n' ∗ (ord_later_auth n' -∗ P ==∗ Q)) -∗
     |==> Q.
   Proof.
     iIntros "HP Ha Hwand".
@@ -262,7 +277,7 @@ Section lemmas.
     iDestruct (own_valid_2 with "Ha Hn1") as %?%mono_ord_both_valid.
     iMod ("Hwand" with "Ha") as (??) "[Ha Hwand]".
     rewrite {1}mono_ord_auth_ub_op. iDestruct "Ha" as "[Ha Hn']".
-    iDestruct ("HP" with "[%] Hn'") as "HP". { by etrans. }
+    iDestruct ("HP" with "[%] Hn'") as "HP". { by apply: ord_max_lt_mono. }
     by iApply ("Hwand" with "Ha").
   Qed.
 End lemmas.
