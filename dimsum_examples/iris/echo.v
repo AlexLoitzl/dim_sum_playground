@@ -706,10 +706,27 @@ Section combined.
       ⌜es = []⌝ ∗
       lpos ↦ pos ∗
       POST ({{ vr, ⌜vr = ValNum pos⌝ ∗ lpos ↦ (pos + 1)}})}}).
-  Proof. Admitted.
-
+  Proof.
+   iIntros "%Hlpos #Hread #Hgetc %args %Φ Hpre".
+   iApply sim_getc => /=; [done|].
+   iDestruct "Hpre" as "[%count [?[? HΦ]]]". iFrame.
+   rewrite /rec_fn_spec_hoare /rec_fn_spec.
+   iIntros "%args' %Φ' [%l [%v [Hargs' [Hl HΦ']]]]".
+   iApply sim_read_mem => /=. 1-2: done.
+   do 3 iExists (_). iFrame.
+   iSplitL "Hargs'". { instantiate (1 := [v]). iExact "Hargs'". }
+   iSplitL "Hl".
+   { rewrite /array => /=.
+     rewrite insert_empty kmap_singleton offset_loc_0 big_sepM_singleton. iAssumption. }
+   iIntros (v') "[? [? Hl]]" => /=.
+   iApply "HΦ'". iExists (_).
+   iSplitL "Hl".
+   { rewrite Z.add_0_l /array  => /=.
+     rewrite insert_empty kmap_singleton offset_loc_0 big_sepM_singleton. iAssumption. }
+   iIntros (v'') "?".
+   iApply "HΦ". iFrame.
+Qed.
 End combined.
-
 
 Definition __NR_READ : Z := 0.
 Definition read_addr : Z := 500.
