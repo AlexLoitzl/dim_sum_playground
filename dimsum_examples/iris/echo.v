@@ -158,8 +158,9 @@ Definition echo_rec : fndef := {|
   fd_body := LetE "c" (rec.Call (Val (ValFn "getc")) []) $
              LetE "_" (rec.Call (Val (ValFn "putc")) [Var "c"]) $
              rec.Call (Val (ValFn "echo")) [];
-  fd_static := I                (* Appearantly I don't understand why this is an I *)
+  fd_static := I
 |}.
+
 Definition echo_prog : gmap string fndef :=
   <["echo" := echo_rec]> $ ∅.
 
@@ -167,7 +168,6 @@ Section echo.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
   (* TODO: Parse this syntactically:
     Π: What does it do?
-    How do the POST tokens work. I cannot find this notation
    *)
   Lemma sim_echo Π :
     "echo" ↪ Some echo_rec -∗
@@ -288,7 +288,7 @@ Proof.
   tstep_s. eexists. go.
   tstep_s. split!. go.
   tstep_s => ?.
-  rewrite bind_ret_l. (* TODO: Is this the way to do it, stolen from some iris proof *)
+  rewrite bind_ret_l.
   go. simplify_eq.
   tstep_i.
   eapply Hloop. { done. }
@@ -608,9 +608,7 @@ Section read_mem.
     iApply ord_loeb. { iAssumption. } iModIntro.
     iIntros "#IH %es %Φ HΦ/=".
     iDestruct "HΦ" as (? ? count) "[? [Hlpos [Hl H]]]".
-    (* (* TODO: This can probably done more straightforward *) *)
-    (* destruct (Z_lt_le_dec 0 (length vs)) as [Hc | Hc]; cycle 1. *)
-    (* (* Base Case *) *)
+    (* Base Case *)
     iDestruct!.
     iApply sim_tgt_rec_Call_internal. 2: { done. } { done. }
     (* FIXME: Maybe I can use this to try fiddling with auto indentation *)
@@ -668,7 +666,6 @@ Section read_mem.
       iSplitL "Hl'". iAssumption.
       iIntros (v') "[-> [Hlpos ?]]".
       iApply sim_tgt_rec_LetE => /=. iModIntro.
-      (* TODO: Whatch out here, this might be an issue to use it here *)
       iApply (sim_tgt_rec_BinOp). { reflexivity. } iModIntro.
       iExists (_).
       iSplit. done.
@@ -678,6 +675,7 @@ Section read_mem.
       iSplit. { done. }
       iSplitL "Hlpos". { rewrite <-Z.add_assoc, Z.add_1_l. iApply "Hlpos". }
       (* TODO: Rewrite at doesn't work *)
+      (* rewrite seqZ_cons at 2. *)
       rewrite (seqZ_cons _ (Z.succ _)) => /=. 2 : { lia. }
       rewrite array_cons.
       (* FIXME: Why does iRewrite not work? *)
@@ -686,9 +684,6 @@ Section read_mem.
   Qed.
 
 End read_mem.
-
-(* TODO 3/4: compose sim_getc and sim_read_mem
-    And define a specification that makes sense*)
 
 Definition combined_prog : gmap string fndef :=
   <["read" := read_mem_rec]> $ <["getc" := getc_rec]> $ ∅.
@@ -727,6 +722,8 @@ Section combined.
    iApply "HΦ". iFrame.
 Qed.
 End combined.
+
+
 
 Definition __NR_READ : Z := 0.
 Definition read_addr : Z := 500.
@@ -864,7 +861,6 @@ End getc_read.
 
 Definition putc_buffer_prov : prov := ProvStatic "putc" 0.
 
-(* TODO: 4 Can this be done differently, or what's the issue *)
 Definition putc_spec : spec rec_event (list Z * gmap Z val) void :=
   Spec.forever (
     '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
