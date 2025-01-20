@@ -723,6 +723,10 @@ Section combined.
 Qed.
 End combined.
 
+(* TODO 1: Write a Spec Program for getc returning increasing numbers *)
+(* TODO 2: Prove a separation logic tuple for it - analogous to sim_locle_spec2 (in ../memmove) *)
+(* TODO 3: Prove specification against implementation - analogous to sim_locle2 (in ../memmove ) *)
+
 
 
 Definition __NR_READ : Z := 0.
