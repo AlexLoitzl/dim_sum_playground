@@ -723,10 +723,57 @@ Section combined.
 Qed.
 End combined.
 
-(* TODO 1: Write a Spec Program for getc returning increasing numbers *)
-(* TODO 2: Prove a separation logic tuple for it - analogous to sim_locle_spec2 (in ../memmove) *)
-(* TODO 3: Prove specification against implementation - analogous to sim_locle2 (in ../memmove ) *)
+(* TODO 0: Write a Spec for a program that increases a location *)
 
+Definition retOneMore_rec : fndef := {|
+  fd_args := [];
+  fd_static_vars := [("pos", 1)];
+  fd_vars := [];
+  fd_body := (LetE "ret" (Load (Var "pos")) $
+              LetE "_" (Store (Var "pos") (BinOp (Var "ret") AddOp (Val 1))) $
+              Var ("ret"));
+  fd_static := I
+|}.
+
+Definition retOneMore_prog : gmap string fndef :=
+  <["retOneMore" := retOneMore_rec]> $ ∅.
+
+
+  (* Spec.forever ( *)
+  (*     '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h)); *)
+  (*     TAssume (f = "locle");; *)
+  (*     l1 ← TAll loc; l2 ← TAll loc; *)
+  (*     TAssume (vs = [ValLoc l1; ValLoc l2]);; *)
+  (*     ps ← TGet; *)
+  (*     z1 ← TExist Z; *)
+  (*     (* NOTE - If ps has already mapped provenance of l1, z1 is that otherwise True *) *)
+  (*     TAssert (z1 = default z1 (ps !! l1.1));; *)
+  (*     TPut (<[l1.1 := z1]> ps);; *)
+
+  (*     ps ← TGet; *)
+  (*     z2 ← TExist Z; *)
+  (*     TAssert (z2 = default z2 (ps !! l2.1));; *)
+  (*     TPut (<[l2.1 := z2]> ps);; *)
+
+  (*     TVis (Outgoing, ERReturn (ValBool (bool_decide (z1 + l1.2 ≤ z2 + l2.2))) h) *)
+  (*   ). *)
+
+Definition retOneMore_spec : spec rec_event unit void :=
+  Spec.forever(
+  '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
+  TAssume (f = "retOne");;
+  TAssume (vs = []);;
+  (* NOTE: Here I now want to express that my program returns the value stored at pos *)
+  (* TODO: Is this too weak? *)
+  v ← TExist Z;
+
+  TVis (Outgoing, ERReturn (ValNum 1) h)).
+
+
+(* FIXME TODO 1: Write a Spec Program for getc returning increasing numbers *)
+
+(* FIXME TODO 2: Prove a separation logic tuple for it - analogous to sim_locle_spec2 (in ../memmove) *)
+(* FIXME TODO 3: Prove specification against implementation - analogous to sim_locle2 (in ../memmove ) *)
 
 
 Definition __NR_READ : Z := 0.
