@@ -723,7 +723,7 @@ Section combined.
 Qed.
 End combined.
 
-(* TODO 0: Write a Spec for a program that increases a location *)
+(* TODO 0a: Write a Spec for a program that increases a location *)
 
 Definition retOneMore_rec : fndef := {|
   fd_args := [];
@@ -738,26 +738,6 @@ Definition retOneMore_rec : fndef := {|
 Definition retOneMore_prog : gmap string fndef :=
   <["retOneMore" := retOneMore_rec]> $ ∅.
 
-
-  (* Spec.forever ( *)
-  (*     '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h)); *)
-  (*     TAssume (f = "locle");; *)
-  (*     l1 ← TAll loc; l2 ← TAll loc; *)
-  (*     TAssume (vs = [ValLoc l1; ValLoc l2]);; *)
-  (*     ps ← TGet; *)
-  (*     z1 ← TExist Z; *)
-  (*     (* NOTE - If ps has already mapped provenance of l1, z1 is that otherwise True *) *)
-  (*     TAssert (z1 = default z1 (ps !! l1.1));; *)
-  (*     TPut (<[l1.1 := z1]> ps);; *)
-
-  (*     ps ← TGet; *)
-  (*     z2 ← TExist Z; *)
-  (*     TAssert (z2 = default z2 (ps !! l2.1));; *)
-  (*     TPut (<[l2.1 := z2]> ps);; *)
-
-  (*     TVis (Outgoing, ERReturn (ValBool (bool_decide (z1 + l1.2 ≤ z2 + l2.2))) h) *)
-  (*   ). *)
-
 Definition retOneMore_spec : spec rec_event unit void :=
   Spec.forever(
   '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
@@ -766,9 +746,42 @@ Definition retOneMore_spec : spec rec_event unit void :=
   (* NOTE: Here I now want to express that my program returns the value stored at pos *)
   (* TODO: Is this too weak? *)
   v ← TExist Z;
+  (* TODO: What exactly are all the integers (0s)? - One can be offset, one index? *)
+  TAssume ((h_heap h) !! ((ProvStatic "pos" 0), 0) = Some (ValNum v));;
+  TVis (Outgoing, ERReturn (ValNum (v + 1)) (heap_update h ((ProvStatic "pos" 0), 0) (ValNum (v + 1))))).
 
-  TVis (Outgoing, ERReturn (ValNum 1) h)).
-
+(* NOTE TODO 0b: Proof that this spec is satisfied *)
+Lemma retOne_refines_retOne_spec_direct :
+  trefines (rec_mod retOne_prog) (spec_mod retOne_spec tt).
+Proof.
+  (* apply: tsim_implies_trefines => n0 /=. *)
+  (* unshelve eapply tsim_remember. { simpl. exact (λ _ '(Rec e _ f) (*σi*) '(t, _), *)
+  (*   t ≡ retOne_spec ∧ *)
+  (*   e = Waiting false ∧ *)
+  (*   f = retOne_prog). } *)
+  (* { split!. }. { done. }. *)
+  (* move => n _ Hloop [???] [??] [??] /=. destruct!/=. *)
+  (* (* Step in implementation to introduce arguments *) *)
+  (* tstep_i. *)
+  (* split!. move => ???? H. *)
+  (* tstep_s. rewrite -/retOne_spec. go. *)
+  (* tstep_s. eexists (_, _, _). go. *)
+  (* (* Unify evars *) *)
+  (* tstep_s. split!. go. *)
+  (* (* Here deal with assumptions *) *)
+  (* tstep_s => ?. go. *)
+  (* tstep_s => ?. go. destruct!. *)
+  (* (* Now, step through implementation *) *)
+  (* tstep_i. split!. *)
+  (* move => ??. destruct!. *)
+  (* rewrite /retOne_prog in H. simplify_map_eq. split!. *)
+  (* (* Stack Frame *) *)
+  (* tstep_i => ?? [-> ->]. split!. *)
+  (* tstep_i. eexists. split!. *)
+  (* tstep_i. *)
+  (* tstep_s. split!. go. *)
+  (* by apply Hloop. *)
+Admitted.
 
 (* FIXME TODO 1: Write a Spec Program for getc returning increasing numbers *)
 
