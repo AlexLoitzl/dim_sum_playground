@@ -790,8 +790,36 @@ Qed.
 
 (* FIXME TODO 1: Write a Spec Program for getc returning increasing numbers *)
 
-(* FIXME TODO 2: Prove a separation logic tuple for it - analogous to sim_locle_spec2 (in ../memmove) *)
-(* FIXME TODO 3: Prove specification against implementation - analogous to sim_locle2 (in ../memmove ) *)
+(* Definition getc_rec : fndef := {| *)
+(*   fd_args := []; *)
+(*   fd_static_vars := []; *)
+(*   fd_vars := [("l", 1)]; *)
+(*   fd_body := LetE "c" (rec.Call (Val (ValFn "read")) [Var "l"; Val 1]) $ *)
+(*              Load (Var "l"); *)
+(*   fd_static := I *)
+(* |}. *)
+
+Definition increasing_getc_spec : spec rec_event unit void :=
+  Spec.forever(
+  (* Incoming call of getc *)
+  '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
+  TAssume (f = "getc");;
+  (* There is some location being passed as parameter *)
+  l ← TAll loc;
+  TAssume (vs = [ValLoc l]);;
+  (* The location is alive *)
+  TAssume (heap_alive h l);;
+  (* There is a current position of the buffer *)
+  v2 ← TAll Z;
+  TAssume ((h_heap h) !! ((ProvStatic "getc" 0), 0) = Some (ValNum v2));;
+  (* Return old position, update the location to old position, and the position is updated *)
+  TVis (Outgoing, ERReturn (ValNum v2)
+         (heap_update (heap_update h l (ValNum v2)) ((ProvStatic "getc" 0), 0) (ValNum (v2 + 1))))).
+
+(* FIXME TODO 2: Prove a separation logic tuple for it - analogous to sim_locle_spec2 (in ./memmove) *)
+
+
+(* FIXME TODO 3: Prove specification against implementation - analogous to sim_locle2 (in ./memmove ) *)
 
 
 Definition __NR_READ : Z := 0.
