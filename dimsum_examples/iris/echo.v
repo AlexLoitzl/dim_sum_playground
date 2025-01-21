@@ -741,47 +741,52 @@ Definition retOneMore_prog : gmap string fndef :=
 Definition retOneMore_spec : spec rec_event unit void :=
   Spec.forever(
   '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
-  TAssume (f = "retOne");;
+  TAssume (f = "retOneMore");;
   TAssume (vs = []);;
   (* NOTE: Here I now want to express that my program returns the value stored at pos *)
   (* TODO: Is this too weak? *)
-  v ← TExist Z;
+  v ← TAll Z;
   (* TODO: What exactly are all the integers (0s)? - One can be offset, one index? *)
-  TAssume ((h_heap h) !! ((ProvStatic "pos" 0), 0) = Some (ValNum v));;
-  TVis (Outgoing, ERReturn (ValNum (v + 1)) (heap_update h ((ProvStatic "pos" 0), 0) (ValNum (v + 1))))).
+  TAssume ((h_heap h) !! ((ProvStatic "retOneMore" 0), 0) = Some (ValNum v));;
+  TVis (Outgoing, ERReturn (ValNum v) (heap_update h ((ProvStatic "retOneMore" 0), 0) (ValNum (v + 1))))).
 
-(* NOTE TODO 0b: Proof that this spec is satisfied *)
-Lemma retOne_refines_retOne_spec_direct :
-  trefines (rec_mod retOne_prog) (spec_mod retOne_spec tt).
+(* NOTE TODO 0b: Prove that this spec is satisfied *)
+
+Lemma retOne_refines_retOneMore_spec_direct :
+  trefines (rec_mod retOneMore_prog) (spec_mod retOneMore_spec tt).
 Proof.
-  (* apply: tsim_implies_trefines => n0 /=. *)
-  (* unshelve eapply tsim_remember. { simpl. exact (λ _ '(Rec e _ f) (*σi*) '(t, _), *)
-  (*   t ≡ retOne_spec ∧ *)
-  (*   e = Waiting false ∧ *)
-  (*   f = retOne_prog). } *)
-  (* { split!. }. { done. }. *)
-  (* move => n _ Hloop [???] [??] [??] /=. destruct!/=. *)
-  (* (* Step in implementation to introduce arguments *) *)
-  (* tstep_i. *)
-  (* split!. move => ???? H. *)
-  (* tstep_s. rewrite -/retOne_spec. go. *)
-  (* tstep_s. eexists (_, _, _). go. *)
-  (* (* Unify evars *) *)
-  (* tstep_s. split!. go. *)
-  (* (* Here deal with assumptions *) *)
-  (* tstep_s => ?. go. *)
-  (* tstep_s => ?. go. destruct!. *)
-  (* (* Now, step through implementation *) *)
-  (* tstep_i. split!. *)
-  (* move => ??. destruct!. *)
-  (* rewrite /retOne_prog in H. simplify_map_eq. split!. *)
-  (* (* Stack Frame *) *)
-  (* tstep_i => ?? [-> ->]. split!. *)
-  (* tstep_i. eexists. split!. *)
-  (* tstep_i. *)
-  (* tstep_s. split!. go. *)
-  (* by apply Hloop. *)
-Admitted.
+  apply: tsim_implies_trefines => n0 /=.
+  (* TODO: Do I have to talk about the heap here? *)
+  unshelve eapply tsim_remember. { simpl. exact (λ _ '(Rec e _ f) '(t, _),
+    t ≡ retOneMore_spec ∧
+    e = Waiting false ∧
+    f = retOneMore_prog). }
+  { split!. }. { done. }.
+  move => n _ Hloop [???] [??] [??] /=. destruct!/=.
+  (* Step in implementation to introduce arguments *)
+  tstep_i.
+  split!. move => ? f ?? H.
+  tstep_s. rewrite -/retOneMore_spec. go.
+  tstep_s. eexists (_, _, _). go.
+  (* Unify evars *)
+  tstep_s. split!. go.
+  (* Here deal with assumptions *)
+  tstep_s => ?. go.
+  tstep_s => ?. go. destruct!.
+  tstep_s => ?. go.
+  tstep_s => ?. go.
+  (* Now, step through implementation *)
+  tstep_i. split!.
+  move => ??. destruct!.
+  rewrite /retOneMore_prog in H. simplify_map_eq. split!.
+  (* Stack Frame *)
+  tstep_i => ?? [-> ?]. simplify_eq. split!.
+  tstep_i. eexists. split!. { done. }
+  tstep_i. tstep_i. tstep_i. split. { by rewrite /heap_alive. }
+  tstep_i. tstep_i. eexists. split!.
+  tstep_i. tstep_s. split!. go.
+  by apply Hloop.
+Qed.
 
 (* FIXME TODO 1: Write a Spec Program for getc returning increasing numbers *)
 
