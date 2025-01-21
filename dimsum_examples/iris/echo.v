@@ -814,7 +814,7 @@ Definition increasing_getc_spec : spec rec_event unit void :=
   TAssume ((h_heap h) !! ((ProvStatic "getc" 0), 0) = Some (ValNum v2));;
   (* Return old position, update the location to old position, and the position is updated *)
   TVis (Outgoing, ERReturn (ValNum v2)
-         (heap_update (heap_update h l (ValNum v2)) ((ProvStatic "getc" 0), 0) (ValNum (v2 + 1))))).
+         (heap_update_big h (<[l := ValNum v2]> $ <[((ProvStatic "getc" 0), 0) := ValNum (v2 + 1)]> $ ∅)))).
 
 (* FIXME TODO 2: Prove a separation logic tuple for it - analogous to sim_locle_spec2 (in ./memmove) *)
 
