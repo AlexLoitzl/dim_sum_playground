@@ -920,36 +920,54 @@ Section sim_spec.
     iIntros (??) "[% [% _]]". subst. iApply "HC". iSplit!.
   Qed.
 
-  (* FIXME TODO 3: Prove specification against implementation - analogous to sim_locle2 (in ./memmove ) *)
+  (* FIXME TODO 3: Do whatever this is - analogous to sim_locle2 (in ./memmove ) *)
 
-  Lemma sim_locle2 fns Π :
+  Definition getc_fn_spec (es : list expr) (POST : (val → iProp Σ) → iProp Σ) : iProp Σ :=
+    let lpos := (ProvStatic "read" 0, 0) in
+    ∃ (pos: Z), ⌜es = []⌝ ∗ lpos ↦ pos ∗
+    POST (λ v, ⌜v = ValNum pos⌝ ∗ lpos ↦ (pos + 1)).
+
+  Lemma sim_getc2 fns Π :
+    (* TODO: What does this do *)
     rec_fn_auth fns -∗
-    "locle" ↪ None -∗
+    (* Getc is external? *)
+    "getc" ↪ None -∗
+    (* TODO: Switching to a linked module? *)
     switch_link Tgt Π ({{ σ0 POST,
-      ∃ vs h,
-    POST (ERCall "locle" vs h) (spec_trans _ _) (locle_spec, tt) ({{ _ Πr,
+      ∃ vs h',
+    POST (ERCall "getc" vs h') (spec_trans _ _) (getc_spec2, tt) ({{ _ Πr,
     switch_link Tgt Πr ({{ σ POST,
-      ∃ v h', ⌜σ = (locle_spec, tt)⌝ ∗
-    POST (ERReturn v h') _ σ0 ({{ _ Πx,
+      ∃ v h'', ⌜σ = (getc_spec2, tt)⌝ ∗
+    POST (ERReturn v h'') _ σ0 ({{ _ Πx,
       ⌜Πx = Π⌝}})}})}})}}) -∗
-    rec_fn_spec_hoare Tgt Π "locle" locle_fn_spec.
+    rec_fn_spec_hoare Tgt Π "getc" getc_fn_spec.
   Proof.
-    (* iIntros "#Hfns #Hf HΠ" (es Φ) "HΦ". iDestruct "HΦ" as (l1 l2 ->) "HΦ". *)
-    (* iApply (sim_tgt_rec_Call_external with "[$]"). iIntros (???) "#??? !>". *)
-    (* iIntros (??) "[% [% Hσ]]". subst. iApply "HΠ". iSplit!. iIntros (??) "[-> HΠi]". *)
-    (* iMod (mstate_var_alloc unit) as (γ) "?". *)
-    (* iMod (mstate_var_split γ tt with "[$]") as "[Hγ ?]". *)
-    (* pose (Hspec := SpecGS γ). *)
-    (* iApply (sim_gen_expr_intro _ tt with "[Hγ]"); simpl; [done..|]. *)
-    (* iApply sim_locle_spec2 => /=. iIntros (??). iDestruct 1 as (????) "HC". subst. *)
-    (* iApply "HΠi". iSplit!. iIntros (??) "[% [% HΠr]]". simplify_eq/=. *)
-    (* iApply "HC". iSplit!. iIntros (??). iDestruct 1 as (????) "HC". *)
-    (* iApply "HΠr". iSplit!. iIntros (??) "[% HΠf]". simplify_eq. *)
-    (* iApply sim_tgt_rec_Waiting_raw. *)
-    (* iSplit. { iIntros. iModIntro. iApply "HΠf". iSplit!. iIntros (??) "[% [% ?]]". simplify_eq. } *)
-    (* iIntros (???) "!>". iApply "HΠf". iSplit!. iIntros (??[?[??]]). simplify_eq. *)
-    (* iApply "Hσ". iSplit!. iFrame. iApply "HΦ". iSplit!. *)
+    iIntros "#Hfns #Hf HΠ" (es Φ) "HΦ". iDestruct "HΦ" as (pos ->) "[Hlpos HΦ]".
+    iApply (sim_tgt_rec_Call_external with "[$]"). iIntros (???) "#?Htoa Haa !>".
+    iIntros (??) "[% [% Hσ]]". subst. iApply "HΠ". iSplit!. iIntros (??) "[-> HΠi]".
+    iMod (mstate_var_alloc unit) as (γ) "?".
+    iMod (mstate_var_split γ tt with "[$]") as "[Hγ ?]".
+    pose (Hspec := SpecGS γ).
+    iApply (sim_gen_expr_intro _ tt with "[Hγ]"); simpl; [done..|].
+    iApply sim_getc_spec2 => /=. iIntros (??). iDestruct 1 as (????) "HC". subst.
+    iApply "HΠi". iSplit!. iIntros (??) "[% [% HΠr]]". simplify_eq/=.
+    iApply "HC".
+    iExists (_). do 3 (iSplit; [done|]). iSplitL "Hlpos Htoa".
+    (* FIXME: What do I have to do here to make this work? *)
+    (* I give up a lot of things here :/ *)
+    { iApply (rec_mapsto_lookup with "[$] [$]"). }
+    iIntros (??). iDestruct 1 as (??) "HC".
+    iApply "HΠr". iSplit!. iIntros (??) "[% HΠf]". simplify_eq.
+    iApply sim_tgt_rec_Waiting_raw.
+    iSplit. { iIntros. iModIntro. iApply "HΠf". iSplit!. iIntros (??) "[% [% ?]]". simplify_eq. }
+    iIntros (???) "!>". iApply "HΠf". iSplit!. iIntros (??[?[??]]). simplify_eq.
+    iApply "Hσ". iSplit!.
+    iSplitR. admit.
+    iSplitL "Haa". simpl. admit.
+    iApply "HΦ". iSplit!.
   Admitted.
+
+(* TODO REVIEW: What did I actually prove ? *)
 
 End sim_spec.
 
