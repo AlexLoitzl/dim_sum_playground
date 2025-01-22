@@ -827,6 +827,7 @@ Section sim_spec.
     (* Incoming call of getc *)
     '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
     TAssume (f = "getc");;
+    TAssume (vs = []);;
     (* There is a current position of the buffer *)
     v ← TAll Z;
     TAssume ((h_heap h) !! ((ProvStatic "read" 0), 0) = Some (ValNum v));;
@@ -875,6 +876,46 @@ Section sim_spec.
     (* TODO: Here it seems like a universal quantifier gets switched with existential *)
     iApply (sim_tgt_TAll with "[-]"). iIntros "!>".
     rewrite bind_bind. iApply (sim_tgt_TAssume); [done|]. iIntros "!>".
+    iApply (sim_gen_TVis with "[-]"). iIntros ([]) "? !>".
+    iIntros (??) "[% [% _]]". subst. iApply "HC". iSplit!.
+  Qed.
+
+  Lemma sim_getc_spec2 `{!specGS} Π Φ :
+    switch Π ({{ κ σ POST,
+      ∃ f vs h, ⌜κ = Some (Incoming, ERCall f vs h)⌝ ∗
+    POST Tgt _ (spec_trans _ unit) ({{ σ' Π',
+      ∃ v, ⌜σ' = σ⌝ ∗ ⌜f = "getc"⌝ ∗ ⌜vs = []⌝ ∗
+             ⌜(h_heap h) !! ((ProvStatic "read" 0), 0) = Some (ValNum v)⌝ ∗
+    switch Π' ({{ κ σ POST,
+      ⌜κ = (Some (Outgoing, ERReturn (ValNum v) (heap_update h ((ProvStatic "read" 0), 0) (ValNum (v + 1)))))⌝ ∗
+      ⌜σ = (getc_spec2, tt)⌝ ∗
+      spec_state ()
+      }})}})}}) -∗
+    TGT getc_spec2 @ Π {{ Φ }}.
+  Proof.
+    iDestruct 1 as "HC".
+    (* NOTE: Only step through spec - initial assumptions*)
+    unfold getc_spec2 at 2. rewrite unfold_forever -/getc_spec2.
+    rewrite /TReceive bind_bind bind_bind.
+    (* Incoming Call - TODO: Here I change from exists to forall - Because we are not trying to prove refinement? *)
+    iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>".
+    rewrite bind_bind. setoid_rewrite bind_ret_l.
+    (* NOTE: Here now, first time that switch matters - we have the visible event of the function call *)
+    iApply (sim_gen_TVis with "[-]").
+    (* Introducing arbitrary state *)
+    iIntros ([]) "Hs !>".
+    iIntros (??) "[% [% _]]". subst.
+    (* NOTE Here now Π as a goal *)
+    (* TODO: What does it mean to apply a switch *)
+    iApply "HC". iSplit!. iIntros (??).
+    iDestruct 1 as (?????) "HC". subst.
+    (* TODO: This step is super unclear to me *)
+    iApply (sim_gen_expr_intro _ tt with "[Hs]"); simpl; [done..|].
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAll with "[-]"). iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    (* TODO: Here it seems like a universal quantifier gets switched with existential *)
     iApply (sim_gen_TVis with "[-]"). iIntros ([]) "? !>".
     iIntros (??) "[% [% _]]". subst. iApply "HC". iSplit!.
   Qed.
