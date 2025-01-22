@@ -723,104 +723,194 @@ Section combined.
 Qed.
 End combined.
 
-(* TODO 0a: Write a Spec for a program that increases a location *)
+Section sim_spec.
+  Context `{!dimsumGS Σ} `{!recGS Σ}.
 
-Definition retOneMore_rec : fndef := {|
-  fd_args := [];
-  fd_static_vars := [("pos", 1)];
-  fd_vars := [];
-  fd_body := (LetE "ret" (Load (Var "pos")) $
-              LetE "_" (Store (Var "pos") (BinOp (Var "ret") AddOp (Val 1))) $
-              Var ("ret"));
-  fd_static := I
-|}.
+  (* TODO 0a: Write a Spec for a program that increases a location *)
 
-Definition retOneMore_prog : gmap string fndef :=
-  <["retOneMore" := retOneMore_rec]> $ ∅.
+  Definition retOneMore_rec : fndef := {|
+    fd_args := [];
+    fd_static_vars := [("pos", 1)];
+    fd_vars := [];
+    fd_body := (LetE "ret" (Load (Var "pos")) $
+                LetE "_" (Store (Var "pos") (BinOp (Var "ret") AddOp (Val 1))) $
+                Var ("ret"));
+    fd_static := I
+  |}.
 
-Definition retOneMore_spec : spec rec_event unit void :=
-  Spec.forever(
-  '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
-  TAssume (f = "retOneMore");;
-  TAssume (vs = []);;
-  (* NOTE: Here I now want to express that my program returns the value stored at pos *)
-  (* TODO: Is this too weak? *)
-  v ← TAll Z;
-  (* TODO: What exactly are all the integers (0s)? - One can be offset, one index? *)
-  TAssume ((h_heap h) !! ((ProvStatic "retOneMore" 0), 0) = Some (ValNum v));;
-  TVis (Outgoing, ERReturn (ValNum v) (heap_update h ((ProvStatic "retOneMore" 0), 0) (ValNum (v + 1))))).
+  Definition retOneMore_prog : gmap string fndef :=
+    <["retOneMore" := retOneMore_rec]> $ ∅.
 
-(* NOTE TODO 0b: Prove that this spec is satisfied *)
+  Definition retOneMore_spec : spec rec_event unit void :=
+    Spec.forever(
+    '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
+    TAssume (f = "retOneMore");;
+    TAssume (vs = []);;
+    (* NOTE: Here I now want to express that my program returns the value stored at pos *)
+    (* TODO: Is this too weak? *)
+    v ← TAll Z;
+    (* TODO: What exactly are all the integers (0s)? - One can be offset, one index? *)
+    TAssume ((h_heap h) !! ((ProvStatic "retOneMore" 0), 0) = Some (ValNum v));;
+    TVis (Outgoing, ERReturn (ValNum v) (heap_update h ((ProvStatic "retOneMore" 0), 0) (ValNum (v + 1))))).
 
-Lemma retOne_refines_retOneMore_spec_direct :
-  trefines (rec_mod retOneMore_prog) (spec_mod retOneMore_spec tt).
-Proof.
-  apply: tsim_implies_trefines => n0 /=.
-  (* TODO: Do I have to talk about the heap here? *)
-  unshelve eapply tsim_remember. { simpl. exact (λ _ '(Rec e _ f) '(t, _),
-    t ≡ retOneMore_spec ∧
-    e = Waiting false ∧
-    f = retOneMore_prog). }
-  { split!. }. { done. }.
-  move => n _ Hloop [???] [??] [??] /=. destruct!/=.
-  (* Step in implementation to introduce arguments *)
-  tstep_i.
-  split!. move => ? f ?? H.
-  tstep_s. rewrite -/retOneMore_spec. go.
-  tstep_s. eexists (_, _, _). go.
-  (* Unify evars *)
-  tstep_s. split!. go.
-  (* Here deal with assumptions *)
-  tstep_s => ?. go.
-  tstep_s => ?. go. destruct!.
-  tstep_s => ?. go.
-  tstep_s => ?. go.
-  (* Now, step through implementation *)
-  tstep_i. split!.
-  move => ??. destruct!.
-  rewrite /retOneMore_prog in H. simplify_map_eq. split!.
-  (* Stack Frame *)
-  tstep_i => ?? [-> ?]. simplify_eq. split!.
-  tstep_i. eexists. split!. { done. }
-  tstep_i. tstep_i. tstep_i. split. { by rewrite /heap_alive. }
-  tstep_i. tstep_i. eexists. split!.
-  tstep_i. tstep_s. split!. go.
-  by apply Hloop.
-Qed.
+  (* NOTE TODO 0b: Prove that this spec is satisfied *)
 
-(* FIXME TODO 1: Write a Spec Program for getc returning increasing numbers *)
+  Lemma retOne_refines_retOneMore_spec_direct :
+    trefines (rec_mod retOneMore_prog) (spec_mod retOneMore_spec tt).
+  Proof.
+    apply: tsim_implies_trefines => n0 /=.
+    (* TODO: Do I have to talk about the heap here? *)
+    unshelve eapply tsim_remember. { simpl. exact (λ _ '(Rec e _ f) '(t, _),
+      t ≡ retOneMore_spec ∧
+      e = Waiting false ∧
+      f = retOneMore_prog). }
+    { split!. }. { done. }.
+    move => n _ Hloop [???] [??] [??] /=. destruct!/=.
+    (* Step in implementation to introduce arguments *)
+    tstep_i.
+    split!. move => ? f ?? H.
+    tstep_s. rewrite -/retOneMore_spec. go.
+    tstep_s. eexists (_, _, _). go.
+    (* Unify evars *)
+    tstep_s. split!. go.
+    (* Here deal with assumptions *)
+    tstep_s => ?. go.
+    tstep_s => ?. go. destruct!.
+    tstep_s => ?. go.
+    tstep_s => ?. go.
+    (* Now, step through implementation *)
+    tstep_i. split!.
+    move => ??. destruct!.
+    rewrite /retOneMore_prog in H. simplify_map_eq. split!.
+    (* Stack Frame *)
+    tstep_i => ?? [-> ?]. simplify_eq. split!.
+    tstep_i. eexists. split!. { done. }
+    tstep_i. tstep_i. tstep_i. split. { by rewrite /heap_alive. }
+    tstep_i. tstep_i. eexists. split!.
+    tstep_i. tstep_s. split!. go.
+    by apply Hloop.
+  Qed.
 
-(* Definition getc_rec : fndef := {| *)
-(*   fd_args := []; *)
-(*   fd_static_vars := []; *)
-(*   fd_vars := [("l", 1)]; *)
-(*   fd_body := LetE "c" (rec.Call (Val (ValFn "read")) [Var "l"; Val 1]) $ *)
-(*              Load (Var "l"); *)
-(*   fd_static := I *)
-(* |}. *)
+  (* FIXME TODO 1: Write a Spec Program for getc returning increasing numbers *)
 
-Definition increasing_getc_spec : spec rec_event unit void :=
-  Spec.forever(
-  (* Incoming call of getc *)
-  '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
-  TAssume (f = "getc");;
-  (* There is some location being passed as parameter *)
-  l ← TAll loc;
-  TAssume (vs = [ValLoc l]);;
-  (* The location is alive *)
-  TAssume (heap_alive h l);;
-  (* There is a current position of the buffer *)
-  v2 ← TAll Z;
-  TAssume ((h_heap h) !! ((ProvStatic "getc" 0), 0) = Some (ValNum v2));;
-  (* Return old position, update the location to old position, and the position is updated *)
-  TVis (Outgoing, ERReturn (ValNum v2)
-         (heap_update_big h (<[l := ValNum v2]> $ <[((ProvStatic "getc" 0), 0) := ValNum (v2 + 1)]> $ ∅)))).
+  (* Definition getc_rec : fndef := {| *)
+  (*   fd_args := []; *)
+  (*   fd_static_vars := []; *)
+  (*   fd_vars := [("l", 1)]; *)
+  (*   fd_body := LetE "c" (rec.Call (Val (ValFn "read")) [Var "l"; Val 1]) $ *)
+  (*              Load (Var "l"); *)
+  (*   fd_static := I *)
+  (* |}. *)
 
-(* FIXME TODO 2: Prove a separation logic tuple for it - analogous to sim_locle_spec2 (in ./memmove) *)
+  (* TODO REVIEW: Is this the actual spec I am interested in?
+    It is not the one that aligns with the previous one because I don't want to talk about
+    ownership of the buffer used by read :/ *)
+  Definition getc_spec : spec rec_event unit void :=
+    Spec.forever(
+    (* Incoming call of getc *)
+    '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
+    TAssume (f = "getc");;
+    (* There is some location being passed as parameter *)
+    l ← TAll loc;
+    TAssume (vs = [ValLoc l]);;
+    (* The location is alive *)
+    TAssume (heap_alive h l);;
+    (* There is a current position of the buffer *)
+    v ← TAll Z;
+    TAssume ((h_heap h) !! ((ProvStatic "getc" 0), 0) = Some (ValNum v));;
+    (* Return old position, update the location to old position, and the position is updated *)
+    TVis (Outgoing, ERReturn (ValNum v)
+          (heap_update_big h (<[l := ValNum v]> $ <[((ProvStatic "getc" 0), 0) := ValNum (v + 1)]> $ ∅)))).
 
+  Definition getc_spec2 : spec rec_event unit void :=
+    Spec.forever(
+    (* Incoming call of getc *)
+    '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
+    TAssume (f = "getc");;
+    (* There is a current position of the buffer *)
+    v ← TAll Z;
+    TAssume ((h_heap h) !! ((ProvStatic "read" 0), 0) = Some (ValNum v));;
+    (* Return old position, update the location to old position, and the position is updated *)
+    TVis (Outgoing, ERReturn (ValNum v) (heap_update h ((ProvStatic "read" 0), 0) (ValNum (v + 1))))).
 
-(* FIXME TODO 3: Prove specification against implementation - analogous to sim_locle2 (in ./memmove ) *)
+  (* FIXME TODO 2: Prove a separation logic tuple for it - analogous to sim_locle_spec2 (in ./memmove) *)
 
+  (* TODO: What does this Lemma state? *)
+  Lemma sim_getc_spec `{!specGS} Π Φ :
+    switch Π ({{ κ σ POST,
+      ∃ f vs h, ⌜κ = Some (Incoming, ERCall f vs h)⌝ ∗
+    POST Tgt _ (spec_trans _ unit) ({{ σ' Π',
+      ∃ l v, ⌜σ' = σ⌝ ∗ ⌜f = "getc"⌝ ∗ ⌜vs = [ValLoc l]⌝ ∗ ⌜heap_alive h l⌝ ∗
+             ⌜(h_heap h) !! ((ProvStatic "getc" 0), 0) = Some (ValNum v)⌝ ∗
+    switch Π' ({{ κ σ POST,
+      ⌜κ = (Some (Outgoing, ERReturn (ValNum v) (heap_update_big h (<[l := ValNum v]> $ <[((ProvStatic "getc" 0), 0) := ValNum (v + 1)]> $ ∅))))⌝ ∗
+      ⌜σ = (getc_spec, tt)⌝ ∗
+      spec_state ()
+      }})}})}}) -∗
+    TGT getc_spec @ Π {{ Φ }}.
+  Proof.
+    iDestruct 1 as "HC".
+    (* NOTE: Only step through spec - initial assumptions*)
+    unfold getc_spec at 2. rewrite unfold_forever -/getc_spec.
+    rewrite /TReceive bind_bind bind_bind.
+    (* Incoming Call - TODO: Here I change from exists to forall - Because we are not trying to prove refinement? *)
+    iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>".
+    rewrite bind_bind. setoid_rewrite bind_ret_l.
+    (* NOTE: Here now, first time that switch matters - we have the visible event of the function call *)
+    iApply (sim_gen_TVis with "[-]").
+    (* Introducing arbitrary state *)
+    iIntros ([]) "Hs !>".
+    iIntros (??) "[% [% _]]". subst.
+    (* NOTE Here now Π as a goal *)
+    (* TODO: What does it mean to apply a switch *)
+    iApply "HC". iSplit!. iIntros (??).
+    iDestruct 1 as (?????) "[%Hh1 [%Hh2 HC]]". subst.
+    (* TODO: This step is super unclear to me *)
+    iApply (sim_gen_expr_intro _ tt with "[Hs]"); simpl; [done..|].
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAll with "[-]"). iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAssume); [done|]. iIntros "!>".
+    rewrite bind_bind.
+    (* TODO: Here it seems like a universal quantifier gets switched with existential *)
+    iApply (sim_tgt_TAll with "[-]"). iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAssume); [done|]. iIntros "!>".
+    iApply (sim_gen_TVis with "[-]"). iIntros ([]) "? !>".
+    iIntros (??) "[% [% _]]". subst. iApply "HC". iSplit!.
+  Qed.
+
+  (* FIXME TODO 3: Prove specification against implementation - analogous to sim_locle2 (in ./memmove ) *)
+
+  Lemma sim_locle2 fns Π :
+    rec_fn_auth fns -∗
+    "locle" ↪ None -∗
+    switch_link Tgt Π ({{ σ0 POST,
+      ∃ vs h,
+    POST (ERCall "locle" vs h) (spec_trans _ _) (locle_spec, tt) ({{ _ Πr,
+    switch_link Tgt Πr ({{ σ POST,
+      ∃ v h', ⌜σ = (locle_spec, tt)⌝ ∗
+    POST (ERReturn v h') _ σ0 ({{ _ Πx,
+      ⌜Πx = Π⌝}})}})}})}}) -∗
+    rec_fn_spec_hoare Tgt Π "locle" locle_fn_spec.
+  Proof.
+    (* iIntros "#Hfns #Hf HΠ" (es Φ) "HΦ". iDestruct "HΦ" as (l1 l2 ->) "HΦ". *)
+    (* iApply (sim_tgt_rec_Call_external with "[$]"). iIntros (???) "#??? !>". *)
+    (* iIntros (??) "[% [% Hσ]]". subst. iApply "HΠ". iSplit!. iIntros (??) "[-> HΠi]". *)
+    (* iMod (mstate_var_alloc unit) as (γ) "?". *)
+    (* iMod (mstate_var_split γ tt with "[$]") as "[Hγ ?]". *)
+    (* pose (Hspec := SpecGS γ). *)
+    (* iApply (sim_gen_expr_intro _ tt with "[Hγ]"); simpl; [done..|]. *)
+    (* iApply sim_locle_spec2 => /=. iIntros (??). iDestruct 1 as (????) "HC". subst. *)
+    (* iApply "HΠi". iSplit!. iIntros (??) "[% [% HΠr]]". simplify_eq/=. *)
+    (* iApply "HC". iSplit!. iIntros (??). iDestruct 1 as (????) "HC". *)
+    (* iApply "HΠr". iSplit!. iIntros (??) "[% HΠf]". simplify_eq. *)
+    (* iApply sim_tgt_rec_Waiting_raw. *)
+    (* iSplit. { iIntros. iModIntro. iApply "HΠf". iSplit!. iIntros (??) "[% [% ?]]". simplify_eq. } *)
+    (* iIntros (???) "!>". iApply "HΠf". iSplit!. iIntros (??[?[??]]). simplify_eq. *)
+    (* iApply "Hσ". iSplit!. iFrame. iApply "HΦ". iSplit!. *)
+  Admitted.
+
+End sim_spec.
 
 Definition __NR_READ : Z := 0.
 Definition read_addr : Z := 500.
