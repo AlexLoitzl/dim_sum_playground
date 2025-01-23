@@ -1065,16 +1065,17 @@ Section sim_spec.
     iExists (_). iSplit!. iSplitL "Hlpos"; [done|].
     iIntros (??). iDestruct 1 as (??) "[Hlpos HC]".
     iApply "HΠr". iSplit!. iIntros (??) "[% HΠf]". simplify_eq.
+    (* TODO: This was just pure luck that I can put it here xD *)
+    iPoseProof (rec_mapsto_update with "Htoa Hlpos") as ">[Htoa Hlpos]".
     (* Not exactly sure what this is *)
     iApply sim_tgt_rec_Waiting_raw.
     iSplit. { iIntros. iModIntro. iApply "HΠf". iSplit!. iIntros (??) "[% [% ?]]". simplify_eq. }
     iIntros (???) "!>". iApply "HΠf". iSplit!. iIntros (??[?[??]]). simplify_eq.
     iApply "Hσ". iSplit!.
-    iSplitR. { admit. }
-    iSplitL "Haa" => /=. { admit. }
+    iSplitL "Htoa". { done. }
+    iSplitR "Hlpos HΦ" => /=. { by rewrite dom_alter_L. } (* TODO: Another lucky find! *)
     iApply "HΦ". iSplit!.
-  Admitted.
-
+  Qed.
 
 (* rec_mapsto_update: *)
 (*   ∀ {Σ : gFunctors} {recGS0 : recGS Σ} (h : gmap loc val) (l : loc) (v v' : val), *)
