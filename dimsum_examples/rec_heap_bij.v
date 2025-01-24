@@ -1177,14 +1177,10 @@ Lemma heap_bij_inv_update hi hs li ls vi vs:
 Proof.
   iIntros  "[% [% [% [% [% [? [Ha [Hbij [??]]]]]]]]] [% [% ?]] ?".
   iDestruct (heap_bij_shared_lookup with "[$] [$]") as %?.
-  iExists _. iSplit!; [ | |..|done|done| | | ].
-  - by rewrite h_provs_heap_update.
-  - by rewrite h_provs_heap_update.
+  iExists _. iSplit!; [done|done| | |done|done|..].
   - apply heap_preserved_update; [done|]. rewrite hb_priv_s_lookup_None. naive_solver.
   - apply heap_preserved_update; [done|]. by apply: hb_disj.
   - by iApply (heap_in_bij_update with "[$]").
-  - by rewrite h_static_provs_heap_update.
-  - by rewrite h_static_provs_heap_update.
 Qed.
 
 Lemma heap_bij_inv_update_s l v hi hs hs' :
@@ -1196,8 +1192,7 @@ Proof.
   iDestruct (heap_bij_const_s_lookup with "[$] [$]") as %Hl1.
   iMod (heap_bij_update_const_s with "[$]") as "[? $]". iModIntro.
   iExists _. iFrame. repeat iSplit; try iPureIntro.
-  - rewrite dom_insert_L /= h_provs_heap_update.
-    move: Hl1 => /(elem_of_dom_2 _ _ _). set_solver.
+  - rewrite dom_insert_L /=. move: Hl1 => /(elem_of_dom_2 _ _ _). set_solver.
   - intros b Hb. apply hb_provs_i_update_const_s in Hb. naive_solver.
   - rewrite hb_priv_s_update_const_s. apply: heap_preserved_insert_const.
     apply heap_preserved_update; [|by simplify_map_eq].
@@ -1245,8 +1240,8 @@ Proof.
   { abstract set_solver. }
   iModIntro. iSplit; [|iSplit; iPureIntro; [by destruct ls.1, li.1|congruence]].
   iExists _. iFrame "Ha". iSplit!.
-  - rewrite h_provs_heap_alloc //. set_solver.
-  - rewrite h_provs_heap_alloc //=. move => b' /hb_provs_i_share. set_solver.
+  - set_solver.
+  - move => b' /hb_provs_i_share. set_solver.
   - rewrite hb_priv_s_share. apply heap_preserved_alloc; [|by simplify_map_eq].
     apply: heap_preserved_mono; [done|]. apply delete_subseteq.
   - apply heap_preserved_alloc; [done|]. apply eq_None_ne_Some_2 => ??.
@@ -1292,7 +1287,7 @@ Proof.
   iDestruct (heap_bij_const_s_lookup with "[$] [$]") as %?.
   iMod (heap_bij_update_const_s with "[$]") as "[Ha ?]". iModIntro.
   iExists _. iFrame "Ha". iSplit!.
-  - rewrite dom_insert_L h_provs_heap_free; [|done].
+  - rewrite dom_insert_L.
     have : ls.1 ∈ dom (hb_bij bij) by apply elem_of_dom.
     set_solver.
   - move => ? /hb_provs_i_update_const_s. eauto.
@@ -1316,13 +1311,9 @@ Proof.
   iIntros "%Hbs [% [% [% [% [% [? [Ha [Hbij [??]]]]]]]]] [%Hkind [% ?]]".
   iDestruct (heap_bij_shared_lookup with "[$] [$]") as %Hbij.
   iExists _. iFrame "Ha". iSplit!.
-  - rewrite h_provs_heap_free //.
-  - rewrite h_provs_heap_free //. by rewrite same_prov_kind_is_ProvBlock_iff.
   - apply heap_preserved_free; [done|]. apply hb_priv_s_lookup_None. naive_solver.
   - apply heap_preserved_free; [done|]. by apply: hb_disj.
   - by iApply heap_in_bij_free.
-  - rewrite h_static_provs_heap_free //. by eapply same_prov_kind_is_ProvBlock_iff.
-  - by rewrite h_static_provs_heap_free.
 Qed.
 
 Lemma heap_bij_inv_free_list hi hs hs' lis lss lis' lss':
@@ -1473,20 +1464,17 @@ Proof.
 Qed.
 
 Lemma heap_bij_inv_init bs :
-  map_Forall (λ p b, b ≠ ∅) bs →
   satisfiable (heap_bij_inv (heap_from_blocks bs) (heap_from_blocks bs) ∗ rec_heap_bij_init bs).
 Proof.
-  move => ?.
   apply: satisfiable_bmono; [apply heap_bij_init|].
   iIntros "[? #?]".
   unshelve iMod (heap_bij_alloc_const_i_big bs with "[$]") as "[? $]".
   { abstract (rewrite hb_shared_i_empty; set_solver). } { rewrite hb_provs_i_empty. set_solver. }
   iMod (heap_bij_alloc_const_s_big bs with "[$]") as "[? $]". { set_solver. }
   iModIntro. iExists _. iFrame "∗#". iSplit!.
-  - rewrite right_id_L dom_fmap_L h_provs_heap_from_blocks //.
+  - rewrite right_id_L dom_fmap_L //.
   - rewrite hb_provs_i_hb_update_const_s_big ?hb_provs_i_hb_update_const_i_big
-      ?hb_shared_s_hb_update_const_i_big ?hb_shared_s_empty ?hb_provs_i_empty ?right_id_L. 2: set_solver.
-    by rewrite h_provs_heap_from_blocks.
+      ?hb_shared_s_hb_update_const_i_big ?hb_shared_s_empty ?hb_provs_i_empty ?right_id_L //.
   - move => [??]/=? /hb_priv_s_lookup_Some/=. rewrite right_id_L. move => /lookup_fmap_Some[?[??]].
     rewrite lookup_gmap_uncurry. by simplify_option_eq.
   - rewrite right_id_L. move => [??]/=??. rewrite lookup_gmap_uncurry. by simplify_option_eq.
@@ -1932,12 +1920,11 @@ Qed.
 (** ** Adequacy *)
 
 Lemma rec_heap_bij_rec_closed hinit bs m :
-  map_Forall (λ p b, b ≠ ∅) bs →
   hinit ⊆ bs →
   let h := (heap_from_blocks bs) in
   trefines (rec_closed h (rec_heap_bij hinit m)) (rec_closed h m).
 Proof.
-  move => ? Hh h.
+  move => Hh h.
   apply tsim_implies_trefines => /= n.
   unshelve apply: tsim_remember. { simpl. exact (λ _
           '(σm1, (σf, σ1, (pp, _, r)), σc1)
@@ -2009,16 +1996,12 @@ Qed.
 Lemma rec_heap_bij_trefines_implies_ctx_refines fnsi fnss :
   dom fnsi = dom fnss →
   fd_static_vars <$> fnsi = fd_static_vars <$> fnss →
-  map_Forall (λ _ fn, Forall (λ z : Z, (0 < z)%Z) fn.*2) (fd_static_vars <$> fnss) →
   trefines (rec_mod fnsi) (rec_heap_bij (fds_init_heap (fd_static_vars <$> fnss)) (rec_mod fnss)) →
   rec_ctx_refines fnsi fnss.
 Proof.
-  move => Hdom Hs ? Href C HC. rewrite /rec_syn_link map_difference_union_r (map_difference_union_r fnss).
+  move => Hdom Hs Href C HC. rewrite /rec_syn_link map_difference_union_r (map_difference_union_r fnss).
   etrans. 2: {
-    apply (rec_heap_bij_rec_closed (fds_init_heap (fd_static_vars <$> fnss ∪ C ∖ fnss))); [|done].
-    apply fds_init_heap_not_empty. rewrite map_fmap_union. apply map_Forall_union_2; [done|].
-    rewrite map_Forall_fmap. move => ?? /lookup_difference_Some[??]. by apply: HC.
-  }
+    by apply (rec_heap_bij_rec_closed (fds_init_heap (fd_static_vars <$> fnss ∪ C ∖ fnss))). }
   rewrite !map_fmap_union Hs. rewrite {1}(map_difference_eq_dom_L C fnsi fnss) //.
   apply seq_map_mod_trefines. { apply _. } { apply _. }
   etrans. { apply rec_syn_link_refines_link. apply map_disjoint_difference_r'. }
