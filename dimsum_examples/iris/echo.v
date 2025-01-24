@@ -827,7 +827,9 @@ Section sim_spec.
       }})}})}}) -∗
     (* REVIEW: This is an arbitrary Φ, because danger? *)
     TGT getc_spec_heap @ Π {{ Φ }}.
-  Proof. Admitted.
+  Proof.
+
+  Admitted.
 
   (* TODO 3 - FIXME: This is probably not possible, exactly *)
   Definition getc_fn_spec_strong (es : list expr) (POST : (val → iProp Σ) → iProp Σ) : iProp Σ :=
@@ -838,7 +840,7 @@ Section sim_spec.
   Definition getc_fn_spec_weak (es : list expr) (POST : (val → iProp Σ) → iProp Σ) : iProp Σ :=
     let lpos := (ProvStatic "read" 0, 0) in
     ∃ (pos: Z), ⌜es = []⌝ ∗ lpos ↦ pos ∗
-    POST (λ v, ⌜v = ValNum pos⌝ ∗ lpos ↦ (pos + 1)).
+    POST (λ v, ⌜v = ValNum pos⌝).
 
   Lemma sim_getc_heap_pure fns Π :
     rec_fn_auth fns -∗
@@ -850,8 +852,38 @@ Section sim_spec.
       ∃ v h'', ⌜σ = (getc_spec_heap, tt)⌝ ∗
     POST (ERReturn v h'') _ σ0 ({{ _ Πx,
       ⌜Πx = Π⌝}})}})}})}}) -∗
-    rec_fn_spec_hoare Tgt Π "getc" getc_fn_spec_weak.
-  Proof. Admitted.
+    rec_fn_spec_hoare Tgt Π "getc" getc_fn_spec_strong.
+  Proof.
+    iIntros "#Hfns #Hf HΠ" (es Φ) "HΦ". iDestruct "HΦ" as (pos ->) "[Hlpos HΦ]".
+    iApply (sim_tgt_rec_Call_external with "[$]").
+    (* We relate the points to predicates to the heap *)
+    iIntros (???) "#?Htoa Haa !>".
+    iIntros (??) "[% [% Hσ]]". subst. iApply "HΠ" => /=. iSplit!. iIntros (??) "[-> HΠi]".
+
+    (* Am I here splitting the heap? *)
+    iMod (mstate_var_alloc unit) as (γ) "?".
+    iMod (mstate_var_split γ tt with "[$]") as "[Hγ ?]".
+    pose (Hspec := SpecGS γ).
+
+    iApply (sim_gen_expr_intro _ tt with "[Hγ]"); simpl; [done..|].
+    iApply sim_getc_spec_heap_pure => /=. iIntros (??). iDestruct 1 as (????) "HC". subst.
+    iApply "HΠi". iSplit!. iIntros (??) "[% [% HΠr]]". simplify_eq/=.
+    iApply "HC".
+    iExists (_).
+    do 3 (iSplit; [done|]). iSplit. { iApply (rec_mapsto_lookup with "Htoa Hlpos"). }
+    iIntros (??). iDestruct 1 as (??) "HC".
+    iApply "HΠr". iSplit!. iIntros (??) "[% HΠf]". simplify_eq.
+    (* TODO: This was just pure luck that I can put it here xD *)
+    iPoseProof (rec_mapsto_update with "Htoa Hlpos") as ">[Htoa Hlpos]".
+    (* Not exactly sure what this is *)
+    iApply sim_tgt_rec_Waiting_raw.
+    iSplit. { iIntros. iModIntro. iApply "HΠf". iSplit!. iIntros (??) "[% [% ?]]". simplify_eq. }
+    iIntros (???) "!>". iApply "HΠf". iSplit!. iIntros (??[?[??]]). simplify_eq.
+    iApply "Hσ". iSplit!.
+    iSplitL "Htoa". { done. }
+    iSplitR "Hlpos HΦ" => /=. { by rewrite dom_alter_L. }
+    iApply "HΦ". iSplit!.
+Qed.
 
 End sim_spec.
 
