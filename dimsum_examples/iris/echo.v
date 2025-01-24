@@ -818,7 +818,7 @@ Section sim_spec.
            ⌜(h_heap h) !! ((ProvStatic "read" 0), 0) = Some (ValNum v)⌝ ∗
       (* Switch back *)
     switch Π' ({{ κ σ POST,
-      (* This is optional event, REVIEW: is this related  *)
+      (* This is optional event, REVIEW: is this related to Π *)
       ⌜κ = (Some (Outgoing, ERReturn (ValNum v) (heap_update h ((ProvStatic "read" 0), 0) (ValNum (v + 1)))))⌝ ∗
       (* So what does this mean? *)
       ⌜σ = (getc_spec_heap, tt)⌝ ∗
@@ -828,10 +828,27 @@ Section sim_spec.
     (* REVIEW: This is an arbitrary Φ, because danger? *)
     TGT getc_spec_heap @ Π {{ Φ }}.
   Proof.
+    iDestruct 1 as "HC".
+    unfold getc_spec_heap at 2. rewrite unfold_forever -/getc_spec_heap.
+    rewrite /TReceive bind_bind bind_bind.
+    iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>".
+    rewrite bind_bind. setoid_rewrite bind_ret_l.
+    iApply (sim_gen_TVis with "[-]").
+    (* Introducing arbitrary state *)
+    iIntros ([]) "Hs !>".
+    iIntros (??) "[% [% _]]". subst.
+    iApply "HC". iSplit!. iIntros (??).
+    iDestruct 1 as (?????) "HC". subst.
+    iApply (sim_gen_expr_intro _ tt with "[Hs]"); simpl; [done..|].
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAll with "[-]"). iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    iApply (sim_gen_TVis with "[-]"). iIntros ([]) "? !>".
+    iIntros (??) "[% [% _]]". subst. iApply "HC". iSplit!.
+  Qed.
 
-  Admitted.
-
-  (* TODO 3 - FIXME: This is probably not possible, exactly *)
+  (* TODO 3 *)
   Definition getc_fn_spec_strong (es : list expr) (POST : (val → iProp Σ) → iProp Σ) : iProp Σ :=
     let lpos := (ProvStatic "read" 0, 0) in
     ∃ (pos: Z), ⌜es = []⌝ ∗ lpos ↦ pos ∗
@@ -870,11 +887,14 @@ Section sim_spec.
     iApply "HΠi". iSplit!. iIntros (??) "[% [% HΠr]]". simplify_eq/=.
     iApply "HC".
     iExists (_).
+    (* iDestruct (rec_mapsto_lookup with "Htoa Hlpos") as "%H". *)
+    (* FIXME REVIEW: Why does iSplit! not duplicate the context *)
+    (* iSplit!. *)
     do 3 (iSplit; [done|]). iSplit. { iApply (rec_mapsto_lookup with "Htoa Hlpos"). }
     iIntros (??). iDestruct 1 as (??) "HC".
     iApply "HΠr". iSplit!. iIntros (??) "[% HΠf]". simplify_eq.
-    (* TODO: This was just pure luck that I can put it here xD *)
-    iPoseProof (rec_mapsto_update with "Htoa Hlpos") as ">[Htoa Hlpos]".
+    (* TODO REVIEW: What Exactly needs to hold for this to work? *)
+    iPoseProof ((rec_mapsto_update _ _ _ (pos + 1)) with "Htoa Hlpos") as ">[Htoa Hlpos]".
     (* Not exactly sure what this is *)
     iApply sim_tgt_rec_Waiting_raw.
     iSplit. { iIntros. iModIntro. iApply "HΠf". iSplit!. iIntros (??) "[% [% ?]]". simplify_eq. }
@@ -884,6 +904,8 @@ Section sim_spec.
     iSplitR "Hlpos HΦ" => /=. { by rewrite dom_alter_L. }
     iApply "HΦ". iSplit!.
 Qed.
+
+(* TODO 4: Now do it with private state *)
 
 End sim_spec.
 
