@@ -127,7 +127,7 @@ Proof.
     t ≡ retOne_spec ∧
     e = Waiting false ∧
     f = retOne_prog). }
-  { split!. }. { done. }.
+  { split!. } { done. }
   move => n _ Hloop [???] [??] [??] /=. destruct!/=.
   (* Step in implementation to introduce arguments *)
   tstep_i.
@@ -251,7 +251,7 @@ Proof.
     t ≡ Spec.forever echo_spec_body ∧
     e = expr_fill K ((Call (Val (ValFn "echo"))) (Val <$> [])) ∧
     f = echo_prog). }
-  { eexists [ReturnExtCtx false]. split!. }. { done. }.
+  { eexists [ReturnExtCtx false]. split!. } { done. }
   move => n _ Hloop [???] [??] [ctx[?[??]]] /=. destruct!/=.
   go_s.
   tstep_s. eexists. go.         (* NOTE: Introducing Heap *)
@@ -752,7 +752,7 @@ Section sim_spec.
     TAssume ((h_heap h) !! ((ProvStatic "retOneMore" 0), 0) = Some (ValNum v));;
     TVis (Outgoing, ERReturn (ValNum v) (heap_update h ((ProvStatic "retOneMore" 0), 0) (ValNum (v + 1))))).
 
-  (* NOTE TODO 0b: Prove that this spec is satisfied *)
+  (* TODO 0b: Prove that this spec is satisfied *)
 
   Lemma retOne_refines_retOneMore_spec_direct :
     trefines (rec_mod retOneMore_prog) (spec_mod retOneMore_spec tt).
@@ -762,7 +762,7 @@ Section sim_spec.
       t ≡ retOneMore_spec ∧
       e = Waiting false ∧
       f = retOneMore_prog). }
-    { split!. }. { done. }.
+    { split!. } { done. }
     move => n _ Hloop [???] [??] [??] /=. destruct!/=.
     (* Step in implementation to introduce arguments *)
     tstep_i.
@@ -963,12 +963,9 @@ Section sim_spec.
     iApply "HΦ". iSplit!.
   Admitted.
 
-  (* TODO: I am struggling with the heap here. The fn_spec, explicitely owns the memory location and
-     gives it back *)
+  (* TODO: I am struggling with the heap here. The fn_spec, explicitely owns the memory location and gives it back *)
   (* Somehow I loos the heap update somewhere here *)
-  (* If I don"t have a local function getc and my module is linked with a getc satisfying getc_spec2
-     then, getc satisfies the hoare spec.
-     *)
+  (* If I don't have a local function getc and my module is linked with a getc satisfying getc_spec2 then, getc satisfies the hoare spec. *)
   (* TODO NOTE: Are the statements complimentary? Do I know any authority from knowing the pointer? *)
   Lemma sim_getc3 fns Π :
     (* I have some capabilities with regards to function names? *)
@@ -1015,12 +1012,6 @@ Section sim_spec.
     iSplitR "Hlpos HΦ" => /=. { by rewrite dom_alter_L. } (* TODO: Another lucky find! *)
     iApply "HΦ". iSplit!.
   Qed.
-
-(* rec_mapsto_update: *)
-(*   ∀ {Σ : gFunctors} {recGS0 : recGS Σ} (h : gmap loc val) (l : loc) (v v' : val), *)
-(*     rec_mapsto_auth h -∗ l ↦ v ==∗ rec_mapsto_auth (alter (λ _ : val, v') l h) ∗ l ↦ v' *)
-
-(* TODO REVIEW: What did I actually prove ? *)
 
 End sim_spec.
 
