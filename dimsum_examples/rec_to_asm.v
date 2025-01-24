@@ -1152,9 +1152,7 @@ Proof.
   iMod (r2a_heap_to_shared' with "[$]") as "[Hauth #Hs1]".
   iModIntro. iFrame "Hs1".
   iExists _. iFrame. iSplit!.
-  - rewrite h_provs_heap_alloc // dom_insert_L.
-    rewrite h_provs_heap_alloc // in Hdom.
-    set_solver.
+  - set_solver.
   - move => ?? /r2a_rh_constant_Some/lookup_insert_Some[[??]//|[??]].
     apply Hpres. by apply r2a_rh_constant_Some.
   - rewrite r2a_rh_shared_insert. by iApply big_sepM_insert_2.
@@ -1291,8 +1289,8 @@ Lemma r2a_heap_inv_add_blocks h ps :
   r2a_heap_inv h -∗
   r2a_heap_inv (heap_add_blocks h ps).
 Proof.
-  iDestruct 1 as (???) "[??]". iExists _. iFrame.
-  iPureIntro. split; [|done]. unfold h_provs in *. set_solver.
+  iDestruct 1 as (???) "[??]". iExists _. rewrite h_static_provs_heap_add_blocks.
+  iFrame. iPureIntro. split; [|done]. set_solver.
 Qed.
 
 Lemma r2a_res_init' mem rh provs f2i :
