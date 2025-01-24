@@ -789,10 +789,9 @@ Section sim_spec.
     by apply Hloop.
   Qed.
 
-  (* FIXME TODO 1: Write a Spec Program for getc returning increasing numbers *)
-
-  (* REVIEW: Does this seem right to you? How do I express statements about heap locations. *)
-  Definition getc_spec2 : spec rec_event unit void :=
+  (* TODO 1: Write a Spec Program for getc returning increasing numbers *)
+  (* This Spec is quite specific, in order to reflect the combined program *)
+  Definition getc_spec_heap : spec rec_event unit void :=
     Spec.forever(
     (* Incoming call of getc *)
     '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
@@ -804,214 +803,55 @@ Section sim_spec.
     (* Return old position, update the location to old position, and the position is updated *)
     TVis (Outgoing, ERReturn (ValNum v) (heap_update h ((ProvStatic "read" 0), 0) (ValNum (v + 1))))).
 
-  (* FIXME TODO 2: Prove a separation logic tuple for it - analogous to sim_locle_spec2 (in ./memmove) *)
+  (* TODO 2: Prove a separation logic tuple for it - analogous to sim_locle_spec2 (in ./memmove) *)
 
-  (* REVIEW NOTE: What does this lemma state:
-     If someone that switches into the module? with an incoming call of getc, and ownership of read
-     will get a switch back with an increased heap.*)
-  Lemma sim_getc_spec2 `{!specGS} Π Φ :
+  Lemma sim_getc_spec_heap_pure `{!specGS} Π Φ :
+    (* Someone is switching to me *)
     switch Π ({{ κ σ POST,
-      (* Precondition *)
+      (* REVIEW: Here, think about do I have to prove this or do I get it *)
       ∃ f vs h, ⌜κ = Some (Incoming, ERCall f vs h)⌝ ∗
-      (* Now this is already concerning me - what exactly is the POST here *)
+      (* Here, a bit of intuition is missing for why it goes into the POST *)
     POST Tgt _ (spec_trans _ unit) ({{ σ' Π',
-      (* This is descrbibing "my" switch, i.e., assumption *)
+      (* REVIEW: Here, think about do I have to prove this or do I get it *)
       ∃ v, ⌜σ' = σ⌝ ∗ ⌜f = "getc"⌝ ∗ ⌜vs = []⌝ ∗
-             ⌜(h_heap h) !! ((ProvStatic "read" 0), 0) = Some (ValNum v)⌝ ∗
-      (* Then I will switch back  *)
+           (* REVIEW: Put a points-to here instead? *)
+           ⌜(h_heap h) !! ((ProvStatic "read" 0), 0) = Some (ValNum v)⌝ ∗
+      (* Switch back *)
     switch Π' ({{ κ σ POST,
+      (* This is optional event, REVIEW: is this related  *)
       ⌜κ = (Some (Outgoing, ERReturn (ValNum v) (heap_update h ((ProvStatic "read" 0), 0) (ValNum (v + 1)))))⌝ ∗
       (* So what does this mean? *)
-      ⌜σ = (getc_spec2, tt)⌝ ∗
+      ⌜σ = (getc_spec_heap, tt)⌝ ∗
       (* Looks like ghost things *)
       spec_state ()
       }})}})}}) -∗
-    (* REVIEW: This is an arbitrary Φ, because loop? *)
-    TGT getc_spec2 @ Π {{ Φ }}.
-  Proof.
-    iDestruct 1 as "HC".
-    (* NOTE: Only step through spec - initial assumptions*)
-    unfold getc_spec2 at 2. rewrite unfold_forever -/getc_spec2.
-    rewrite /TReceive bind_bind bind_bind.
-    (* Incoming Call - TODO: Here I change from exists to forall - Because we are not trying to prove refinement? *)
-    iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>".
-    rewrite bind_bind. setoid_rewrite bind_ret_l.
-    (* NOTE: Here now, first time that switch matters - we have the visible event of the function call *)
-    iApply (sim_gen_TVis with "[-]").
-    (* Introducing arbitrary state *)
-    iIntros ([]) "Hs !>".
-    iIntros (??) "[% [% _]]". subst.
-    (* NOTE Here now Π as a goal *)
-    (* TODO: What does it mean to apply a switch *)
-    iApply "HC". iSplit!. iIntros (??).
-    iDestruct 1 as (?????) "HC". subst.
-    (* TODO: This step is super unclear to me *)
-    iApply (sim_gen_expr_intro _ tt with "[Hs]"); simpl; [done..|].
-    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
-    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
-    rewrite bind_bind. iApply (sim_tgt_TAll with "[-]"). iIntros "!>".
-    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
-    (* TODO: Here it seems like a universal quantifier gets switched with existential *)
-    iApply (sim_gen_TVis with "[-]"). iIntros ([]) "? !>".
-    iIntros (??) "[% [% _]]". subst. iApply "HC". iSplit!.
-  Qed.
+    (* REVIEW: This is an arbitrary Φ, because danger? *)
+    TGT getc_spec_heap @ Π {{ Φ }}.
+  Proof. Admitted.
 
-  (* NOTE: This is the same as sim_getc_spec2 but using a points-to predicate for heap *)
-  (* TODO FIXME: How is knowledge of heap and points-to
-     related??? *)
-  Lemma sim_getc_spec3 `{!specGS} Π Φ :
-    switch Π ({{ κ σ POST,
-      ∃ f vs h, ⌜κ = Some (Incoming, ERCall f vs h)⌝ ∗
-    POST Tgt _ (spec_trans _ unit) ({{ σ' Π',
-      ∃ v, ⌜σ' = σ⌝ ∗ ⌜f = "getc"⌝ ∗ ⌜vs = []⌝ ∗
-           (* REVIEW: Points-to *)
-           ((ProvStatic "read" 0), 0) ↦ (ValNum v) ∗
-    switch Π' ({{ κ σ POST,
-      ⌜κ = (Some (Outgoing, ERReturn (ValNum v) (heap_update h ((ProvStatic "read" 0), 0) (ValNum (v + 1)))))⌝ ∗
-      ⌜σ = (getc_spec2, tt)⌝ ∗
-      (* Maybe I have to reason here that I get it back? (The points-to) *)
-      ((ProvStatic "read" 0), 0) ↦ (ValNum (v + 1)) ∗
-      spec_state ()
-      }})}})}}) -∗
-    TGT getc_spec2 @ Π {{ Φ }}.
-  Proof.
-  (* TODO - not sure anymore if I can prove this, because I don't know how to deal with properties of the
-     heap without loosing my points-to :/ *)
-    iDestruct 1 as "HC".
-    (* NOTE: Only step through spec - initial assumptions*)
-    unfold getc_spec2 at 2. rewrite unfold_forever -/getc_spec2. rewrite /TReceive bind_bind bind_bind.
-    (* Incoming Call - TODO: Here I change from exists to forall - Because we are not trying to prove refinement? *)
-    iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>".
-    rewrite bind_bind. setoid_rewrite bind_ret_l.
-    (* NOTE: Here now, first time that switch matters - we have the visible event of the function call *)
-    iApply (sim_gen_TVis with "[-]").
-    (* Introducing arbitrary state *)
-    iIntros ([]) "Hs !>".
-    iIntros (??) "[% [% _]]". subst.
-    (* NOTE Here now Π as a goal *)
-    (* TODO: What does it mean to apply a switch *)
-    iApply "HC". iSplit!. iIntros (??).
-    iDestruct 1 as (????) "[Hv HC]". subst.
-    (* TODO: This step is super unclear to me *)
-    iApply (sim_gen_expr_intro _ tt with "[Hs]"); simpl; [done..|].
-    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
-    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
-    rewrite bind_bind. iApply (sim_tgt_TAll with "[-]"). iIntros "!>".
-    rewrite bind_bind.
-    (* FIXME REVIEW: This is ridiculous, why can't I split this up *)
-    iApply (sim_tgt_TAssume with "[HC]"); [admit|]. iIntros "!>".
-    (* TODO: Here it seems like a universal quantifier gets switched with existential *)
-    iApply (sim_gen_TVis with "[-]"). iIntros ([]) "? !>".
-    iIntros (??) "[% [% _]]". subst. iApply "HC". iSplit!.
-  Admitted.
-
-  (* FIXME TODO 3: Do whatever this is - analogous to sim_locle2 (in ./memmove ) *)
-  (* I think this spec is faulty! - I don't think I can prove ownership of the position *)
-  Definition getc_fn_spec (es : list expr) (POST : (val → iProp Σ) → iProp Σ) : iProp Σ :=
+  (* TODO 3 - FIXME: This is probably not possible, exactly *)
+  Definition getc_fn_spec_strong (es : list expr) (POST : (val → iProp Σ) → iProp Σ) : iProp Σ :=
     let lpos := (ProvStatic "read" 0, 0) in
     ∃ (pos: Z), ⌜es = []⌝ ∗ lpos ↦ pos ∗
     POST (λ v, ⌜v = ValNum pos⌝ ∗ lpos ↦ (pos + 1)).
 
-  (* Prove that getc satisfies hoare triple, if linked with the getc_spec2 ts? *)
-  Lemma sim_getc2 fns Π :
+  Definition getc_fn_spec_weak (es : list expr) (POST : (val → iProp Σ) → iProp Σ) : iProp Σ :=
+    let lpos := (ProvStatic "read" 0, 0) in
+    ∃ (pos: Z), ⌜es = []⌝ ∗ lpos ↦ pos ∗
+    POST (λ v, ⌜v = ValNum pos⌝ ∗ lpos ↦ (pos + 1)).
+
+  Lemma sim_getc_heap_pure fns Π :
     rec_fn_auth fns -∗
-    (* Getc is external? *)
     "getc" ↪ None -∗
-    (* REVIEW: Switching to a linked module? *)
     switch_link Tgt Π ({{ σ0 POST,
       ∃ vs h',
-    POST (ERCall "getc" vs h') (spec_trans _ _) (getc_spec2, tt) ({{ _ Πr,
+    POST (ERCall "getc" vs h') (spec_trans _ _) (getc_spec_heap, tt) ({{ _ Πr,
     switch_link Tgt Πr ({{ σ POST,
-      ∃ v h'', ⌜σ = (getc_spec2, tt)⌝ ∗
+      ∃ v h'', ⌜σ = (getc_spec_heap, tt)⌝ ∗
     POST (ERReturn v h'') _ σ0 ({{ _ Πx,
       ⌜Πx = Π⌝}})}})}})}}) -∗
-    rec_fn_spec_hoare Tgt Π "getc" getc_fn_spec.
-  Proof.
-    iIntros "#Hfns #Hf HΠ" (es Φ) "HΦ". iDestruct "HΦ" as (pos ->) "[Hlpos HΦ]".
-
-    iApply (sim_tgt_rec_Call_external with "[$]").
-    (* We relate the points to predicates to the heap *)
-    iIntros (???) "#?Htoa Haa !>".
-    (* Now i care about the switch, does that mean I am "executing" a different module *)
-    iIntros (??) "[% [% Hσ]]". subst.
-
-    iApply "HΠ" => /=. iSplit!.
-    (* NOTE: I do this here because of the weird ≈{ ..  }≈>... *)
-    iIntros (??) "[-> HΠi]".
-    (* HΠi is the incoming switch again. *)
-    (* TODO: No idea what's going on here... *)
-    iMod (mstate_var_alloc unit) as (γ) "?".
-    iMod (mstate_var_split γ tt with "[$]") as "[Hγ ?]".
-    pose (Hspec := SpecGS γ).
-    iApply (sim_gen_expr_intro _ tt with "[Hγ]"); simpl; [done..|].
-    iApply sim_getc_spec2 => /=. iIntros (??). iDestruct 1 as (????) "HC". subst.
-    iApply "HΠi". iSplit!. iIntros (??) "[% [% HΠr]]". simplify_eq/=.
-    iApply "HC".
-    iExists (_). do 3 (iSplit; [done|]).
-    iSplitL "Hlpos Htoa".
-    (* FIXME: What do I have to do here to make this work? *)
-    (* I give up a lot of things here :/ *)
-    { iApply (rec_mapsto_lookup with "[$] [$]"). }
-    iIntros (??). iDestruct 1 as (??) "HC".
-    iApply "HΠr". iSplit!. iIntros (??) "[% HΠf]". simplify_eq.
-    iApply sim_tgt_rec_Waiting_raw.
-    iSplit. { iIntros. iModIntro. iApply "HΠf". iSplit!. iIntros (??) "[% [% ?]]". simplify_eq. }
-    iIntros (???) "!>". iApply "HΠf". iSplit!. iIntros (??[?[??]]). simplify_eq.
-    iApply "Hσ". iSplit!.
-    iSplitR. admit.
-    iSplitL "Haa". simpl. admit.
-    iApply "HΦ". iSplit!.
-  Admitted.
-
-  (* TODO: I am struggling with the heap here. The fn_spec, explicitely owns the memory location and gives it back *)
-  (* Somehow I loos the heap update somewhere here *)
-  (* If I don't have a local function getc and my module is linked with a getc satisfying getc_spec2 then, getc satisfies the hoare spec. *)
-  (* TODO NOTE: Are the statements complimentary? Do I know any authority from knowing the pointer? *)
-  Lemma sim_getc3 fns Π :
-    (* I have some capabilities with regards to function names? *)
-    rec_fn_auth fns -∗
-    (* Getc is external *)
-    "getc" ↪ None -∗
-    (* TODO: Switching to a linked module? *)
-    switch_link Tgt Π ({{ σ0 POST,
-      ∃ vs h,
-    POST (ERCall "getc" vs h) (spec_trans _ _) (getc_spec2, tt) ({{ _ Πr,
-    switch_link Tgt Πr ({{ σ POST,
-      ∃ v h', ⌜σ = (getc_spec2, tt)⌝ ∗
-    POST (ERReturn v h') _ σ0 ({{ _ Πx,
-      ⌜Πx = Π⌝}})}})}})}}) -∗
-    rec_fn_spec_hoare Tgt Π "getc" getc_fn_spec.
-  Proof.
-    iIntros "#Hfns #Hf HΠ" (es Φ) "HΦ". iDestruct "HΦ" as (pos ->) "[Hlpos HΦ]".
-    iApply (sim_tgt_rec_Call_external with "[$]").
-    (* We relate the points to predicates to the heap *)
-    iIntros (???) "#?Htoa Haa !>".
-    (* Now i care about the switch, does that mean I am "executing" a different module *)
-    iIntros (??) "[% [% Hσ]]". subst. iApply "HΠ" => /=. iSplit!. iIntros (??) "[-> HΠi]".
-    (* HΠi is the incoming switch again. *)
-    (* TODO: No idea what's going on here... *)
-    iMod (mstate_var_alloc unit) as (γ) "?".
-    iMod (mstate_var_split γ tt with "[$]") as "[Hγ ?]".
-    pose (Hspec := SpecGS γ).
-
-    iApply (sim_gen_expr_intro _ tt with "[Hγ]"); simpl; [done..|].
-    iApply sim_getc_spec3 => /=. iIntros (??). iDestruct 1 as (????) "HC". subst. (* HC is the switch back? *)
-    iApply "HΠi". iSplit!. iIntros (??) "[% [% HΠr]]". simplify_eq/=.
-    iApply "HC".
-    iExists (_). iSplit!. iSplitL "Hlpos"; [done|].
-    iIntros (??). iDestruct 1 as (??) "[Hlpos HC]".
-    iApply "HΠr". iSplit!. iIntros (??) "[% HΠf]". simplify_eq.
-    (* TODO: This was just pure luck that I can put it here xD *)
-    iPoseProof (rec_mapsto_update with "Htoa Hlpos") as ">[Htoa Hlpos]".
-    (* Not exactly sure what this is *)
-    iApply sim_tgt_rec_Waiting_raw.
-    iSplit. { iIntros. iModIntro. iApply "HΠf". iSplit!. iIntros (??) "[% [% ?]]". simplify_eq. }
-    iIntros (???) "!>". iApply "HΠf". iSplit!. iIntros (??[?[??]]). simplify_eq.
-    iApply "Hσ". iSplit!.
-    iSplitL "Htoa". { done. }
-    iSplitR "Hlpos HΦ" => /=. { by rewrite dom_alter_L. } (* TODO: Another lucky find! *)
-    iApply "HΦ". iSplit!.
-  Qed.
+    rec_fn_spec_hoare Tgt Π "getc" getc_fn_spec_weak.
+  Proof. Admitted.
 
 End sim_spec.
 
