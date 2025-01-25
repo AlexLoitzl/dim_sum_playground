@@ -98,11 +98,26 @@ Arguments small_to_type_bij _ {_} _.
 
 Global Hint Mode Shrink + : typeclass_instances.
 
-Ltac solve_shrink :=
+Create HintDb shrink_db discriminated.
+Hint Constants Transparent : shrink_db.
+Ltac solve_shrink_direct :=
   lazy; refine (MkShrink _ _ (λ x, x) (λ x, x) (λ x, eq_refl) (λ x, eq_refl)).
+Hint Extern 100 (Shrink _) => solve_shrink_direct : shrink_db.
+(** solve_shrink_direct can be very slow so it should not be triggered
+by normal typeclass search, only by solve_shrink *)
+Ltac solve_shrink := typeclasses eauto with typeclass_instances shrink_db.
 
 Global Instance unitUR_shrink : Shrink unitUR.
 Proof. solve_shrink. Qed.
+
+Global Instance prod_shrink (x y : Type) `{!Shrink x} `{!Shrink y} : Shrink (prod x y).
+Proof.
+  refine (MkShrink _ (small_car x * small_car y)
+            (λ v, (type_to_small x v.1, type_to_small y v.2))
+            (λ v, (small_to_type x v.1, small_to_type y v.2)) _ _) => -[??] /=.
+  - by rewrite !type_to_small_bij.
+  - by rewrite !small_to_type_bij.
+Qed.
 
 (** * [uPred_small] *)
 Record uPred_small (M : ucmra) `{!Shrink M} : TypeBelowState := UPred_small {
