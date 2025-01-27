@@ -1079,16 +1079,12 @@ Proof.
     2: { apply eq_None_ne_Some => ??. apply Hi2. by eapply (lookup_heap_Some_elem_of_h_provs (_,_)). }
     2: { apply eq_None_ne_Some => ??. apply Hi1. by eapply (lookup_heap_Some_elem_of_h_provs (_,_)). }
     iSplit.
-    + iPureIntro. rewrite !list_to_map_lookup_is_Some. f_equiv => ?. rewrite !elem_of_list_fmap.
-      f_equiv => ?. naive_solver.
-    + iIntros (?? [?[??]]%elem_of_list_to_map_2%elem_of_list_fmap).
-      iIntros ([?[??]]%elem_of_list_to_map_2%elem_of_list_fmap).
-      by simplify_eq.
+    + iPureIntro. by rewrite !lookup_kmap.
+    + iIntros (??). rewrite !lookup_kmap. iIntros ([??]%zero_block_lookup_Some [??]%zero_block_lookup_Some). naive_solver.
   - have ? : p1 ≠ l1.1. { contradict H. apply elem_of_hb_provs_i. naive_solver. }
     iDestruct ("Hh" with "[//]") as "[Hh1 Hh2]".
-    rewrite !lookup_union_r. 1: by iSplit.
-    all: apply not_elem_of_list_to_map_1;
-        move => /elem_of_list_fmap[[[??]?] [?/elem_of_list_fmap[?[??]]]]; simplify_eq/=.
+    rewrite !lookup_union_r ?lookup_kmap_None. 1: by iSplit.
+    all: move => ??; naive_solver.
 Qed.
 
 Lemma heap_in_bij_alloc_r l2 hi hs n bij:
@@ -1097,9 +1093,7 @@ Lemma heap_in_bij_alloc_r l2 hi hs n bij:
   heap_in_bij bij hi (heap_alloc hs l2 n).
 Proof.
   iIntros (?) "Hh". iIntros (????). rewrite lookup_union_r. 1: by iApply "Hh".
-  apply not_elem_of_list_to_map_1.
-  move => /elem_of_list_fmap[[??][?/elem_of_list_fmap[?[??]]]]; simplify_eq/=.
-  naive_solver.
+  apply lookup_kmap_None; [apply _|]. naive_solver.
 Qed.
 
 Lemma heap_in_bij_free hi hs l1 l2 bij:
@@ -2068,7 +2062,7 @@ Proof.
   tstep_i. tstep_i. split!.
   tstep_s.
   tstep_s => ???. simplify_eq. rewrite Hl h_block_lookup /=. simplify_map_eq.
-  rewrite heap_alloc_h_lookup /=; [|done|lia] => ?. simplify_eq.
+  rewrite fmap_Some => -[?[??]]. simplify_eq.
   tstep_s => ?[? [? ?]]. simplify_eq.
   apply Hret; [done|].
   iSatMonoBupd.

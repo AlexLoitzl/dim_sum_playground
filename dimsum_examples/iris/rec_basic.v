@@ -185,13 +185,10 @@ Section lemmas.
   Proof.
     iIntros (Ha) "Hh".
     iMod (rec_mapsto_alloc_big with "Hh") as "[$ ?]".
-    { apply map_disjoint_list_to_map_l. apply Forall_forall => -[??] /= /elem_of_list_fmap[?[??]].
-      simplify_eq. apply eq_None_not_Some => /lookup_heap_is_Some_elem_of_h_provs/=.
-      unfold heap_is_fresh in *. naive_solver. }
-    rewrite big_sepM_list_to_map. 2: {
-      apply NoDup_alt => ???. do 2 setoid_rewrite list_lookup_fmap_Some.
-      setoid_rewrite lookup_seqZ => ??. naive_solver lia. }
-    by rewrite big_sepL_fmap.
+    { apply map_disjoint_spec => ??? /lookup_kmap_Some[?[??]] /lookup_heap_Some_elem_of_h_provs?.
+      simplify_eq. destruct Ha. naive_solver. }
+    iModIntro. rewrite big_sepM_kmap_intro big_sepM_zero_block.
+    rewrite /offset_loc. destruct Ha as [?[->?]]. by setoid_rewrite Z.add_0_l.
   Qed.
   Local Opaque heap_alloc_h.
 
@@ -268,14 +265,15 @@ Section lemmas.
     iModIntro. iFrame. iSplit!.
     - move => ?? /lookup_insert_Some. naive_solver lia.
     - move => ?? /lookup_insert_Some[[??]|[??]] l' ?; simplify_eq.
-      + rewrite dom_union_L elem_of_union dom_list_to_map_L.
-        set_unfold. setoid_rewrite elem_of_seq.
-        split; move => ?; destruct!/=.
+      + rewrite dom_union_L elem_of_union dom_kmap_L elem_of_map elem_of_dom.
+        setoid_rewrite elem_of_dom_zero_block.
+        split => ?; destruct!/=.
         * lia.
-        * revert select (_ ∈ _) => /elem_of_dom/lookup_heap_is_Some_elem_of_h_provs. congruence.
-        * left.  eexists (l +ₗ l'.2, _) => /=. split. { apply loc_eq. split!. lia. }
-          eexists _. split; [done|]. eexists (Z.to_nat l'.2). lia.
-      + rewrite dom_union_L elem_of_union dom_list_to_map_L.
+        * revert select (is_Some _) => /lookup_heap_is_Some_elem_of_h_provs. congruence.
+        * left. eexists (l'.2) => /=. split. { apply loc_eq. split!. }
+          lia.
+      + rewrite dom_union_L elem_of_union dom_kmap_L elem_of_map.
+        setoid_rewrite elem_of_dom_zero_block.
         split; move => ?; destruct!/=. 1: set_solver. all: naive_solver lia.
   Qed.
   Local Opaque heap_alloc_h.
