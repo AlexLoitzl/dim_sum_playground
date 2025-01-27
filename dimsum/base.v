@@ -1314,17 +1314,23 @@ Section sep_map.
     ([∗ map] k↦y ∈ map_seq 0 xs, Φ k y) ⊣⊢ [∗ list] i↦x∈xs, Φ i x.
   Proof. apply big_sepM_map_seq. Qed.
 
-  Lemma big_sepM_kmap_intro {B} `{Countable B} (f : K → B) m Φ `{!Inj (=) (=) f} `{!BiAffine PROP}:
-    ([∗ map] k↦y∈kmap f m, ∃ x, ⌜f x = k⌝ ∗ Φ x y) ⊣⊢
-    [∗ map] k↦y∈m, Φ k y.
+  Lemma big_sepM_kmap_intro {B} `{Countable B} (f : K → B) m (Φ : B → _ → PROP) `{!Inj (=) (=) f}:
+    ([∗ map] k↦y∈kmap f m, Φ k y) ⊣⊢
+    [∗ map] k↦y∈m, Φ (f k) y.
   Proof.
     induction m as [|k y m Hk IH] using map_ind.
     { by rewrite kmap_empty !big_sepM_empty. }
     rewrite kmap_insert !big_sepM_insert //. 2: { apply lookup_kmap_None; [done|]. naive_solver. }
-    rewrite IH. f_equiv.
-    iSplit.
-    - iIntros "[%x [% ?]]". by simplify_eq.
-    - iIntros "?". iExists _. by iFrame.
+    by rewrite IH.
+  Qed.
+
+  Lemma big_sepM_kmap_intro' {B} `{Countable B} (f : K → B) m Φ `{!Inj (=) (=) f} `{!BiAffine PROP}:
+    ([∗ map] k↦y∈kmap f m, ∃ x, ⌜f x = k⌝ ∗ Φ x y) ⊣⊢
+    [∗ map] k↦y∈m, Φ k y.
+  Proof.
+    rewrite big_sepM_kmap_intro. f_equiv => ??. iSplit.
+    - iIntros "[% [% ?]]". by simplify_eq.
+    - by iIntros "$".
   Qed.
 
   Lemma big_sepM_impl_strong' {B}

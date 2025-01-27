@@ -1067,11 +1067,11 @@ Proof.
     eapply heap_preserved_alloc. 2: apply lookup_delete.
     eapply heap_preserved_mono; [done| apply delete_subseteq].
   - rewrite /r2a_heap_shared_agree big_sepM_union. 2: {
-      apply map_disjoint_list_to_map_l, Forall_forall => -[[??]?] /elem_of_list_fmap[?[??]]. simplify_eq/=.
-      apply eq_None_not_Some => /lookup_heap_is_Some_elem_of_h_provs. naive_solver.
+      apply map_disjoint_spec => ??? /lookup_kmap_Some[?[??]] /lookup_heap_Some_elem_of_h_provs?.
+      naive_solver.
     }
     iSplitR.
-    + iApply big_sepM_intro. iIntros "!>" (?? (?&?&?)%elem_of_list_to_map_2%elem_of_list_fmap).
+    + iApply big_sepM_intro. iIntros "!>" (??[?[??]]%lookup_kmap_Some); [|apply _].
       by simplify_map_eq.
     + iApply (big_sepM_impl with "Hs"). iIntros "!>" (k??) "?".
       rewrite lookup_insert_ne //. contradict Hl. rewrite Hl.
@@ -1162,13 +1162,11 @@ Proof.
          destruct l => /=; unfold heap_is_fresh in *; naive_solver.
     iDestruct "Hs" as "[_ Hh]".
     iSplitR "Hh".
-    + rewrite !big_sepM_list_to_map.
-      2: { rewrite -list_fmap_compose. apply NoDup_fmap; [move => ?? /= ?;simplify_eq; lia|]. apply NoDup_seqZ. }
-      iEval rewrite big_sepL_fmap. simplify_map_eq/=.
+    + rewrite !big_sepM_kmap_intro. iApply big_sepM_zero_block.
       have ->: a = a + 0 by lia.
       rewrite -(fmap_add_seqZ a 0) big_sepL_fmap.
-      iApply (big_sepL_impl with "[$]"). iIntros "!>" (? o ?) "?". iSplit!.
-      by have -> : (a + 0 + (l.2 + o)) = a + o by lia.
+      iApply (big_sepL_impl with "[$]"). iIntros "!>" (? o ?) "?". simplify_map_eq.
+      iSplit!. by rewrite Z.add_0_r.
     + iApply (big_sepM_impl with "Hh"). iIntros "!>" (?? Hheap%lookup_heap_Some_elem_of_h_provs) "?".
       rewrite lookup_insert_ne; [done|]. congruence.
 Qed.
@@ -1199,7 +1197,7 @@ Proof.
     + rewrite /r2a_heap_shared_agree.
       rewrite /r2a_mem_map.
       have ? : Inj eq eq (λ z, (p, z - a)) by unfold Inj; naive_solver lia.
-      rewrite -(big_sepM_kmap_intro (λ z, (p, z - a)) m).
+      rewrite -(big_sepM_kmap_intro' (λ z, (p, z - a)) m).
       iApply (big_sepM_impl_strong' with "Hm").
       iIntros "!>" ([??] ?) "Hk". iIntros ([??]%map_lookup_filter_Some).
       simplify_map_eq.
@@ -1234,7 +1232,7 @@ Proof.
   iDestruct "Hs" as "[Hs Ha]". iSplitL "Ha".
   - iApply big_sepM_map_seq_0.
     have ?: Inj eq eq (λ n : nat, l +ₗ n) by move => ???; simplify_eq; lia.
-    iApply (big_sepM_kmap_intro (λ n : nat, l +ₗ n)).
+    iApply (big_sepM_kmap_intro' (λ n : nat, l +ₗ n)).
     iApply (big_sepM_impl_strong' with "[$]").
     iIntros "!>" (??) "Hm". iIntros ([i [?[?[??]%lookup_seqZ]%lookup_map_seq_Some]]%lookup_kmap_Some); [|done].
     simplify_eq/=. rewrite map_lookup_filter_true; [|naive_solver].

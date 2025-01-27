@@ -597,31 +597,63 @@ Proof.
   destruct (gmap_curry (h_heap h) !! p); naive_solver.
 Qed.
 
-Definition zero_block (l: loc) (n: Z) : gmap Z val :=
-  gmap_curry (list_to_map ((λ z : Z, (l +ₗ z, ValNum 0%Z)) <$> seqZ 0 n)) !!! l.1.
+Lemma h_block_lookup2 h l:
+  h_heap h !! l = h_block h l.1 !! l.2.
+Proof. destruct l. by rewrite h_block_lookup. Qed.
 
-Lemma zero_block_lookup_Some l k i x:
-  l.2 = 0%Z →
-  zero_block l k !! i = Some x ↔ x = ValNum 0 ∧ (0 ≤ i < k)%Z.
+
+Definition zero_block (n : Z) : gmap Z val :=
+  map_seqZ 0 (replicate (Z.to_nat n) (ValNum 0)).
+
+Lemma zero_block_lookup_None k i:
+  zero_block k !! i = None ↔ ¬ (0 ≤ i < k)%Z.
 Proof.
-  move => Hl. rewrite /zero_block lookup_total_gmap_curry -elem_of_list_to_map.
-  2: { eapply NoDup_fmap_fst; last first.
-       { eapply NoDup_fmap_2, NoDup_seqZ.
-         intros z1 z2; injection 1. lia. }
-       intros ? y1 y2 [? []]%elem_of_list_fmap_2 [? []]%elem_of_list_fmap_2.
-       by simplify_eq. }
-  rewrite elem_of_list_fmap. setoid_rewrite elem_of_seqZ.
-  destruct l; naive_solver lia.
+  rewrite /zero_block lookup_map_seqZ_None length_replicate. naive_solver lia.
 Qed.
 
-Lemma zero_block_insert_zero l (k: Z) i:
-  l.2 = 0%Z →
-  (0 ≤ i < k)%Z →
-  <[i:=ValNum 0%Z]> (zero_block l k) = zero_block l k.
+Lemma zero_block_lookup_Some k i x:
+  zero_block k !! i = Some x ↔ x = ValNum 0 ∧ (0 ≤ i < k)%Z.
 Proof.
-  move => ??. apply map_eq => j.
+  rewrite /zero_block lookup_map_seqZ_Some lookup_replicate. naive_solver lia.
+Qed.
+
+Lemma zero_block_insert_zero (k : Z) i:
+  (0 ≤ i < k)%Z →
+  <[i:=ValNum 0%Z]> (zero_block k) = zero_block k.
+Proof.
+  move => ?. apply map_eq => j.
   destruct (decide (i = j)); simplify_map_eq => //.
   symmetry. by apply zero_block_lookup_Some.
+Qed.
+
+Lemma zero_block_lookup_is_Some i k :
+  is_Some (zero_block k !! i) ↔ (0 ≤ i < k)%Z.
+Proof.
+  rewrite /is_Some. setoid_rewrite zero_block_lookup_Some.
+  naive_solver.
+Qed.
+
+Lemma elem_of_dom_zero_block i k :
+  i ∈ dom (zero_block k) ↔ (0 ≤ i < k)%Z.
+Proof. by rewrite elem_of_dom zero_block_lookup_is_Some. Qed.
+
+Lemma zero_block_list sz :
+  zero_block sz = list_to_map ((λ x, pair x (ValNum 0)) <$> seqZ 0 sz).
+Proof.
+  apply map_eq => ?. apply option_eq => ?.
+  rewrite zero_block_lookup_Some -elem_of_list_to_map ?elem_of_list_fmap.
+  2: { apply NoDup_alt => ???. do 2 setoid_rewrite list_lookup_fmap_Some.
+       setoid_rewrite lookup_seqZ => ??. naive_solver lia. }
+  setoid_rewrite elem_of_seqZ. naive_solver lia.
+Qed.
+
+Lemma big_sepM_zero_block {PROP : bi} n (Φ : Z → val → PROP) :
+  ([∗ map] k↦y ∈ zero_block n, Φ k y) ⊣⊢ ([∗ list] k ∈ seqZ 0 n, Φ k (ValNum 0)).
+Proof.
+  rewrite zero_block_list big_sepM_list_to_map.
+  2: { apply NoDup_alt => ???. do 2 setoid_rewrite list_lookup_fmap_Some.
+       setoid_rewrite lookup_seqZ => ??. naive_solver lia. }
+  by rewrite big_sepL_fmap.
 Qed.
 
 
@@ -717,41 +749,34 @@ Proof.
     + rewrite lookup_union_l //. by simplify_map_eq.
 Qed.
 
+(* TODO: take loc instead of prov as argument to allow allocating at
+other places than 0 and make some sideconditions a bit easier to solve
+by turning 0 ≤ l'.2 < n into l.1 ≤ l'.2 < l.1 + n ? *)
+Definition heap_alloc_h (h : gmap loc val) (p : prov) (n : Z) : gmap loc val :=
+  (kmap (pair p) (zero_block n) ∪ h).
 
-Definition heap_alloc_h (h : gmap loc val) (l : loc) (n : Z) : gmap loc val :=
-  (list_to_map ((λ z, (l +ₗ z, ValNum 0)) <$> seqZ 0 n) ∪ h).
-
-Lemma heap_alloc_h_lookup h n (l l' : loc):
-  l.1 = l'.1 →
-  l.2 ≤ l'.2 < l.2 + n →
-  heap_alloc_h h l n !! l' = Some (ValNum 0).
+Lemma heap_alloc_h_lookup h n p (l' : loc):
+  p = l'.1 →
+  0 ≤ l'.2 < n →
+  heap_alloc_h h p n !! l' = Some (ValNum 0).
 Proof.
-  destruct l as [p o], l' as [p' o'] => /=??; subst. apply lookup_union_Some_l.
-  apply elem_of_list_to_map_1.
-  { rewrite -list_fmap_compose. apply NoDup_fmap; [|apply NoDup_seqZ].
-    move => ??/=. rewrite /offset_loc/= => ?. naive_solver lia. }
-  apply elem_of_list_fmap. eexists (o' - o). rewrite elem_of_seqZ /offset_loc /=.
-  split; [do 2 f_equal; lia | naive_solver lia].
+  destruct l' as [p' o'] => /=??; subst. apply lookup_union_Some_l.
+  rewrite lookup_kmap. apply zero_block_lookup_Some. naive_solver lia.
 Qed.
 
-Lemma heap_alloc_h_is_Some h l n l' :
-  is_Some (heap_alloc_h h l n !! l') ↔ is_Some (h !! l') ∨ l'.1 = l.1 ∧ l.2 ≤ l'.2 < l.2 + n.
+Lemma heap_alloc_h_is_Some h p n l' :
+  is_Some (heap_alloc_h h p n !! l') ↔ is_Some (h !! l') ∨ l'.1 = p ∧ 0 ≤ l'.2 < n.
 Proof.
-  rewrite /heap_alloc_h -!elem_of_dom dom_union dom_list_to_map elem_of_union elem_of_list_to_set.
-  rewrite -list_fmap_compose/compose/= elem_of_list_fmap.
-  setoid_rewrite elem_of_seqZ.
-  split; [naive_solver lia|].
-  move => [?|[??]]; [naive_solver|].
-  left. eexists (l'.2 - l.2). split; [|lia].
-  destruct l', l => /=. rewrite /offset_loc/=. simplify_eq/=.
-  f_equal. lia.
+  rewrite /heap_alloc_h -!elem_of_dom dom_union dom_kmap_L elem_of_union elem_of_map.
+  setoid_rewrite elem_of_dom_zero_block.
+  destruct l'. naive_solver lia.
 Qed.
 
 (* must be Opaque, otherwise simpl takes ages to figure out that it cannot reduce heap_alloc_h. *)
 Global Opaque heap_alloc_h.
 
 Program Definition heap_alloc (h : heap_state) (l : loc) (n : Z) : heap_state :=
-  Heap (heap_alloc_h h.(h_heap) l n) ({[l.1]} ∪ h_provs h) _.
+  Heap (heap_alloc_h h.(h_heap) l.1 n) ({[l.1]} ∪ h_provs h) _.
 Next Obligation.
   move => ? l ? l' /=. rewrite heap_alloc_h_is_Some.
   move => [?|[-> ?]].
@@ -773,7 +798,7 @@ Proof. done. Qed.
 
 Lemma heap_alive_alloc h l l' n :
   l.1 = l'.1 →
-  l'.2 ≤ l.2 < l'.2 + n →
+  0 ≤ l.2 < n →
   heap_alive (heap_alloc h l' n) l.
 Proof.
   move => ??. rewrite /heap_alive heap_alloc_h_is_Some. naive_solver.
@@ -781,19 +806,14 @@ Qed.
 
 Lemma h_block_heap_alloc h l n :
   heap_is_fresh h l →
-  h_block (heap_alloc h l n) l.1 = zero_block l n.
+  h_block (heap_alloc h l n) l.1 = zero_block n.
 Proof.
   intros [Hfresh ?].
-  rewrite /h_block /heap_alloc /zero_block /=.
+  rewrite /h_block /heap_alloc /=.
   apply map_eq; intros i.
   rewrite !lookup_total_gmap_curry.
-  assert (h_heap h !! (l.1, i) = None) as Hlook.
-  { destruct lookup eqn: Hlook; last done.
-    apply lookup_heap_Some_elem_of_h_provs in Hlook.
-    naive_solver.
-  }
-  rewrite lookup_union; rewrite Hlook; clear Hlook.
-  destruct lookup; done.
+  rewrite lookup_union_l ?lookup_kmap //. apply eq_None_not_Some.
+  contradict Hfresh. move: Hfresh => /lookup_heap_is_Some_elem_of_h_provs//.
 Qed.
 
 Program Definition heap_add_blocks (h : heap_state) (blocks : gset block_id) : heap_state :=
@@ -942,16 +962,13 @@ Lemma heap_range_alloc h l z :
   heap_is_fresh h l →
   heap_range (heap_alloc h l z) l z.
 Proof.
-  move => [Hfresh ?] l' ? //=.
-  rewrite lookup_union_is_Some.
-  rewrite list_to_map_lookup_is_Some.
-  setoid_rewrite elem_of_list_fmap.
-  setoid_rewrite elem_of_seqZ.
-  split.
-  - move => Hheap. destruct l, l'. destruct!; simplify_eq/=.
-    + lia.
-    + by apply lookup_heap_is_Some_elem_of_h_provs in Hheap.
-  - destruct l, l'. naive_solver.
+  move => [Hfresh [??]] l' ? //=.
+  rewrite lookup_union_is_Some lookup_kmap_is_Some.
+  setoid_rewrite zero_block_lookup_is_Some.
+  split; [|destruct l, l'; naive_solver lia].
+  move => [[?[??]]|/lookup_heap_is_Some_elem_of_h_provs ?].
+  - destruct l, l'; naive_solver lia.
+  - congruence.
 Qed.
 
 Lemma heap_range_alloc_other h l z l' z' :
@@ -959,18 +976,14 @@ Lemma heap_range_alloc_other h l z l' z' :
   heap_range h l' z' →
   heap_range (heap_alloc h l z) l' z'.
 Proof.
-  move => Hneq Hrange l'' ? //=.
-  rewrite lookup_union_is_Some.
-  rewrite list_to_map_lookup_is_Some.
-  setoid_rewrite elem_of_list_fmap.
-  setoid_rewrite elem_of_seqZ.
-  split.
-  - move => [|].
-    + move => [v [o [[= ??] ?]]]. simplify_eq.
-    + by apply Hrange.
-  - destruct l, l'. move => /Hrange. naive_solver.
+  move => ? Hrange l'' ?.
+  rewrite lookup_union_is_Some lookup_kmap_is_Some.
+  setoid_rewrite zero_block_lookup_is_Some.
+  etrans; [|by apply Hrange].
+  naive_solver.
 Qed.
 
+(*
 Lemma heap_range_alloc_other' h l z l' z' :
   0 < z' →
   heap_is_fresh h l →
@@ -992,6 +1005,7 @@ Proof.
     + by apply Hrange.
   - destruct l, l'. move => /Hrange. naive_solver.
 Qed.
+*)
 
 Lemma heap_range_update h l z l' v :
   heap_range h l z ↔
@@ -1051,7 +1065,7 @@ Lemma heap_preserved_alloc l n h m :
   heap_preserved m (heap_alloc h l n).
 Proof.
   move => Hp ? l' f /= ?. rewrite lookup_union_r; [by apply Hp|].
-  apply not_elem_of_list_to_map_1 => /elem_of_list_fmap[[[??]?] [?/elem_of_list_fmap[?[??]]]]; simplify_eq/=.
+  rewrite lookup_kmap_None => ??. naive_solver.
 Qed.
 
 Lemma heap_preserved_free l h m:
@@ -1074,11 +1088,11 @@ Qed.
 
 (** ** initial heap *)
 Definition fd_init_heap (f : string) (statics : list (string * Z)) : gmap prov (gmap Z val) :=
-  list_to_map (zip_with (λ p sv, (p, zero_block (p, 0%Z) sv.2))
+  list_to_map (zip_with (λ p sv, (p, zero_block sv.2))
                  (static_provs f statics) statics).
 
 Lemma fd_init_heap_lookup_Some f statics p h :
-  fd_init_heap f statics !! p = Some h ↔ ∃ i s, statics !! i = Some s ∧ static_provs f statics !! i = Some p ∧ h = zero_block (p, 0%Z) s.2.
+  fd_init_heap f statics !! p = Some h ↔ ∃ i s, statics !! i = Some s ∧ static_provs f statics !! i = Some p ∧ h = zero_block s.2.
 Proof.
   rewrite /fd_init_heap list_to_map_lookup_Some_NoDup.
   - f_equiv => ?. rewrite lookup_zip_with_Some. naive_solver.
@@ -1149,7 +1163,7 @@ Qed.
 
 Lemma fd_init_heap_snoc f statics s :
   fd_init_heap f (statics ++ [s]) =
-    <[ProvStatic f (length statics) := zero_block (ProvStatic f (length statics), 0) s.2]>
+    <[ProvStatic f (length statics) := zero_block s.2]>
       (fd_init_heap f statics).
 Proof.
   apply map_eq => i. apply option_eq => h.

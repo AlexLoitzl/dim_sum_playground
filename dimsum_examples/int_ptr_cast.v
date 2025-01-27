@@ -212,6 +212,7 @@ Proof.
   change (@nil expr) with (Val <$> []).
   tstep_i. split!. move => ??. simplify_eq. unfold main_rec_prog in Hf. simplify_map_eq. split!.
   tstep_i => ???. destruct!. split!. { repeat econs. }
+  have ? : l.2 = 0 by destruct select (heap_is_fresh _ _) as [?[??]].
   tstep_i. split. { apply heap_alive_alloc; [done|lia]. }
   tstep_i. change ([Val (ValLoc l)]) with (Val <$> [ValLoc l]).
   tstep_i. split. { move => *; simplify_map_eq. }
