@@ -945,26 +945,32 @@ Qed.
       }})}})}}) -∗
     (* REVIEW: This is an arbitrary Φ, because danger? *)
     TGT getc_spec_priv @ Π {{ Φ }}.
-  Proof. Admitted.
-    (* iDestruct 1 as "HC". *)
-    (* unfold getc_spec_priv at 2. rewrite unfold_forever -/getc_spec_priv. *)
-    (* rewrite /TReceive bind_bind bind_bind. *)
-    (* iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>". *)
-    (* rewrite bind_bind. setoid_rewrite bind_ret_l. *)
-    (* iApply (sim_gen_TVis with "[-]"). *)
-    (* (* Introducing arbitrary state *) *)
-    (* iIntros (v) "Hs !>". *)
-    (* iIntros (??) "[% [% _]]". subst. *)
-    (* iApply "HC". iSplit!. iIntros (??). *)
-    (* iDestruct 1 as (?????) "HC". subst. *)
-    (* (* NOTE: Until here, it seems okay *) *)
-    (* iApply (sim_gen_expr_intro _ tt with "[Hs]"); simpl; [done..|]. *)
-    (* rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>". *)
-    (* rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>". *)
-    (* rewrite bind_bind. iApply (sim_tgt_TGet with "[-]"). *)
-    (* rewrite bind_bind. iApply (sim_tgt_TPut with "[-]"). *)
-    (* iApply (sim_gen_TVis with "[-]"). iIntros (v') "? !>". *)
-    (* iIntros (??) "[% [% _]]". subst. iApply "HC". iSplit!. *)
+  Proof.
+    iDestruct 1 as "HC".
+    unfold getc_spec_priv at 2. rewrite unfold_forever -/getc_spec_priv.
+    rewrite /TReceive bind_bind bind_bind.
+    iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>".
+    rewrite bind_bind. setoid_rewrite bind_ret_l.
+    iApply (sim_gen_TVis with "[-]").
+    (* Introducing arbitrary state *)
+    iIntros (v) "Hs !>".
+    iIntros (??) "[% [% _]]". subst.
+    iApply "HC". iSplit!. iIntros (??).
+    iDestruct 1 as (?????) "HC". subst.
+    (* FIXME: Until here, it seems okay *)
+    iAssert (spec_state v0) as "H". admit.
+    iApply (sim_gen_expr_intro _ tt with "[Hs]"); simpl; [done..|].
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    rewrite bind_bind. iApply (sim_gen_TGet with "[-]"). iSplit. { done. } iIntros "!>".
+    rewrite bind_bind. iApply (sim_gen_TPut with "[H]"). { done. }
+    iIntros "Hs". iModIntro.
+    iApply (sim_gen_TVis with "[-]"). iIntros (v') "Hs' !>".
+    iIntros (??) "[% [% _]]". subst. iApply "HC".
+    iSplitR. done.
+    iSplit. { iDestruct (mstate_var_merge with "Hs Hs'") as "[-> Hfull]". done. }
+    done.
+Admitted.
 
   (* TODO 3 *)
 
