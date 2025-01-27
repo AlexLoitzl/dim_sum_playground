@@ -99,6 +99,11 @@ Section spec.
   (*   iIntros ([??] ?) "!>". simplify_eq. iSplit!. by iFrame. *)
   (* Qed. *)
 
+  Lemma sim_tgt_TGet (k : S → spec EV S void) Π Φ s :
+    TGT (k s) @ Π {{ Φ }} -∗
+    TGT (Spec.bind TGet k) @ Π {{ Φ }}.
+  Proof. Admitted.
+
   Lemma sim_gen_TPut ts (k : _ → spec EV S void) Π Φ (s : S) s' :
     spec_state s -∗
     (spec_state s' -∗ ▷ₒ?ts WP{ts} (k tt) @ Π {{ Φ }}) -∗
@@ -125,6 +130,11 @@ Section spec.
   (*   iExists _. iSplit. { iPureIntro. by econs. } *)
   (*   iIntros ([??] ?) "!>". simplify_eq. iSplit!. by iFrame. *)
   (* Qed. *)
+
+  Lemma sim_tgt_TPut (k : _ → spec EV S void) Π Φ s :
+    TGT (k tt) @ Π {{ Φ }} -∗
+    TGT (Spec.bind (TPut s) k) @ Π {{ Φ }}.
+  Proof. Admitted.
 
   Lemma sim_gen_TAll {T} ts (k : _ → spec EV S void) Π Φ :
     (∃/∀{ts} x, ▷ₒ?ts WP{ts} (k x) @ Π {{ Φ }}) -∗

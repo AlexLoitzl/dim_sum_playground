@@ -921,15 +921,19 @@ Qed.
 
   (* TODO 2: Prove a separation logic tuple for it - analogous to sim_locle_spec2 (in ./memmove) *)
 
+
+  Goal ((spec rec_event Z void * Z)%type = m_state (spec_trans (io_type * rec_ev) Z)).
+    reflexivity. Qed.
+
   Lemma sim_getc_spec_heap_priv `{!specGS} Π Φ :
     (* Someone is switching to me *)
     switch Π ({{ κ σ POST,
       (* REVIEW: Here, think about do I have to prove this or do I get it *)
-      ∃ f vs h, ⌜κ = Some (Incoming, ERCall f vs h)⌝ ∗
+      ∃ f vs h, ⌜κ = Some (Incoming, ERCall f vs h)⌝ ∗ (* (* NOTE: Why does this fail? *) ⌜σ.2 = v⌝ ∗ *)
       (* Here, a bit of intuition is missing for why it goes into the POST *)
       POST Tgt _ (spec_trans _ Z) ({{ σ' Π',
       (* REVIEW: Here, think about do I have to prove this or do I get it *)
-      ∃ v, ⌜σ' = σ⌝ ∗ ⌜f = "getc"⌝ ∗ ⌜vs = []⌝ ∗
+      ∃ v, ⌜σ' = σ⌝ ∗ ⌜f = "getc"⌝ ∗ ⌜vs = []⌝ ∗ ⌜σ.2 = v⌝ ∗
       (* Switch back *)
     switch Π' ({{ κ σ POST,
       (* This is optional event, REVIEW: is this related to Π *)
@@ -937,11 +941,30 @@ Qed.
       (* So what does this mean? *)
       ⌜σ = (getc_spec_priv, (v + 1)%Z)⌝ ∗
       (* FIXME: Do I need to change the parameter here? *)
-      spec_state ()
+      spec_state (v + 1)
       }})}})}}) -∗
     (* REVIEW: This is an arbitrary Φ, because danger? *)
     TGT getc_spec_priv @ Π {{ Φ }}.
   Proof. Admitted.
+    (* iDestruct 1 as "HC". *)
+    (* unfold getc_spec_priv at 2. rewrite unfold_forever -/getc_spec_priv. *)
+    (* rewrite /TReceive bind_bind bind_bind. *)
+    (* iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>". *)
+    (* rewrite bind_bind. setoid_rewrite bind_ret_l. *)
+    (* iApply (sim_gen_TVis with "[-]"). *)
+    (* (* Introducing arbitrary state *) *)
+    (* iIntros (v) "Hs !>". *)
+    (* iIntros (??) "[% [% _]]". subst. *)
+    (* iApply "HC". iSplit!. iIntros (??). *)
+    (* iDestruct 1 as (?????) "HC". subst. *)
+    (* (* NOTE: Until here, it seems okay *) *)
+    (* iApply (sim_gen_expr_intro _ tt with "[Hs]"); simpl; [done..|]. *)
+    (* rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>". *)
+    (* rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>". *)
+    (* rewrite bind_bind. iApply (sim_tgt_TGet with "[-]"). *)
+    (* rewrite bind_bind. iApply (sim_tgt_TPut with "[-]"). *)
+    (* iApply (sim_gen_TVis with "[-]"). iIntros (v') "? !>". *)
+    (* iIntros (??) "[% [% _]]". subst. iApply "HC". iSplit!. *)
 
   (* TODO 3 *)
 
