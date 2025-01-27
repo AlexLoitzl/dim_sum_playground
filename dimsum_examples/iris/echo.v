@@ -927,7 +927,7 @@ Qed.
       (* REVIEW: Here, think about do I have to prove this or do I get it *)
       ∃ f vs h, ⌜κ = Some (Incoming, ERCall f vs h)⌝ ∗
       (* Here, a bit of intuition is missing for why it goes into the POST *)
-    POST Tgt _ (spec_trans _ Z) ({{ σ' Π',
+      POST Tgt _ (spec_trans _ Z) ({{ σ' Π',
       (* REVIEW: Here, think about do I have to prove this or do I get it *)
       ∃ v, ⌜σ' = σ⌝ ∗ ⌜f = "getc"⌝ ∗ ⌜vs = []⌝ ∗
       (* Switch back *)
@@ -935,16 +935,17 @@ Qed.
       (* This is optional event, REVIEW: is this related to Π *)
       ⌜κ = (Some (Outgoing, ERReturn (ValNum v) h))⌝ ∗
       (* So what does this mean? *)
-      ⌜σ = (getc_spec_heap, v)⌝ ∗
-      (* Looks like ghost things *)
-      spec_state (v + 1)
+      ⌜σ = (getc_spec_priv, (v + 1)%Z)⌝ ∗
+      (* FIXME: Do I need to change the parameter here? *)
+      spec_state ()
       }})}})}}) -∗
     (* REVIEW: This is an arbitrary Φ, because danger? *)
-    TGT getc_spec_heap @ Π {{ Φ }}.
+    TGT getc_spec_priv @ Π {{ Φ }}.
   Proof. Admitted.
 
   (* TODO 3 *)
-  Definition getc_fn_spec_strong (es : list expr) (POST : (val → iProp Σ) → iProp Σ) : iProp Σ :=
+
+  Definition getc_fn_spec_priv (es : list expr) (POST : (val → iProp Σ) → iProp Σ) : iProp Σ :=
     let lpos := (ProvStatic "read" 0, 0) in
     ∃ (pos: Z), ⌜es = []⌝ ∗ lpos ↦ pos ∗
     POST (λ v, ⌜v = ValNum pos⌝ ∗ lpos ↦ (pos + 1)).
@@ -953,13 +954,13 @@ Qed.
     rec_fn_auth fns -∗
     "getc" ↪ None -∗
     switch_link Tgt Π ({{ σ0 POST,
-      ∃ vs h',
-    POST (ERCall "getc" vs h') (spec_trans _ _) (getc_spec_heap, tt) ({{ _ Πr,
+      ∃ vs h' v,
+    POST (ERCall "getc" vs h') (spec_trans _ _) (getc_spec_priv, v) ({{ _ Πr,
     switch_link Tgt Πr ({{ σ POST,
-      ∃ v h'', ⌜σ = (getc_spec_heap, tt)⌝ ∗
+      ∃ h'', ⌜σ = (getc_spec_priv, (v + 1)%Z)⌝ ∗
     POST (ERReturn v h'') _ σ0 ({{ _ Πx,
       ⌜Πx = Π⌝}})}})}})}}) -∗
-    rec_fn_spec_hoare Tgt Π "getc" getc_fn_spec_strong.
+    rec_fn_spec_hoare Tgt Π "getc" getc_fn_spec_priv.
   Proof. Admitted.
 
 End sim_spec.
