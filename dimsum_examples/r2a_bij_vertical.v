@@ -51,10 +51,10 @@ Definition val_through_bij (bij : heap_bij) (vs : val) : val :=
 Program Definition heap_through_bij (bij : heap_bij) (h : heap_state) : heap_state :=
   Heap (list_to_map $ omap (λ '(l, v), if hb_bij bij !! l.1 is Some (HBShared p) then
          Some ((p, l.2), val_through_bij bij v) else None) (map_to_list (h_heap h)))
-       (set_omap prov_to_block (hb_shared_i bij)) _.
+       (hb_shared_i bij) _.
 Next Obligation.
-  move => ??? b. rewrite list_to_map_lookup_is_Some => -[?]. rewrite elem_of_list_omap => -[[[??]?]]/=[??].
-  repeat case_match; simplify_eq. rewrite elem_of_set_omap => ?. exists (ProvBlock b). split!. rewrite elem_of_hb_shared_i. naive_solver.
+  move => ?? p. rewrite list_to_map_lookup_is_Some => -[?]. rewrite elem_of_list_omap => -[[[??]?]]/=[??].
+  repeat case_match; simplify_eq. rewrite elem_of_hb_shared_i. naive_solver.
 Qed.
 
 Lemma heap_through_bij_Some bij h pi o vi:
@@ -94,37 +94,12 @@ Proof.
 Qed.
 
 Lemma h_static_provs_heap_through_bij bij h :
-  dom (hb_bij bij) ⊆ h_provs h →
   h_static_provs (heap_through_bij bij h) = filter is_ProvStatic (hb_shared_i bij).
-Proof.
-  move => Hdom.
-  apply set_eq => p.
-  rewrite elem_of_filter !elem_of_h_static_provs elem_of_hb_shared_i.
-  split.
-  - move => [? [[??]/=[? ]]]. subst. rewrite heap_through_bij_is_Some.
-    move => [p2 [??]]. naive_solver.
-  - move => [? [p2 ?]]. split; [done|].
-    exploit hb_shared_prov; [done|] => ?.
-    exploit same_prov_kind_static_l; [done..|] => ?. subst.
-    have : p2 ∈ h_provs h. { apply Hdom. by apply: elem_of_dom_2. }
-    rewrite elem_of_h_provs elem_of_h_static_provs => ?. destruct!/=.
-    eexists (_, l.2). split!.
-    rewrite heap_through_bij_is_Some1; [|done]. by destruct l.
-Qed.
+Proof. apply set_eq => p. by rewrite elem_of_filter. Qed.
 
 Lemma h_provs_heap_through_bij bij h :
-  dom (hb_bij bij) ⊆ h_provs h →
   h_provs (heap_through_bij bij h) = hb_shared_i bij.
-Proof.
-  move => ?.
-  apply set_eq => p.
-  rewrite elem_of_h_provs /=.
-  rewrite h_static_provs_heap_through_bij // heap_through_bij_blocks elem_of_filter.
-  setoid_rewrite elem_of_set_omap.
-  destruct p; [|set_solver].
-  split; [|naive_solver].
-  move => -[|[? [?[[]]]]]; naive_solver.
-Qed.
+Proof. done. Qed.
 
 (** * combine bij *)
 (** ** r2a_combine_bij *)
@@ -1078,16 +1053,16 @@ Proof.
     unfold r2a_f2i_incl at 1. iDestruct "Hf2i" as (f2i_full ??) "#?".
     iSatStop.
 
-    pose (hs := (filter (λ p, is_ProvStatic p.1 ∧ hinit !! p.1 = None) (gmap_curry (h_heap h)))).
+    pose (hs := set_to_map (λ p, (p, h_block h p)) (h_static_provs h) ∖ hinit
+            : gmap prov (gmap Z val)).
     have Hpres : heap_preserved (hinit ∪ hs) h. {
       apply heap_preserved_union.
       + by apply: heap_preserved_mono.
-      + move => ?? /map_lookup_filter_Some[/lookup_gmap_curry_Some[? ->] ?].
+      + move => ?? /lookup_difference_Some[/lookup_set_to_map[//|?[??]] ?].
+        simplify_eq. rewrite h_block_lookup.
         by rewrite -surjective_pairing.
     }
-    have Hdisj : hinit ##ₘ hs. {
-      apply map_disjoint_spec => ???? /map_lookup_filter_Some. naive_solver.
-    }
+    have Hdisj : hinit ##ₘ hs. { apply map_disjoint_difference_r'. }
     have Hdisjinit : dom hs ## hb_shared_i (heap_bij_init_bij hinit). {
       rewrite/= /heap_bij_init_bij hb_shared_i_hb_update_const_s_big
         ?hb_shared_i_hb_update_const_i_big ?hb_shared_s_hb_update_const_i_big
@@ -1098,10 +1073,14 @@ Proof.
       + etrans; [|done]. etrans; [by eapply subseteq_dom|].
         rewrite -(dom_fmap_L R2AConstant).
         eapply subseteq_dom. apply r2a_rh_constant_fmap_l.
-      + move => ? /elem_of_dom[? /map_lookup_filter_Some[/lookup_gmap_curry_Some[He Heq] ?]].
-        move: He => /(map_choose _)[?[? Hl]]. rewrite Heq in Hl.
-        by apply: (lookup_heap_is_Some_elem_of_h_provs (_, _)).
+      + move =>?/elem_of_dom[?]/lookup_difference_Some[/lookup_set_to_map[//|?[??]]].
+        set_solver.
     }
+    have Hinhs : ∀ p, is_ProvStatic p → p ∈ h_provs h → hinit !! p = None → p ∈ dom hs. {
+      move => p ???. apply elem_of_dom. eexists (h_block h p).
+      apply lookup_difference_Some. split!. apply lookup_set_to_map => //.
+      set_solver. }
+    clearbody hs.
     eexists. split_and!; [done..| |].
     eexists moinit, ∅, moinit, (h_static_provs h), f2i_full, (R2AConstant <$> (hinit ∪ hs)),
       (hb_update_const_s_big hs
@@ -1164,11 +1143,8 @@ Proof.
       rewrite right_id_L. rewrite -map_fmap_union lookup_fmap_Some. naive_solver.
     - rewrite r2a_rh_shared_fmap_constant.
       eexists ∅. move => ???. by simplify_map_eq.
-    - move => p /elem_of_difference[/elem_of_h_static_provs[?[l [? [??]]]]].
+    - move => p /elem_of_difference[/elem_of_h_static_provs[? ?]].
       move => /not_elem_of_union[/not_elem_of_union[/not_elem_of_dom? _] _].
-      apply elem_of_dom. eexists (h_block h p). apply map_lookup_filter_Some. split!.
-      apply lookup_gmap_curry_Some. setoid_rewrite h_block_lookup. split; [|done].
-      move => /map_empty/(_ l.2). subst. rewrite h_block_lookup -surjective_pairing.
       naive_solver.
     - iSatMono. iIntros!. iDestruct (r2a_heap_get_statics with "[$]") as "#?". iFrame "∗#".
       rewrite r2a_rh_shared_fmap_constant /r2a_mem_map !big_sepM_empty.
@@ -1270,35 +1246,16 @@ Proof.
 
     have h_provs_h' : h_provs h' = hb_shared_i bijb' ∪ h_provs hprev. {
       rewrite /h' h_provs_heap_merge !h_provs_heap_restrict h_provs_heap_through_bij.
-      2: set_solver.
-      apply set_eq => p. rewrite 2!elem_of_union !elem_of_filter.
-      destruct (decide (is_ProvBlock p)); [naive_solver|].
-      have ? : is_ProvStatic p by destruct p.
-      have ? : p ∈ hb_shared_i bijb' → p ∈ h_provs hprev by apply Hstaticinprev.
-
-      split => ?; destruct! => //.
-      - naive_solver.
-      - naive_solver.
-      - naive_solver.
-      - destruct (decide (p ∈ dom (rh' ∪ r2a_rh_shared rha) ∧ p ∈ hb_shared_i bijb')); naive_solver.
-      - destruct (decide (p ∈ dom (rh' ∪ r2a_rh_shared rha) ∧ p ∈ hb_shared_i bijb')) as [Hin|Hin];
-          [naive_solver|].
-        rewrite not_and_r in Hin. naive_solver.
-    }
-
-    have Hinstatic : ∀ p h, p ∈ h_static_provs h ↔ p ∈ h_provs h ∧ is_ProvStatic p. {
-      move => p ?. destruct (decide (is_ProvStatic p)).
-      - rewrite h_provs_static; naive_solver.
-      - rewrite elem_of_h_static_provs. naive_solver.
+      apply set_eq => p. done.
     }
 
     have h_static_provs_h' : h_static_provs h' = h_static_provs h. {
-      apply set_eq => p. rewrite Hinstatic h_provs_h' elem_of_union. split.
-      - move => [[Hin| Hin] ?].
+      apply set_eq => p. rewrite elem_of_h_static_provs h_provs_h' elem_of_union. split.
+      - move => [? [Hin| Hin]].
         + rewrite -Hag -h_provs_static //. by apply Hstaticinprev.
         + rewrite h_provs_static // in Hin. congruence.
       - move => ?. have ? : is_ProvStatic p by eapply elem_of_h_static_provs.
-        split; [|done]. right. rewrite h_provs_static; congruence.
+        split; [done|]. right. rewrite h_provs_static; congruence.
     }
 
     have Hrh_shared :

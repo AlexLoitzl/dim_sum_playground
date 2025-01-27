@@ -55,8 +55,7 @@ Section map.
     set Π' := (X in (_ ≈{ m }≈>ₜ X)%I).
     iApply (sim_gen_include (map_trans _ _) (λ σ, (σ, (σf, true))) with "Hsim").
     iIntros "!>" (??) "Hsim". iIntros "HΠ".
-    iApply (sim_gen_ctx with "[-]"). iIntros "?".
-    iMod ("Hsim" with "[$]") as "[HP| Hs]". {
+    iMod ("Hsim") as "[HP| Hs]". {
       iApply (sim_gen_stop with "[-]"). by iApply ("HΠ" with "HP").
     }
     iApply (sim_gen_step with "[-]"). iIntros (?? Hstep). inv_all/= @m_step.
@@ -76,8 +75,7 @@ Section map.
     set Π' := (X in (_ ≈{ m }≈>ₛ X)%I).
     iApply (sim_gen_include (map_trans _ _) (λ σ, (σ, (σf, true))) with "Hsim").
     iIntros "!>" (??) "Hsim". iIntros "Hc".
-    iApply (sim_gen_ctx with "[-]"). iIntros "?".
-    iMod ("Hsim" with "[$]") as "[?| [%κ [% [% Hs]]] ]". {
+    iMod ("Hsim") as "[?| [%κ [% [% Hs]]] ]". {
       iApply (sim_gen_stop with "[-]").
       iDestruct ("Hc" with "[$]") as (???[?[??]]) "Hc". by simplify_eq.
     }
@@ -127,8 +125,7 @@ Section seq_product.
     set Π' := (X in (_ ≈{ m1 }≈>ₜ X)%I).
     iApply (sim_gen_include (seq_product_trans m1 m2) (λ σ1, (Some SPLeft, σ1, σ2)) with "Hsim").
     iIntros "!>" (??) "Hsim". iIntros "Hc".
-    iApply (sim_gen_ctx with "[-]"). iIntros "?".
-    iMod ("Hsim" with "[$]") as "[HP| Hs ]". {
+    iMod ("Hsim") as "[HP| Hs ]". {
       iDestruct ("Hc" with "[$] [//]") as "Hc".
       by iApply (sim_gen_stop with "[-]").
     }
@@ -150,8 +147,7 @@ Section seq_product.
     set Π' := (X in (_ ≈{ m2 }≈>ₜ X)%I).
     iApply (sim_gen_include (seq_product_trans m1 m2) (λ σ2, (Some SPRight, σ1, σ2)) with "Hsim").
     iIntros "!>" (??) "Hsim". iIntros "Hc".
-    iApply (sim_gen_ctx with "[-]"). iIntros "?".
-    iMod ("Hsim" with "[$]") as "[HP| Hs ]". {
+    iMod ("Hsim") as "[HP| Hs ]". {
       iDestruct ("Hc" with "[$] [//]") as "Hc".
       by iApply (sim_gen_stop with "[-]").
     }
@@ -181,8 +177,7 @@ Section seq_product.
     set Π' := (X in (_ ≈{ m1 }≈>ₛ X)%I).
     iApply (sim_gen_include (seq_product_trans m1 m2) (λ σ1, (Some SPLeft, σ1, σ2)) with "Hsim").
     iIntros "!>" (??) "Hsim". iIntros "Hc".
-    iApply (sim_gen_ctx with "[-]"). iIntros "?".
-    iMod ("Hsim" with "[$]") as "[?| [%κ [% [% Hsim]]] ]". {
+    iMod ("Hsim") as "[?| [%κ [% [% Hsim]]] ]". {
       iDestruct ("Hc" with "[$]") as (??) "Hc".
       iApply (sim_gen_stop with "[-]"). by simplify_eq/=.
     }
@@ -208,8 +203,7 @@ Section seq_product.
     set Π' := (X in (_ ≈{ m2 }≈>ₛ X)%I).
     iApply (sim_gen_include (seq_product_trans m1 m2) (λ σ2, (Some SPRight, σ1, σ2)) with "Hsim").
     iIntros "!>" (??) "Hsim". iIntros "Hc".
-    iApply (sim_gen_ctx with "[-]"). iIntros "?".
-    iMod ("Hsim" with "[$]") as "[?| [%κ [% [% Hsim]]] ]". {
+    iMod ("Hsim") as "[?| [%κ [% [% Hsim]]] ]". {
       iDestruct ("Hc" with "[$]") as (??) "Hc".
       iApply (sim_gen_stop with "[-]"). by simplify_eq/=.
     }
@@ -248,8 +242,7 @@ Section state_transform.
     iIntros (?) "Hsim".
     iApply (sim_gen_ind with "[] Hsim"). { solve_proper. }
     clear σ' σ HR. iIntros "!>" (σ'?) "Hsim". iIntros (σ HR) "Hc".
-    iApply (sim_gen_ctx with "[-]"). iIntros "?".
-    iMod ("Hsim" with "[$]") as "[HP| Hs]". {
+    iMod ("Hsim") as "[HP| Hs]". {
       iApply (sim_gen_stop with "[-]"). by iApply ("Hc" with "HP").
     }
     iApply (sim_gen_step with "[-]"). iIntros (?? Hstep). inv_all/= @m_step.
@@ -278,8 +271,7 @@ Section state_transform.
     iIntros (?) "Hsim".
     iApply (sim_gen_ind with "[] Hsim"). { solve_proper. }
     clear σ' σ HR. iIntros "!>" (σ'?) "Hsim". iIntros (σ HR) "Hc".
-    iApply (sim_gen_ctx with "[-]"). iIntros "?".
-    iMod ("Hsim" with "[$]") as "[?| [% [% [% Hs]]] ]". {
+    iMod ("Hsim") as "[?| [% [% [% Hs]]] ]". {
       iApply (sim_gen_stop with "[-]"). by iApply ("Hc" with "[$]").
     }
     iApply (sim_gen_step with "[-]").

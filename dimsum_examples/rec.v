@@ -518,33 +518,42 @@ Proof. split; [naive_solver|]. destruct fn1, fn2 => /= -[?[?[??]]]. subst. f_equ
 (** ** heap *)
 Record heap_state : Set := Heap {
   h_heap : gmap loc val;
-  h_used_blocks : gset block_id;
-  heap_wf l : ∀ b, is_Some (h_heap !! l) → l.1 = ProvBlock b → b ∈ h_used_blocks;
+  h_provs : gset prov;
+  heap_wf l : is_Some (h_heap !! l) → l.1 ∈ h_provs;
 }.
 Add Printing Constructor heap_state.
 
 Lemma heap_state_eq h1 h2:
-  h1 = h2 ↔ h1.(h_heap) = h2.(h_heap) ∧ h1.(h_used_blocks) = h2.(h_used_blocks).
+  h1 = h2 ↔ h1.(h_heap) = h2.(h_heap) ∧ h1.(h_provs) = h2.(h_provs).
 Proof. split; [naive_solver|]. destruct h1, h2 => /= -[??]; subst. f_equal. apply AxProofIrrelevance. Qed.
 
 (** *** heap provs *)
-Definition h_static_provs (h : heap_state) : gset prov :=
-  filter (λ x, is_ProvStatic x) (set_map fst (dom (h_heap h))).
+Definition h_used_blocks (h : heap_state) : gset block_id :=
+  set_omap (λ x, prov_to_block x) (h_provs h).
 
-Definition h_provs (h : heap_state) : gset prov :=
-  h_static_provs h ∪ set_map ProvBlock (h_used_blocks h).
+Definition h_static_provs (h : heap_state) : gset prov :=
+  filter (λ x, is_ProvStatic x) (h_provs h).
 
 Lemma elem_of_h_static_provs h p :
-  p ∈ h_static_provs h ↔ is_ProvStatic p ∧ ∃ l, l.1 = p ∧ is_Some (h_heap h !! l).
-Proof. setoid_rewrite <-elem_of_dom. set_solver. Qed.
+  p ∈ h_static_provs h ↔ is_ProvStatic p ∧ p ∈ h_provs h.
+Proof. set_solver. Qed.
 
 Lemma elem_of_h_provs p h :
   p ∈ h_provs h ↔ p ∈ h_static_provs h ∨ ∃ b, p = ProvBlock b ∧ b ∈ h_used_blocks h.
-Proof. set_solver. Qed.
+Proof.
+  rewrite elem_of_filter /h_used_blocks.
+  setoid_rewrite elem_of_set_omap.
+  destruct p; split => ?; destruct!; try naive_solver.
+  destruct x; naive_solver.
+Qed.
 
 Lemma h_provs_blocks b h :
   ProvBlock b ∈ h_provs h ↔ b ∈ h_used_blocks h.
-Proof. set_solver. Qed.
+Proof.
+  rewrite /h_used_blocks elem_of_set_omap.
+  split => ?; destruct!; try naive_solver.
+  destruct x; naive_solver.
+Qed.
 
 Lemma h_provs_static p h :
   is_ProvStatic p →
@@ -566,12 +575,7 @@ Qed.
 Lemma lookup_heap_is_Some_elem_of_h_provs l h :
   is_Some (h_heap h !! l) →
   l.1 ∈ h_provs h.
-Proof.
-  move => Hl. rewrite elem_of_h_provs elem_of_h_static_provs.
-  destruct l.1 eqn:?.
-  - move: Hl => /heap_wf. naive_solver.
-  - naive_solver.
-Qed.
+Proof. apply heap_wf. Qed.
 
 Lemma lookup_heap_Some_elem_of_h_provs l h v :
   h_heap h !! l = Some v →
@@ -656,19 +660,19 @@ Global Opaque heap_fresh.
 (** *** heap constructors *)
 Global Program Instance heap_empty : Empty heap_state :=
   Heap ∅ ∅ _.
-Next Obligation. move => ? ?. rewrite lookup_empty => -[??]. done. Qed.
+Next Obligation. move => ?. rewrite lookup_empty => -[??]. done. Qed.
 
 Program Definition heap_update (h : heap_state) (l : loc) (v : val) : heap_state :=
-  Heap (alter (λ _, v) l h.(h_heap)) h.(h_used_blocks) _.
-Next Obligation. move => ?????. rewrite lookup_alter_is_Some. apply heap_wf. Qed.
+  Heap (alter (λ _, v) l h.(h_heap)) h.(h_provs) _.
+Next Obligation. move => ????. rewrite lookup_alter_is_Some. apply heap_wf. Qed.
 
 Lemma h_static_provs_heap_update h l v :
   h_static_provs (heap_update h l v) = h_static_provs h.
-Proof. set_solver. Qed.
+Proof. done. Qed.
 
 Lemma h_provs_heap_update h l v :
   h_provs (heap_update h l v) = h_provs h.
-Proof. unfold h_provs. set_solver. Qed.
+Proof. done. Qed.
 
 Lemma heap_alive_update h l l' v :
   heap_alive h l →
@@ -686,8 +690,8 @@ Proof.
 Qed.
 
 Program Definition heap_update_big (h : heap_state) (m : gmap loc val) : heap_state :=
-  Heap (map_union_weak m h.(h_heap)) (h.(h_used_blocks)) _.
-Next Obligation. move => ????. rewrite map_lookup_imap. move => [? /bind_Some[?[??]]]. by apply heap_wf. Qed.
+  Heap (map_union_weak m h.(h_heap)) (h.(h_provs)) _.
+Next Obligation. move => ???. rewrite map_lookup_imap. move => [? /bind_Some[?[??]]]. by apply heap_wf. Qed.
 
 Lemma heap_update_big_empty h :
   heap_update_big h ∅ = h.
@@ -747,36 +751,25 @@ Qed.
 Global Opaque heap_alloc_h.
 
 Program Definition heap_alloc (h : heap_state) (l : loc) (n : Z) : heap_state :=
-  Heap (heap_alloc_h h.(h_heap) l n)
-    (option_to_set (prov_to_block l.1) ∪ h_used_blocks h) _.
+  Heap (heap_alloc_h h.(h_heap) l n) ({[l.1]} ∪ h_provs h) _.
 Next Obligation.
-  move => ? l ?? b /=. rewrite heap_alloc_h_is_Some.
-  move => [?|[-> ?]] Hblock.
+  move => ? l ? l' /=. rewrite heap_alloc_h_is_Some.
+  move => [?|[-> ?]].
   - exploit heap_wf; [done..|]. set_solver.
-  - rewrite Hblock /=. set_solver.
+  - set_solver.
 Qed.
 
 Lemma h_static_provs_heap_alloc h l n :
   is_ProvBlock l.1 →
   h_static_provs (heap_alloc h l n) = h_static_provs h.
 Proof.
-  rewrite set_eq => Hb p. rewrite !elem_of_h_static_provs.
-  setoid_rewrite heap_alloc_h_is_Some.
-  split; [|naive_solver].
-  move => [? [l' [? [?|[??]]]]]; simplify_eq; [naive_solver|].
-  by destruct l.1, l'.1.
+  rewrite set_eq => Hb p. rewrite !elem_of_h_static_provs /=.
+  destruct l.1 => //; set_solver.
 Qed.
 
 Lemma h_provs_heap_alloc h l n :
-  is_ProvBlock l.1 →
   h_provs (heap_alloc h l n) = {[l.1]} ∪ h_provs h.
-Proof.
-  intros Heq.
-  rewrite /h_provs /= h_static_provs_heap_alloc //.
-  destruct l.1 as [b|] eqn:Hb; last done.
-  rewrite set_map_union_L set_map_singleton_L.
-  set_solver.
-Qed.
+Proof. done. Qed.
 
 Lemma heap_alive_alloc h l l' n :
   l.1 = l'.1 →
@@ -804,53 +797,41 @@ Proof.
 Qed.
 
 Program Definition heap_add_blocks (h : heap_state) (blocks : gset block_id) : heap_state :=
-  Heap (h_heap h) (blocks ∪ h_used_blocks h) _.
-Next Obligation. move => ??????. apply: union_subseteq_r. by eapply heap_wf. Qed.
+  Heap (h_heap h) (set_map ProvBlock blocks ∪ h_provs h) _.
+Next Obligation. move => ????. apply: union_subseteq_r. by eapply heap_wf. Qed.
+
+Lemma h_static_provs_heap_add_blocks h ps:
+  h_static_provs (heap_add_blocks h ps) = h_static_provs h.
+Proof. rewrite /h_static_provs/=. rewrite filter_union_L. set_solver. Qed.
 
 Program Definition heap_free (h : heap_state) (l : loc) : heap_state :=
-  Heap (filter (λ '(l', v), l'.1 ≠ l.1) h.(h_heap)) h.(h_used_blocks) _.
-Next Obligation. move => ????. rewrite map_lookup_filter => -[?/bind_Some[?[??]]]. by apply heap_wf. Qed.
+  Heap (filter (λ '(l', v), l'.1 ≠ l.1) h.(h_heap)) h.(h_provs) _.
+Next Obligation. move => ???. rewrite map_lookup_filter => -[?/bind_Some[?[??]]]. by apply heap_wf. Qed.
 
 Lemma h_static_provs_heap_free h l :
-  is_ProvBlock l.1 →
   h_static_provs (heap_free h l) = h_static_provs h.
-Proof.
-  rewrite set_eq => Hb p.
-  rewrite !elem_of_filter !elem_of_map.
-  setoid_rewrite elem_of_dom.
-  split.
-  - move => [Hs [[? z]/= [<-]]].
-    assert (p ≠ l.1) by by destruct p, l.1.
-    rewrite map_lookup_filter_true // => ?.
-    split; first done. by exists (p, z).
-  - move => [??]. assert (p ≠ l.1) by by destruct p, l.1.
-    destruct!. split!; [done|].
-    rewrite map_lookup_filter_true //.
-Qed.
+Proof. done. Qed.
 
 Lemma h_provs_heap_free h l :
-  is_ProvBlock l.1 →
   h_provs (heap_free h l) = h_provs h.
-Proof.
-  move => Hl. apply set_eq => p.
-  by rewrite !elem_of_h_provs h_static_provs_heap_free.
-Qed.
+Proof. done. Qed.
 
+(*
 Lemma heap_free_alloc h l n b :
   l.1 = ProvBlock b →
-  b ∉ h_used_blocks h →
+  (* b ∉ h_used_blocks h → *)
   heap_free (heap_alloc h l n) l = heap_add_blocks h {[b]}.
 Proof.
-  move => Hl Hin.
-  apply heap_state_eq => /=. rewrite Hl. split; [| by simplify_eq].
-  rewrite map_filter_union.
+  move => Hl. apply heap_state_eq => /=. rewrite Hl. split.
+  - rewrite map_filter_union.
   2: { apply map_disjoint_list_to_map_l. rewrite Forall_fmap. apply Forall_forall.
        move => ?? /=. apply eq_None_not_Some. move => /heap_wf/=. naive_solver. }
-  rewrite (map_filter_id _ (h_heap h)).
-  2: { move => [??] ? /(mk_is_Some _ _) /heap_wf/=Hwf ?. subst. naive_solver. }
-  rewrite map_filter_empty_iff_2 ?left_id_L //.
-  move => ?? /(elem_of_list_to_map_2 _ _ _)/elem_of_list_fmap[?[??]]. simplify_eq/=. by apply.
-Qed.
+  (* rewrite (map_filter_id _ (h_heap h)). *)
+  (* 2: { move => [??] ? /(mk_is_Some _ _) /heap_wf/=Hwf ?. subst. naive_solver. } *)
+  (* rewrite map_filter_empty_iff_2 ?left_id_L //. *)
+  (* move => ?? /(elem_of_list_to_map_2 _ _ _)/elem_of_list_fmap[?[??]]. simplify_eq/=. by apply. *)
+(* Qed. *)
+*)
 
 Lemma heap_free_update h l l' v :
   l'.1 = l.1 →
@@ -862,68 +843,44 @@ Proof.
 Qed.
 
 Program Definition heap_merge (h1 h2 : heap_state) : heap_state :=
-  Heap (h_heap h1 ∪ h_heap h2) (h_used_blocks h1 ∪ h_used_blocks h2) _.
-Next Obligation. move => ????. move => /lookup_union_is_Some[/heap_wf?|/heap_wf?]; set_solver. Qed.
+  Heap (h_heap h1 ∪ h_heap h2) (h_provs h1 ∪ h_provs h2) _.
+Next Obligation. move => ???. move => /lookup_union_is_Some[/heap_wf?|/heap_wf?]; set_solver. Qed.
 
 Lemma h_static_provs_heap_merge h1 h2 :
   h_static_provs (heap_merge h1 h2) = h_static_provs h1 ∪ h_static_provs h2.
-Proof. set_solver. Qed.
+Proof. by rewrite /h_static_provs/= filter_union_L. Qed.
 
 Lemma h_provs_heap_merge h1 h2 :
   h_provs (heap_merge h1 h2) = h_provs h1 ∪ h_provs h2.
- Proof. unfold h_provs. set_solver. Qed.
+Proof. done. Qed.
 
 
 Program Definition heap_restrict (h : heap_state) (P : prov → Prop) `{!∀ x, Decision (P x)} : heap_state :=
-  Heap (filter (λ x, P x.1.1) h.(h_heap)) h.(h_used_blocks) _.
-Next Obligation. move => ?????. rewrite map_lookup_filter => -[?/bind_Some[?[??]]]. by apply heap_wf. Qed.
+  Heap (filter (λ x, P x.1.1) h.(h_heap)) h.(h_provs) _.
+Next Obligation. move => ????. rewrite map_lookup_filter => -[?/bind_Some[?[??]]]. by apply heap_wf. Qed.
 
 Lemma h_static_provs_heap_restrict h (P : prov → Prop) `{!∀ x, Decision (P x)} :
-  h_static_provs (heap_restrict h P) = filter P (h_static_provs h).
-Proof.
-  apply set_eq => p. rewrite elem_of_filter !elem_of_h_static_provs /=.
-  rewrite /is_Some. setoid_rewrite map_lookup_filter_Some. naive_solver.
-Qed.
+  h_static_provs (heap_restrict h P) = h_static_provs h.
+Proof. done. Qed.
 
 Lemma h_provs_heap_restrict h (P : prov → Prop) `{!∀ x, Decision (P x)} :
-  h_provs (heap_restrict h P) = filter (λ p, is_ProvBlock p ∨ P p) (h_provs h).
-Proof.
-  apply set_eq => p.
-  rewrite elem_of_filter !elem_of_h_provs h_static_provs_heap_restrict elem_of_filter /= elem_of_h_static_provs.
-  split; [naive_solver|].
-  move => ?. destruct!; [|naive_solver..].
-  by destruct l.1.
-Qed.
+  h_provs (heap_restrict h P) = h_provs h.
+Proof. done. Qed.
 
 Program Definition heap_from_blocks (bs : gmap prov (gmap Z val)) : heap_state :=
-  Heap (gmap_uncurry bs) (set_omap prov_to_block (dom bs)) _.
+  Heap (gmap_uncurry bs) (dom bs) _.
 Next Obligation.
-  move => bs [??] ?/=. rewrite lookup_gmap_uncurry. move => [? /bind_Some[?[??]]] ?. simplify_eq.
-  apply: elem_of_set_omap_2; [by apply elem_of_dom|done].
+  move => ?[??]. rewrite lookup_gmap_uncurry => -[? /bind_Some[?[??]]]/=.
+  by apply elem_of_dom.
 Qed.
 
 Lemma h_static_provs_heap_from_blocks bs :
-  map_Forall (λ p b, b ≠ ∅) bs →
   h_static_provs (heap_from_blocks bs) = filter is_ProvStatic (dom bs).
-Proof.
-  move => Hnotempty.
-  apply set_eq => p. rewrite elem_of_h_static_provs elem_of_filter /=. f_equiv. split.
-  - move => [[??][? ]]. rewrite lookup_gmap_uncurry. move => [? /bind_Some?]. apply elem_of_dom. naive_solver.
-  - move => /elem_of_dom[??]. ogeneralize (Hnotempty _ _ _); [done|]. move => /(map_choose _)[?[??]].
-    eexists (_, _). split; [done|]. rewrite lookup_gmap_uncurry. by simplify_map_eq.
-Qed.
+Proof. done. Qed.
 
 Lemma h_provs_heap_from_blocks bs :
-  map_Forall (λ p b, b ≠ ∅) bs →
   h_provs (heap_from_blocks bs) = dom bs.
-Proof.
-  move => ?. apply set_eq => p. rewrite elem_of_h_provs/=. rewrite h_static_provs_heap_from_blocks //.
-  rewrite - {3}(filter_union_complement_L is_ProvStatic (dom bs)). 2: apply inhabitant.
-  rewrite elem_of_union. f_equiv. rewrite elem_of_filter. split.
-  - move => [? [-> /elem_of_set_omap[p' [??]]]]. destruct p' => //. naive_solver.
-  - move => [??]. destruct p => //=. split!. apply elem_of_set_omap. naive_solver.
-Qed.
-
+Proof. done. Qed.
 
 Fixpoint heap_fresh_list (xs : list Z) (bs : gset block_id) (h : heap_state) : list loc :=
   match xs with
@@ -1239,25 +1196,6 @@ Proof.
   move => Hdisj. rewrite !fds_init_heap_insert //. apply map_disjoint_union_l_2.
   - apply fds_init_heap_map_disjoint. apply: map_disjoint_Some_l; [done|]. apply lookup_insert.
   - apply IH. apply: map_disjoint_weaken_l; [done|]. by apply insert_subseteq_r.
-Qed.
-
-Lemma fd_init_heap_not_empty f fn :
-  Forall (λ z, 0 < z)%Z fn.*2  →
-  map_Forall (λ p b, b ≠ ∅) (fd_init_heap f fn).
-Proof.
-  move => Hall p b /fd_init_heap_lookup_Some[?[?[?[??]]]]. simplify_eq.
-  move => /map_empty. move => /(_ 0). apply not_eq_None_Some. eexists _.
-  rewrite zero_block_lookup_Some //. split!.
-  exploit @Forall_lookup_1; [done..| rewrite list_lookup_fmap_Some; naive_solver|].
-  simpl. lia.
-Qed.
-
-Lemma fds_init_heap_not_empty fns :
-  map_Forall (λ f fn, Forall (λ z, 0 < z)%Z fn.*2) fns →
-  map_Forall (λ p b, b ≠ ∅) (fds_init_heap fns).
-Proof.
-  move => Hall p b /fds_init_heap_lookup_Some[?[?[??]]].
-  apply: fd_init_heap_not_empty; [|done]. by apply: Hall.
 Qed.
 
 (** ** state *)

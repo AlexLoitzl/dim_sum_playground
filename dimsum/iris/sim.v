@@ -241,7 +241,7 @@ Section sim_gen.
                    (leibnizO (option EV) -d> leibnizO (m.(m_state)) -d> iPropO Σ) -d> iPropO Σ) :
     leibnizO (m.(m_state)) -d>
       (leibnizO (option EV) -d> leibnizO (m.(m_state)) -d> iPropO Σ) -d> iPropO Σ := λ σ Π,
-  (ord_later_ctx -∗ |={∅}=> (Π None σ) ∨
+  (|={∅}=> (Π None σ) ∨
         ts_step ts m σ (λ κ σ', ▷ₒ?ts |={∅}=> if κ is Some _ then Π κ σ' else sim_gen σ' Π))%I.
 
   Global Instance sim_gen_pre_ne n:
@@ -255,8 +255,8 @@ Section sim_gen.
     ⊢ □ (∀ σ Π, sim1 σ Π -∗ sim2 σ Π)
     → ∀ σ Π , sim_gen_pre sim1 σ Π -∗ sim_gen_pre sim2 σ Π.
   Proof.
-    iIntros "#Hinner" (σ Π) "Hsim ?".
-    iMod ("Hsim" with "[$]") as "[?|Hsim]"; [by iLeft; iFrame| iRight; iModIntro].
+    iIntros "#Hinner" (σ Π) "Hsim".
+    iMod ("Hsim") as "[?|Hsim]"; [by iLeft; iFrame| iRight; iModIntro].
     iApply (ts_step_wand with "Hsim"). iIntros (??) "Hsim" => /=.
     iMod "Hsim". case_match => //. by iApply "Hinner".
   Qed.
@@ -349,8 +349,8 @@ Section sim_gen.
     iIntros (?) "Hsim".
     iApply (sim_gen_ind with "[] Hsim"). { solve_proper. }
     iIntros "!>" (??) "Hsim". iIntros (?) "Hc".
-    rewrite sim_gen_unfold. iIntros "?".
-    iMod ("Hsim" with "[$]") as "[?|Hsim]"; [iLeft| iRight].
+    rewrite sim_gen_unfold.
+    iMod ("Hsim") as "[?|Hsim]"; [iLeft| iRight].
     - iMod ("Hc" with "[$]") as "$". done.
     - iModIntro. iApply (ts_step_wand with "Hsim").
       iIntros (??) "Hsim". iMod "Hsim" as "Hsim". iMod "Hsim" as "Hsim".
@@ -379,8 +379,8 @@ Section sim_gen.
     iIntros (?) "Hsim".
     iApply (sim_gen_ind with "[] Hsim"). { solve_proper. }
     iIntros "!>" (??) "Hsim". iIntros (?) "Hc".
-    rewrite sim_gen_unfold. iIntros "#?".
-    iMod ("Hsim" with "[$]") as "[?|Hsim]".
+    rewrite sim_gen_unfold.
+    iMod ("Hsim") as "[?|Hsim]".
     - iSpecialize ("Hc" with "[$]"). iDestruct "Hc" as "[$|[_ Hc]]"; [done|].
       rewrite sim_gen_unfold. by iApply "Hc".
     - iModIntro. iRight. iApply (ts_step_wand with "Hsim"). iIntros (? ?) "Hsim /=".
@@ -415,19 +415,19 @@ Section sim_gen.
   Lemma sim_gen_ctx σ Π :
     (ord_later_ctx -∗ σ ≈{ ts, m }≈> Π) -∗
     σ ≈{ ts, m }≈> Π.
-  Proof. iIntros "Hsim". rewrite sim_gen_unfold. iIntros "#?". by iApply "Hsim". Qed.
+  Proof. iIntros "Hsim". iApply fupd_sim_gen. iMod ord_later_ctx_intro. by iApply "Hsim". Qed.
 
   Lemma sim_gen_stop σ Π :
     Π None σ -∗
     σ ≈{ ts, m }≈> Π.
-  Proof. iIntros "?". rewrite sim_gen_unfold. iIntros "?". iLeft. by iFrame. Qed.
+  Proof. iIntros "?". rewrite sim_gen_unfold. iLeft. by iFrame. Qed.
 
   Lemma sim_gen_step σ Π :
     (ts_step ts m σ (λ κ σ', ▷ₒ?ts |={∅}=> Π κ σ' ∨ ⌜κ = None⌝ ∗ σ' ≈{ ts, m }≈> Π)) -∗
     σ ≈{ ts, m }≈> Π.
   Proof.
     iIntros "HΠ". rewrite sim_gen_unfold.
-    iIntros "?". iRight. iModIntro. iApply (ts_step_wand with "HΠ").
+    iRight. iModIntro. iApply (ts_step_wand with "HΠ").
     iIntros (? ?) "Hsim". iMod "Hsim". iMod "Hsim". iModIntro.
     iDestruct "Hsim" as "[?|[% ?]]"; case_match => //. by iApply sim_gen_stop.
   Qed.
@@ -470,18 +470,17 @@ Section sim_tgt.
   Lemma sim_tgt_elim E σ Π κs n m_s σ_s :
     σ ~{m, κs, n}~>ₜ - →
     σ ≈{ m }≈>ₜ Π -∗
-    ord_later_auth n -∗
-    (∀ κ σ' n' κs', Π κ σ' -∗ ⌜σ' ~{m, κs', n'}~>ₜ -⌝ -∗ ord_later_auth n' -∗
+    ord_later_auth (OrdMax n) -∗
+    (∀ κ σ' n' κs', Π κ σ' -∗ ⌜σ' ~{m, κs', n'}~>ₜ -⌝ -∗ ord_later_auth (OrdMax n') -∗
            |={E}=> ⌜σ_s ~{m_s, tapp (option_trace κ) κs'}~>ₜ -⌝) -∗
     |={E}=> ⌜σ_s ~{m_s, κs}~>ₜ -⌝.
   Proof.
     iIntros (?) "Hsim Ha Hc".
-    iDestruct (ord_later_ctx_alloc with "[$]") as "#?".
     pose (F := (λ σ Π,
       ∀ n κs,
         ⌜σ ~{m, κs, n}~>ₜ -⌝ -∗
-        ord_later_auth n -∗
-        (∀ κ σ' n' κs', Π κ σ' -∗ ⌜σ' ~{m, κs', n'}~>ₜ -⌝ -∗ ord_later_auth n' -∗
+        ord_later_auth (OrdMax n) -∗
+        (∀ κ σ' n' κs', Π κ σ' -∗ ⌜σ' ~{m, κs', n'}~>ₜ -⌝ -∗ ord_later_auth (OrdMax n') -∗
            |={E}=> ⌜σ_s ~{m_s, tapp (option_trace κ) κs'}~>ₜ -⌝) -∗
         |={E}=> ⌜σ_s ~{m_s, κs}~>ₜ -⌝)%I).
     iAssert (∀ Π, σ ≈{ m }≈>ₜ Π -∗ F σ Π)%I as "Hgen"; last first.
@@ -490,7 +489,7 @@ Section sim_tgt.
     iApply (sim_gen_ind with "[] Hsim"). { unfold F. solve_proper. }
     iIntros "!>" (??) "Hsim". iIntros (?? Htrace) "Ha Hc".
     iMod (fupd_mask_subseteq ∅) as "He"; [set_solver|].
-    iMod ("Hsim" with "[$]") as "[HΠ|Hsim]"; iMod "He" as "_".
+    iMod ("Hsim") as "[HΠ|Hsim]"; iMod "He" as "_".
     { iApply ("Hc" $! None with "[$] [//] [$]"). }
     move: Htrace => /tnhas_trace_inv Htrace.
     iApply (fupd_mono _ _ ⌜_⌝). { iPureIntro. by apply: thas_trace_under_tall. }
@@ -499,14 +498,14 @@ Section sim_tgt.
     iMod ("Hsim" with "[//]") as (b ?) "Hsim".
     iMod (ord_later_elim with "Hsim Ha [-]"); [|done]. iIntros "Ha".
     iMod (ord_later_update with "Ha"); [shelve|].
-    iModIntro. iExists _. iFrame. iSplit; [done|]. iIntros "Ha Hsim". iModIntro => /=.
+    iModIntro. iExists (OrdMax _). iFrame. iSplit; [done|]. iIntros "Ha Hsim". iModIntro => /=.
     iMod "Hsim". iMod "He" as "_". case_match.
     + iMod ("Hc" with "[$] [%] [$]") as %?. 2: { iPureIntro. by apply: thas_trace_mono. }
       apply: tnhas_trace_mono; [by eauto|done|by econs|done].
     + iApply ("Hsim" with "[%] [$] [$]"). simplify_eq/=.
       apply: tnhas_trace_mono; [by eauto|done|by econs|done].
     Unshelve.
-    * etrans; [|done]. apply o_le_S.
+    * rewrite /subseteq/=. etrans; [|done]. apply o_le_S.
     * done.
     * done.
   Qed.
@@ -520,12 +519,11 @@ Section sim_src.
   (* One should be able to get rid of the [HasNoLc] if one uses classical logic. *)
   (* TODO: Is it possible to get a stronger adequacy lemma? *)
   Lemma sim_src_elim E Pσ σ Π κs `{!VisNoAng m} :
-    ord_later_ctx -∗
     σ ≈{ m }≈>ₛ Π -∗
     (∀ κ σ', Π κ σ' -∗ ∃ κs', ⌜κs = tapp (option_trace κ) κs'⌝ ∗ |={E}=> ⌜σ' ~{m, κs'}~>ₜ Pσ⌝ ) -∗
     |={E}=> ⌜σ ~{m, κs}~>ₜ Pσ⌝.
   Proof.
-    iIntros "#? Hsim HΠ".
+    iIntros "Hsim HΠ".
     pose (F := (λ σ Π,
       (∀ κ σ', Π κ σ' -∗ ∃ κs', ⌜κs = tapp (option_trace κ) κs'⌝ ∗ |={E}=> ⌜σ' ~{m, κs'}~>ₜ Pσ⌝ ) -∗
         |={E}=> ⌜σ ~{m, κs}~>ₜ Pσ⌝)%I  : _ → _ → iProp Σ).
@@ -535,7 +533,7 @@ Section sim_src.
     iApply (sim_gen_ind with "[] Hsim"). { solve_proper. }
     iIntros "!>" (??) "Hsim". iIntros "Hc".
     iMod (fupd_mask_subseteq ∅) as "He"; [set_solver|].
-    iMod ("Hsim" with "[$]") as "[?|[%κ [% [% Hsim]]]]"; iMod "He" as "_".
+    iMod ("Hsim") as "[?|[%κ [% [% Hsim]]]]"; iMod "He" as "_".
     { iDestruct ("Hc" with "[$]") as (??) "?". subst. done. }
     destruct κ; last first; simplify_eq/=.
     - iApply (fupd_mono _ _ ⌜_⌝). { iPureIntro. by apply TTraceStepNone. }
@@ -752,13 +750,13 @@ Theorem sim_adequacy Σ EV (m_t m_s : module EV) `{!dimsumPreG Σ} `{!VisNoAng (
 Proof.
   intros Hsim. constructor => κs /thas_trace_n [n Htrace].
   eapply uPred.pure_soundness. apply (step_fupdN_soundness_no_lc _ 0 0) => ? /=. simpl in *. iIntros "_".
-  iMod (ord_later_alloc n) as (?) "Ha". iDestruct (ord_later_ctx_alloc with "Ha") as "#?".
+  iMod (ord_later_alloc (OrdMax n)) as (?) "Ha".
   iMod Hsim as "Hsim".
   clear Hsim. set (X := DimsumGS _ _ _ _ : dimsumGS Σ).
   pose (F := (λ σ_t σ_s,
                ∀ n κs,
                ⌜σ_t ~{ m_trans m_t, κs, n }~>ₜ -⌝ -∗
-               ord_later_auth n -∗
+               ord_later_auth (OrdMax n) -∗
                |={⊤,∅}=> ⌜σ_s ~{ m_trans m_s, κs }~>ₜ -⌝)%I
           : _ → _ → iProp Σ ).
   iAssert (∀ σ_t σ_s, σ_t ⪯{m_trans m_t, m_trans m_s} σ_s -∗ F σ_t σ_s)%I as "Hgen"; last first. {
@@ -770,7 +768,7 @@ Proof.
   iApply (fupd_mask_weaken ∅); [set_solver|]. iIntros "He".
   iApply (sim_tgt_elim with "Hsim Ha"); [done|].
   iIntros (????) "Hsim %?".
-  iApply (sim_src_elim with "[$] Hsim"). iIntros (??) "[% Hsim]". subst.
+  iApply (sim_src_elim with "Hsim"). iIntros (??) "[% Hsim]". subst.
   iExists _. iSplit; [done|].
   iMod "He" as "_". iApply ("Hsim" with "[//] [$]").
 Qed.
