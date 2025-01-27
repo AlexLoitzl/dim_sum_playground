@@ -907,6 +907,61 @@ Qed.
 
 (* TODO 4: Now do it with private state *)
 
+  Definition getc_spec_priv : spec rec_event Z void :=
+    Spec.forever(
+    (* Incoming call of getc *)
+    '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
+    TAssume (f = "getc");;
+    TAssume (vs = []);;
+    (* There is a current position of the buffer *)
+    v ← TGet;
+    TPut (v + 1);;
+    (* Return old position *)
+    TVis (Outgoing, ERReturn (ValNum v) h)).
+
+  (* TODO 2: Prove a separation logic tuple for it - analogous to sim_locle_spec2 (in ./memmove) *)
+
+  Lemma sim_getc_spec_heap_priv `{!specGS} Π Φ :
+    (* Someone is switching to me *)
+    switch Π ({{ κ σ POST,
+      (* REVIEW: Here, think about do I have to prove this or do I get it *)
+      ∃ f vs h, ⌜κ = Some (Incoming, ERCall f vs h)⌝ ∗
+      (* Here, a bit of intuition is missing for why it goes into the POST *)
+    POST Tgt _ (spec_trans _ Z) ({{ σ' Π',
+      (* REVIEW: Here, think about do I have to prove this or do I get it *)
+      ∃ v, ⌜σ' = σ⌝ ∗ ⌜f = "getc"⌝ ∗ ⌜vs = []⌝ ∗
+      (* Switch back *)
+    switch Π' ({{ κ σ POST,
+      (* This is optional event, REVIEW: is this related to Π *)
+      ⌜κ = (Some (Outgoing, ERReturn (ValNum v) h))⌝ ∗
+      (* So what does this mean? *)
+      ⌜σ = (getc_spec_heap, v)⌝ ∗
+      (* Looks like ghost things *)
+      spec_state (v + 1)
+      }})}})}}) -∗
+    (* REVIEW: This is an arbitrary Φ, because danger? *)
+    TGT getc_spec_heap @ Π {{ Φ }}.
+  Proof. Admitted.
+
+  (* TODO 3 *)
+  Definition getc_fn_spec_strong (es : list expr) (POST : (val → iProp Σ) → iProp Σ) : iProp Σ :=
+    let lpos := (ProvStatic "read" 0, 0) in
+    ∃ (pos: Z), ⌜es = []⌝ ∗ lpos ↦ pos ∗
+    POST (λ v, ⌜v = ValNum pos⌝ ∗ lpos ↦ (pos + 1)).
+
+  Lemma sim_getc_heap_priv fns Π :
+    rec_fn_auth fns -∗
+    "getc" ↪ None -∗
+    switch_link Tgt Π ({{ σ0 POST,
+      ∃ vs h',
+    POST (ERCall "getc" vs h') (spec_trans _ _) (getc_spec_heap, tt) ({{ _ Πr,
+    switch_link Tgt Πr ({{ σ POST,
+      ∃ v h'', ⌜σ = (getc_spec_heap, tt)⌝ ∗
+    POST (ERReturn v h'') _ σ0 ({{ _ Πx,
+      ⌜Πx = Π⌝}})}})}})}}) -∗
+    rec_fn_spec_hoare Tgt Π "getc" getc_fn_spec_strong.
+  Proof. Admitted.
+
 End sim_spec.
 
 Definition __NR_READ : Z := 0.
