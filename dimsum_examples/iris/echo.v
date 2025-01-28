@@ -972,6 +972,52 @@ Qed.
     iIntros "!>".
     iIntros (??) "[% [% H2]]". subst.
     iApply "HC". iSplit!.
+  Qed.
+
+  Lemma sim_getc_spec_heap_priv_weak' `{!specGS} Π Φ :
+    switch Π ({{ κ σ POST,
+      (* REVIEW: Here, think about do I have to prove this or do I get it *)
+      ∃ f vs h, ⌜κ = Some (Incoming, ERCall f vs h)⌝ ∗
+      (* Here, a bit of intuition is missing for why it goes into the POST *)
+      POST Tgt _ (spec_trans _ Z) ({{ σ' Π',
+      (* REVIEW: Here, think about do I have to prove this or do I get it *)
+      ∃ v, ⌜σ' = σ⌝ ∗ ⌜f = "getc"⌝ ∗ ⌜vs = []⌝ ∗ (spec_state v) ∗
+      (* Switch back *)
+      switch Π' ({{ κ σ POST,
+      (* This is optional event, REVIEW: is this related to Π *)
+      ⌜κ = (Some (Outgoing, ERReturn (ValNum v) h))⌝ ∗
+      (* So what does this mean? *)
+      ⌜σ = (getc_spec_priv, (v + 1)%Z)⌝ (* ∗ *)
+      (* spec_state (v + 1) *)
+      }})}})}}) -∗
+    (* REVIEW: This is an arbitrary Φ, because danger? *)
+    TGT getc_spec_priv @ Π {{ Φ }}.
+  Proof.
+    iDestruct 1 as "HC".
+    unfold getc_spec_priv at 2. rewrite unfold_forever -/getc_spec_priv.
+    rewrite /TReceive bind_bind bind_bind.
+    iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>".
+    rewrite bind_bind. setoid_rewrite bind_ret_l.
+    iApply (sim_gen_TVis with "[-]").
+    (* Introducing arbitrary state *)
+    iIntros (v) "Hs !>". simpl.
+    iIntros (??) "[% [% _]]". subst.
+    iApply "HC". iSplit!. iIntros (??).
+    iDestruct 1 as (????) "[Hs' HC]". subst.
+    (* REVIEW: Why (not) are the state names the same *)
+    iApply (sim_gen_expr_intro _ tt with "[Hs]"); simpl; [done..|].
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    rewrite bind_bind. iApply (sim_gen_TGet with "[-]").
+    iSplit. { done. }
+    iIntros "!>".
+    rewrite bind_bind. iApply (sim_gen_TPut with "[Hs']"). { done. }
+    iIntros "Hs". iIntros "!>".
+    iApply (sim_gen_TVis with "[-]"). iIntros (v') "Hs'".
+    iDestruct (mstate_var_merge with "Hs Hs'") as "[-> Hfull]".
+    iIntros "!>".
+    iIntros (??) "[% [% H2]]". subst.
+    iApply "HC". iSplit!.
 Qed.
 
   Lemma sim_getc_spec_heap_priv `{!specGS} Π Φ :
@@ -1026,14 +1072,13 @@ Qed.
     pose (Hspec := SpecGS γ).
 
     iApply (sim_gen_expr_intro _ tt with "[Hγ1]"); simpl; [done..|].
-    iApply sim_getc_spec_heap_priv_weak => /=. iIntros (??). iDestruct 1 as (????) "HC". subst.
+    iApply sim_getc_spec_heap_priv_weak' => /=. iIntros (??). iDestruct 1 as (????) "HC". subst.
     iApply "HΠi". iSplit!. iIntros (??) "[% [% HΠr]]". simplify_eq/=.
     iApply "HC".
     iExists (_).
-    (* iDestruct (rec_mapsto_lookup with "Htoa Hlpos") as "%H". *)
     (* FIXME REVIEW: Why does iSplit! not duplicate the context *)
     (* iSplit!. *)
-    do 3 (iSplit; [done|]). iSplit. { admit. }
+    do 3 (iSplit; [done|]).
     iSplitL "Hγ2". { done. }
     iIntros (??). iDestruct 1 as (?) "%HC".
     iApply "HΠr". iSplit!. iIntros (??) "[% HΠf]". simplify_eq.
@@ -1043,7 +1088,7 @@ Qed.
     iApply "Hσ". iSplit!.
     iFrame.
     by iApply "HΦ".
-  Admitted.
+  Qed.
 
 End sim_spec.
 
