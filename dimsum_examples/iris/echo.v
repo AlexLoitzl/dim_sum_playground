@@ -926,7 +926,7 @@ Qed.
     reflexivity. Qed.
 
   Lemma sim_getc_spec_heap_priv `{!specGS} Π Φ :
-    (* Someone is switching to me *)
+
     switch Π ({{ κ σ POST,
       (* REVIEW: Here, think about do I have to prove this or do I get it *)
       ∃ f vs h, ⌜κ = Some (Incoming, ERCall f vs h)⌝ ∗ (* (* NOTE: Why does this fail? *) ⌜σ.2 = v⌝ ∗ *)
@@ -973,24 +973,53 @@ Qed.
 Admitted.
 
   (* TODO 3 *)
+  Definition getc_fn_spec_priv (v : Z) (es : list expr) (POST : (val → iProp Σ) → iProp Σ) : iProp Σ :=
+    ⌜es = []⌝ ∗
+    (* FIXME: Which scope do I need for the ⌜ ⌝ *)
+    POST (λ v', (bi_pure (v' = ValNum v))).
+    (* POST (λ v', (⌜v' = ValNum v⌝)). *)
+    (* POST (λ v', ((⌜v' = ValNum v⌝)%bi_scope)). *)
 
-  Definition getc_fn_spec_priv (es : list expr) (POST : (val → iProp Σ) → iProp Σ) : iProp Σ :=
-    let lpos := (ProvStatic "read" 0, 0) in
-    ∃ (pos: Z), ⌜es = []⌝ ∗ lpos ↦ pos ∗
-    POST (λ v, ⌜v = ValNum pos⌝ ∗ lpos ↦ (pos + 1)).
-
-  Lemma sim_getc_heap_priv fns Π :
+  Lemma sim_getc_heap_priv v fns Π :
     rec_fn_auth fns -∗
     "getc" ↪ None -∗
     switch_link Tgt Π ({{ σ0 POST,
-      ∃ vs h' v,
-    POST (ERCall "getc" vs h') (spec_trans _ _) (getc_spec_priv, v) ({{ _ Πr,
+      ∃ vs h',
+    POST (ERCall "getc" vs h') (spec_trans _ Z) (getc_spec_priv, v) ({{ _ Πr,
     switch_link Tgt Πr ({{ σ POST,
       ∃ h'', ⌜σ = (getc_spec_priv, (v + 1)%Z)⌝ ∗
     POST (ERReturn v h'') _ σ0 ({{ _ Πx,
       ⌜Πx = Π⌝}})}})}})}}) -∗
-    rec_fn_spec_hoare Tgt Π "getc" getc_fn_spec_priv.
-  Proof. Admitted.
+    rec_fn_spec_hoare Tgt Π "getc" (getc_fn_spec_priv v).
+  Proof.
+    iIntros "#Hfns #Hf HΠ" (es Φ) "HΦ". iDestruct "HΦ" as (->) "HΦ".
+    iApply (sim_tgt_rec_Call_external with "[$]").
+    iIntros (???) "#?Htoa Haa !>".
+    iIntros (??) "[% [% Hσ]]". subst. iApply "HΠ" => /=. iSplit!. iIntros (??) "[-> HΠi]".
+
+    (* Am I here splitting the heap? *)
+    iMod (mstate_var_alloc Z) as (γ) "?".
+    iMod (mstate_var_split γ v with "[$]") as "[Hγ ?]".
+    pose (Hspec := SpecGS γ).
+
+    iApply (sim_gen_expr_intro _ tt with "[Hγ]"); simpl; [done..|].
+    iApply sim_getc_spec_heap_priv => /=. iIntros (??). iDestruct 1 as (????) "HC". subst.
+    iApply "HΠi". iSplit!. iIntros (??) "[% [% HΠr]]". simplify_eq/=.
+    iApply "HC".
+    iExists (_).
+    (* iDestruct (rec_mapsto_lookup with "Htoa Hlpos") as "%H". *)
+    (* FIXME REVIEW: Why does iSplit! not duplicate the context *)
+    (* iSplit!. *)
+    do 3 (iSplit; [done|]). iSplit. { admit. }
+    iIntros (??). iDestruct 1 as (??) "HC".
+    iApply "HΠr". iSplit!. iIntros (??) "[% HΠf]". simplify_eq.
+    iApply sim_tgt_rec_Waiting_raw.
+    iSplit. { iIntros. iModIntro. iApply "HΠf". iSplit!. iIntros (??) "[% [% ?]]". simplify_eq. }
+    iIntros (???) "!>". iApply "HΠf". iSplit!. iIntros (??[?[??]]). simplify_eq.
+    iApply "Hσ". iSplit!.
+    iFrame.
+    by iApply "HΦ".
+  Admitted.
 
 End sim_spec.
 
