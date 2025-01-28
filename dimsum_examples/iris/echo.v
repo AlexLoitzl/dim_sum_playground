@@ -921,27 +921,15 @@ Qed.
 
   (* TODO 2: Prove a separation logic tuple for it - analogous to sim_locle_spec2 (in ./memmove) *)
 
-
-  Goal ((spec rec_event Z void * Z)%type = m_state (spec_trans (io_type * rec_ev) Z)).
-    reflexivity. Qed.
-
   Lemma sim_getc_spec_heap_priv_weak `{!specGS} Π Φ :
     switch Π ({{ κ σ POST,
-      (* REVIEW: Here, think about do I have to prove this or do I get it *)
       ∃ f vs h, ⌜κ = Some (Incoming, ERCall f vs h)⌝ ∗
-      (* Here, a bit of intuition is missing for why it goes into the POST *)
       POST Tgt _ (spec_trans _ Z) ({{ σ' Π',
-      (* REVIEW: Here, think about do I have to prove this or do I get it *)
       ∃ v, ⌜σ' = σ⌝ ∗ ⌜f = "getc"⌝ ∗ ⌜vs = []⌝ ∗ ⌜Π' = Π⌝ ∗ (spec_state v) ∗
-      (* Switch back *)
       switch Π' ({{ κ σ POST,
-      (* This is optional event, REVIEW: is this related to Π *)
       ⌜κ = (Some (Outgoing, ERReturn (ValNum v) h))⌝ ∗
-      (* So what does this mean? *)
       ⌜σ = (getc_spec_priv, (v + 1)%Z)⌝ (* ∗ *)
-      (* spec_state (v + 1) *)
       }})}})}}) -∗
-    (* REVIEW: This is an arbitrary Φ, because danger? *)
     TGT getc_spec_priv @ Π {{ Φ }}.
   Proof.
     iDestruct 1 as "HC".
@@ -950,7 +938,6 @@ Qed.
     iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>".
     rewrite bind_bind. setoid_rewrite bind_ret_l.
     iApply (sim_gen_TVis with "[-]").
-    (* Introducing arbitrary state *)
     iIntros (v) "Hs !>". simpl.
     iIntros (??) "[% [% H]]". subst.
     iApply "HC". iSplit!. iIntros (??).
@@ -976,22 +963,15 @@ Qed.
 
   Lemma sim_getc_spec_heap_priv_weak' `{!specGS} Π Φ :
     switch Π ({{ κ σ POST,
-      (* REVIEW: Here, think about do I have to prove this or do I get it *)
       ∃ f vs h, ⌜κ = Some (Incoming, ERCall f vs h)⌝ ∗
-      (* Here, a bit of intuition is missing for why it goes into the POST *)
       POST Tgt _ (spec_trans _ Z) ({{ σ' Π',
-      (* REVIEW: Here, think about do I have to prove this or do I get it *)
       ∃ v, ⌜σ' = σ⌝ ∗ ⌜f = "getc"⌝ ∗ ⌜vs = []⌝ ∗ (spec_state v) ∗
-      (* Switch back *)
       switch Π' ({{ κ σ POST,
-      (* This is optional event, REVIEW: is this related to Π *)
       ⌜κ = (Some (Outgoing, ERReturn (ValNum v) h))⌝ ∗
-      (* So what does this mean? *)
       ⌜σ = (getc_spec_priv, (v + 1)%Z)⌝ (* ∗ *)
-      (* spec_state (v + 1) *)
       }})}})}}) -∗
-    (* REVIEW: This is an arbitrary Φ, because danger? *)
     TGT getc_spec_priv @ Π {{ Φ }}.
+
   Proof.
     iDestruct 1 as "HC".
     unfold getc_spec_priv at 2. rewrite unfold_forever -/getc_spec_priv.
@@ -999,12 +979,10 @@ Qed.
     iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>".
     rewrite bind_bind. setoid_rewrite bind_ret_l.
     iApply (sim_gen_TVis with "[-]").
-    (* Introducing arbitrary state *)
     iIntros (v) "Hs !>". simpl.
     iIntros (??) "[% [% _]]". subst.
     iApply "HC". iSplit!. iIntros (??).
     iDestruct 1 as (????) "[Hs' HC]". subst.
-    (* REVIEW: Why (not) are the state names the same *)
     iApply (sim_gen_expr_intro _ tt with "[Hs]"); simpl; [done..|].
     rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
     rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
@@ -1022,19 +1000,12 @@ Qed.
 
   Lemma sim_getc_spec_heap_priv `{!specGS} Π Φ :
     switch Π ({{ κ σ POST,
-      (* REVIEW: Here, think about do I have to prove this or do I get it *)
-      ∃ f vs h, ⌜κ = Some (Incoming, ERCall f vs h)⌝ ∗ (* (* NOTE: Why does this fail? *) ⌜σ.2 = v⌝ ∗ *)
-      (* Here, a bit of intuition is missing for why it goes into the POST *)
+      ∃ f vs h, ⌜κ = Some (Incoming, ERCall f vs h)⌝ ∗
       POST Tgt _ (spec_trans _ Z) ({{ σ' Π',
-      (* REVIEW: Here, think about do I have to prove this or do I get it *)
       ∃ v, ⌜σ' = σ⌝ ∗ ⌜f = "getc"⌝ ∗ ⌜vs = []⌝ ∗ ⌜σ.2 = v⌝ ∗ ⌜Π' = Π⌝ ∗
-      (* Switch back *)
       switch Π' ({{ κ σ POST,
-      (* This is optional event, REVIEW: is this related to Π *)
       ⌜κ = (Some (Outgoing, ERReturn (ValNum v) h))⌝ ∗
-      (* So what does this mean? *)
       ⌜σ = (getc_spec_priv, (v + 1)%Z)⌝ ∗
-      (* FIXME: Do I need to change the parameter here? *)
       spec_state (v + 1)
       }})}})}}) -∗
     (* REVIEW: This is an arbitrary Φ, because danger? *)
@@ -1065,8 +1036,8 @@ Qed.
     iApply (sim_tgt_rec_Call_external with "[$]").
     iIntros (???) "#?Htoa Haa !>".
     iIntros (??) "[% [% Hσ]]". subst. iApply "HΠ" => /=. iSplit!. iIntros (??) "[-> HΠi]".
-    (* Am I here splitting the heap? *)
-    (* FIXME: Here, this is interesting. Why can I just make it up? *)
+    (* REVIEW: Introduce a "name" to refer to this particular state *)
+
     iMod (mstate_var_alloc Z) as (γ) "?".
     iMod (mstate_var_split γ v with "[$]") as "[Hγ1 Hγ2]".
     pose (Hspec := SpecGS γ).
@@ -1076,8 +1047,6 @@ Qed.
     iApply "HΠi". iSplit!. iIntros (??) "[% [% HΠr]]". simplify_eq/=.
     iApply "HC".
     iExists (_).
-    (* FIXME REVIEW: Why does iSplit! not duplicate the context *)
-    (* iSplit!. *)
     do 3 (iSplit; [done|]).
     iSplitL "Hγ2". { done. }
     iIntros (??). iDestruct 1 as (?) "%HC".
