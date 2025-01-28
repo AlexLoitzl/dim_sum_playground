@@ -1020,13 +1020,13 @@ Qed.
     iIntros (???) "#?Htoa Haa !>".
     iIntros (??) "[% [% Hσ]]". subst. iApply "HΠ" => /=. iSplit!. iIntros (??) "[-> HΠi]".
     (* Am I here splitting the heap? *)
-    (* FIXME: Here, this is interesting *)
+    (* FIXME: Here, this is interesting. Why can I just make it up? *)
     iMod (mstate_var_alloc Z) as (γ) "?".
-    iMod (mstate_var_split γ v with "[$]") as "[Hγ ?]".
+    iMod (mstate_var_split γ v with "[$]") as "[Hγ1 Hγ2]".
     pose (Hspec := SpecGS γ).
 
-    iApply (sim_gen_expr_intro _ tt with "[Hγ]"); simpl; [done..|].
-    iApply sim_getc_spec_heap_priv => /=. iIntros (??). iDestruct 1 as (????) "HC". subst.
+    iApply (sim_gen_expr_intro _ tt with "[Hγ1]"); simpl; [done..|].
+    iApply sim_getc_spec_heap_priv_weak => /=. iIntros (??). iDestruct 1 as (????) "HC". subst.
     iApply "HΠi". iSplit!. iIntros (??) "[% [% HΠr]]". simplify_eq/=.
     iApply "HC".
     iExists (_).
@@ -1034,7 +1034,8 @@ Qed.
     (* FIXME REVIEW: Why does iSplit! not duplicate the context *)
     (* iSplit!. *)
     do 3 (iSplit; [done|]). iSplit. { admit. }
-    iIntros (??). iDestruct 1 as (??) "HC".
+    iSplitL "Hγ2". { done. }
+    iIntros (??). iDestruct 1 as (?) "%HC".
     iApply "HΠr". iSplit!. iIntros (??) "[% HΠf]". simplify_eq.
     iApply sim_tgt_rec_Waiting_raw.
     iSplit. { iIntros. iModIntro. iApply "HΠf". iSplit!. iIntros (??) "[% [% ?]]". simplify_eq. }
