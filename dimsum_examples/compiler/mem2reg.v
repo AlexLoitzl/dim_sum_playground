@@ -316,10 +316,10 @@ Lemma pass_lexpr_op_correct ei' Ki ei Ks es es' x k (l: loc) n hi hs fns1 fns2 I
     (∀ (w1 w2: val),
        default (Val wi) (subst_map vsi <$> (var_val_to_expr <$> (f None))) = Val w1 →
       rec_heap_bij_return n fns1 fns2 Ki Ks
-        (r ∗ heap_bij_const_s l.1 (<[0%Z := w2]> (zero_block l k)) ∗ val_in_bij w1 w2) INV) →
+        (r ∗ heap_bij_const_s l.1 (<[0%Z := w2]> (zero_block k)) ∗ val_in_bij w1 w2) INV) →
     satisfiable (([∗ map] v1;v2 ∈ (delete x vsi);(delete x vss), val_in_bij v1 v2) ∗
                    heap_bij_inv hi hs ∗ val_in_bij wi ws ∗
-                   heap_bij_const_s l.1 (<[0%Z := ws]> (zero_block l k)) ∗
+                   heap_bij_const_s l.1 (<[0%Z := ws]> (zero_block k)) ∗
                    INV ∗ r ∗ rf) →
     vss !! x = Some (ValLoc l) →
     vsi !! x = Some wi →
@@ -378,7 +378,7 @@ Proof.
       iSatMonoBupd. iIntros "(Hvals & #Hbij & Hinv & #Hval & Hl & Hs & r & rf)".
       iMod (heap_bij_inv_update_s with "Hinv Hl") as "[Hinv Hl]".
       iFrame "∗#". iModIntro.
-      have -> : h_block (heap_update hs l w2) l.1 = <[0%Z:=w2]> (zero_block l k); [|done].
+      have -> : h_block (heap_update hs l w2) l.1 = <[0%Z:=w2]> (zero_block k); [|done].
       rewrite h_block_heap_update Hl. apply map_eq => i.
       iSatStart. iIntros "(? & ? & Hinv & ? & Hl & ?)"; simpl.
       iDestruct (heap_bij_inv_lookup_s (l.1, i) with "Hinv Hl") as %Hi.
@@ -438,11 +438,11 @@ Lemma pass_correct  r rf ei' Ki ei Ks es es' x (l: loc) n k h h' fns1 fns2 INV v
   `{Hfill2: !RecExprFill ei Ki (subst_map vsi (lexpr_to_expr ei'))}:
     l.2 = 0 →
     rec_heap_bij_call n fns1 fns2 INV →
-    (∀ w, rec_heap_bij_return n fns1 fns2 Ki Ks (r ∗ heap_bij_const_s l.1 (<[0%Z := w]> (zero_block l k))) INV) →
+    (∀ w, rec_heap_bij_return n fns1 fns2 Ki Ks (r ∗ heap_bij_const_s l.1 (<[0%Z := w]> (zero_block k))) INV) →
     vss !! x = Some (ValLoc l) →
     vsi !! x = Some vi →
     dom vss ⊆ dom vsi →
-    satisfiable (heap_bij_inv h h' ∗ heap_bij_const_s l.1 (<[0%Z := vs]> (zero_block l k)) ∗
+    satisfiable (heap_bij_inv h h' ∗ heap_bij_const_s l.1 (<[0%Z := vs]> (zero_block k)) ∗
                 val_in_bij vi vs ∗ ([∗ map] v1;v2 ∈ (delete x vsi);(delete x vss), val_in_bij v1 v2) ∗
                 INV ∗ r ∗ rf) →
     crun () (pass x es') = CResult () r_p (CSuccess ei') →
@@ -559,7 +559,7 @@ Lemma heap_bij_alloc_elim vs l ls li i h1 h2 n h h':
   heap_alloc_list vs ls h2 h →
   heap_bij_inv h1 h2 ⊢ |==>
     heap_bij_inv h' h ∗
-    heap_bij_const_s l.1 (zero_block l n) ∗
+    heap_bij_const_s l.1 (zero_block n) ∗
     [∗ list] li; ls ∈ li; (delete i ls), loc_in_bij li ls.
 Proof.
   intros Hlook1 Hlook2.
@@ -591,7 +591,7 @@ Lemma heap_bij_free_elim lis lss hi hs hs' w l k i:
   lss !! i = Some (l, k) →
   lis.*2 = (delete i lss.*2) →
     heap_bij_inv hi hs -∗
-    heap_bij_const_s l.1 (<[0%Z:=w]> (zero_block l k)) -∗
+    heap_bij_const_s l.1 (<[0%Z:=w]> (zero_block k)) -∗
     ([∗ list] li;ls ∈ lis.*1;(delete i lss.*1), loc_in_bij li ls) ==∗
       ∃ hi' : heap_state, ⌜heap_free_list lis hi hi'⌝ ∗
         heap_bij_inv hi' hs'.
@@ -717,9 +717,8 @@ Proof.
       rewrite list_fmap_delete.
       rewrite {1}(delete_Permutation vars.*1); last done.
       simpl. clear. set_solver.
-    + erewrite (zero_block_insert_zero l k); last first.
+    + erewrite (zero_block_insert_zero k); last first.
       { eapply Forall_lookup_1 in Hall; eauto. lia. }
-      { by eapply heap_alloc_list_offset_zero. }
       iSatMonoBupd. iIntros "(Hbij & Hvals & #Hs & r & rf)".
       iFrame "rf r".
       iMod (heap_bij_alloc_elim with "Hbij") as "(Hbij & Hconst & #Hlocs)"; eauto.

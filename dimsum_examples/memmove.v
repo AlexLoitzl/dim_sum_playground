@@ -504,6 +504,7 @@ Proof.
   tstep_i. split! => ? Hf. unfold main_prog in Hf. simplify_map_eq. split!.
   tstep_i => *. destruct!/=. split; [by repeat econs|].
   tstep_i. rewrite offset_loc_0.
+  have ? : l.2 = 0 by destruct select (heap_is_fresh _ _) as [?[??]].
   tstep_i.
   split.
   { eapply heap_alive_alloc; [done|lia]. }
