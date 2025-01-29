@@ -879,7 +879,7 @@ Section sim_spec.
 
     (* Am I here splitting the heap? *)
     iMod (mstate_var_alloc unit) as (γ) "?".
-    iMod (mstate_var_split γ tt with "[$]") as "[Hγ ?]".
+    iMod (mstate_var_split γ tt with "[$]") as "[Hγ _]".
     pose (Hspec := SpecGS γ).
 
     iApply (sim_gen_expr_intro _ tt with "[Hγ]"); simpl; [done..|].
@@ -905,6 +905,7 @@ Section sim_spec.
     iApply "HΦ". iSplit!.
 Qed.
 
+(* MEETING *)
 (* TODO 4: Now do it with private state *)
 
   Definition getc_spec_priv : spec rec_event Z void :=
@@ -919,7 +920,7 @@ Qed.
     (* Return old position *)
     TVis (Outgoing, ERReturn (ValNum v) h)).
 
-  (* TODO 2: Prove a separation logic tuple for it - analogous to sim_locle_spec2 (in ./memmove) *)
+  (* TODO: Prove a separation logic tuple for it - analogous to sim_locle_spec2 (in ./memmove) *)
 
   Lemma sim_getc_spec_heap_priv_weak `{!specGS} Π Φ :
     switch Π ({{ κ σ POST,
@@ -943,7 +944,9 @@ Qed.
     iApply "HC". iSplit!. iIntros (??).
     iDestruct 1 as (?????) "[Hs' HC]". subst.
     (* REVIEW: Why (not) are the state names the same *)
-    (* unfold spec_state, spec_state_name. *)
+    unfold spec_state, spec_state_name.
+
+
     iApply "H".
     iSplit. { done. }
     iSplitL "Hs". { done. }
@@ -968,10 +971,9 @@ Qed.
       ∃ v, ⌜σ' = σ⌝ ∗ ⌜f = "getc"⌝ ∗ ⌜vs = []⌝ ∗ (spec_state v) ∗
       switch Π' ({{ κ σ POST,
       ⌜κ = (Some (Outgoing, ERReturn (ValNum v) h))⌝ ∗
-      ⌜σ = (getc_spec_priv, (v + 1)%Z)⌝ (* ∗ *)
+      ⌜σ = (getc_spec_priv, (v + 1)%Z)⌝
       }})}})}}) -∗
     TGT getc_spec_priv @ Π {{ Φ }}.
-
   Proof.
     iDestruct 1 as "HC".
     unfold getc_spec_priv at 2. rewrite unfold_forever -/getc_spec_priv.
@@ -1002,7 +1004,7 @@ Qed.
     switch Π ({{ κ σ POST,
       ∃ f vs h, ⌜κ = Some (Incoming, ERCall f vs h)⌝ ∗
       POST Tgt _ (spec_trans _ Z) ({{ σ' Π',
-      ∃ v, ⌜σ' = σ⌝ ∗ ⌜f = "getc"⌝ ∗ ⌜vs = []⌝ ∗ ⌜σ.2 = v⌝ ∗ ⌜Π' = Π⌝ ∗
+        ∃ v, ⌜σ' = σ⌝ ∗ ⌜f = "getc"⌝ ∗ ⌜vs = []⌝ ∗ (spec_state v) ∗
       switch Π' ({{ κ σ POST,
       ⌜κ = (Some (Outgoing, ERReturn (ValNum v) h))⌝ ∗
       ⌜σ = (getc_spec_priv, (v + 1)%Z)⌝ ∗
@@ -1010,7 +1012,36 @@ Qed.
       }})}})}}) -∗
     (* REVIEW: This is an arbitrary Φ, because danger? *)
     TGT getc_spec_priv @ Π {{ Φ }}.
-  Proof. Admitted.
+  Proof.
+    iDestruct 1 as "HC".
+    unfold getc_spec_priv at 2. rewrite unfold_forever -/getc_spec_priv.
+    rewrite /TReceive bind_bind bind_bind.
+    iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>".
+    rewrite bind_bind. setoid_rewrite bind_ret_l.
+    iApply (sim_gen_TVis with "[-]").
+    iIntros (v) "Hs !>". simpl.
+    iIntros (??) "[% [% _]]". subst.
+    iApply "HC". iSplit!. iIntros (??).
+    iDestruct 1 as (????) "[Hs' HC]". subst.
+    iApply (sim_gen_expr_intro _ tt with "[Hs]"); simpl; [done..|].
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    rewrite bind_bind. iApply (sim_gen_TGet with "[-]").
+    iSplit. { done. }
+    iIntros "!>".
+    rewrite bind_bind. iApply (sim_gen_TPut with "[Hs']"). { done. }
+    iIntros "Hs". iIntros "!>".
+    iApply (sim_gen_TVis with "[-]"). iIntros (v') "Hs'".
+    (* FIXME: Here it is now a little bit weird *)
+    iDestruct (mstate_var_merge with "Hs Hs'") as "[-> Hfull]".
+    iIntros "!>".
+    iIntros (??) "[% [% H2]]".
+    subst. iApply "HC".
+    iSplit!.
+    (* FIXME REVIEW: I understand that it doesn't work? (ElimModal for WP and {}≈>) but what does it mean? *)
+    (* iMod (mstate_var_split spec_state_name v' with "[$]") as "[Hγ _]". *)
+    (* Should I not have full ownership of this thing now? - by rules of ghost *)
+  Admitted.
 
   (* TODO 3 *)
   Definition getc_fn_spec_priv (v : Z) (es : list expr) (POST : (val → iProp Σ) → iProp Σ) : iProp Σ :=
@@ -1033,14 +1064,18 @@ Qed.
     rec_fn_spec_hoare Tgt Π "getc" (getc_fn_spec_priv v).
   Proof.
     iIntros "#Hfns #Hf HΠ" (es Φ) "HΦ". iDestruct "HΦ" as (->) "HΦ".
-    iApply (sim_tgt_rec_Call_external with "[$]").
-    iIntros (???) "#?Htoa Haa !>".
-    iIntros (??) "[% [% Hσ]]". subst. iApply "HΠ" => /=. iSplit!. iIntros (??) "[-> HΠi]".
-    (* REVIEW: Introduce a "name" to refer to this particular state *)
 
+    (* FIXME REVIEW *)
     iMod (mstate_var_alloc Z) as (γ) "?".
     iMod (mstate_var_split γ v with "[$]") as "[Hγ1 Hγ2]".
     pose (Hspec := SpecGS γ).
+
+    iApply (sim_tgt_rec_Call_external with "[$]").
+    iIntros (???) "#?Htoa Haa !>".
+    iIntros (??) "[% [% Hσ]]". subst. iApply "HΠ" => /=. iSplit!. iIntros (??) "[-> HΠi]".
+
+    (* FIXME REVIEW: Introduce a "name" to refer to this particular state *)
+    (* Or here *)
 
     iApply (sim_gen_expr_intro _ tt with "[Hγ1]"); simpl; [done..|].
     iApply sim_getc_spec_heap_priv_weak' => /=. iIntros (??). iDestruct 1 as (????) "HC". subst.
