@@ -1,6 +1,7 @@
 From iris.bi.lib Require Import fixpoint.
 From iris.proofmode Require Import proofmode.
 
+(* NOTE - BI the logic of "bunched implications" *)
 Section bi_loop.
   Context {PROP : bi} {A : Type} (body : (A → PROP) → (A → PROP)).
 
@@ -43,7 +44,9 @@ Section bi_loop.
   Local Existing Instance bi_loop_pre_monotone.
   Lemma bi_loop_eq a:
     bi_loop body a ⊣⊢ bi_loop_pre body (bi_loop body) a.
-  Proof. rewrite /bi_loop. apply: greatest_fixpoint_unfold. Qed.
+  Proof. rewrite /bi_loop.
+         apply: greatest_fixpoint_unfold.
+  Qed.
 
   Lemma bi_loop_step a:
     (∀ Φ, □ (∀ a, bi_loop body a -∗ Φ a) -∗ body Φ a) ⊢ bi_loop body a.
@@ -60,6 +63,9 @@ Set Default Proof Using "Type".
 Local Open Scope Z_scope.
 
 (* TODO: upstream? *)
+(* NOTE
+   Unfold function if it is applied to at least the arguments before "/". In this case all.
+   Unfold function if arguments marked with "!" unfold to constructor *)
 Arguments subst_static _ !_ /.
 
 (*
@@ -89,6 +95,62 @@ Property to prove:
 *)
 
 
+Definition retOne_rec : fndef := {|
+  fd_args := [];
+  fd_static_vars := [];
+  fd_vars := [];
+  fd_body := Val 1;
+  fd_static := I
+|}.
+Definition retOne_prog : gmap string fndef :=
+  <["retOne" := retOne_rec]> $ ∅.
+
+Definition retOne_spec : spec rec_event unit void :=
+  Spec.forever(
+  '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
+  TAssume (f = "retOne");;
+  TAssume (vs = []);;
+  TVis (Outgoing, ERReturn (ValNum 1) h)).
+
+Local Ltac go :=
+  clear_spec.
+Local Ltac go_s :=
+  tstep_s; go.
+Local Ltac go_i :=
+  tstep_i; go.
+
+Lemma retOne_refines_retOne_spec_direct :
+  trefines (rec_mod retOne_prog) (spec_mod retOne_spec tt).
+Proof.
+  apply: tsim_implies_trefines => n0 /=.
+  unshelve eapply tsim_remember. { simpl. exact (λ _ '(Rec e _ f) (*σi*) '(t, _),
+    t ≡ retOne_spec ∧
+    e = Waiting false ∧
+    f = retOne_prog). }
+  { split!. } { done. }
+  move => n _ Hloop [???] [??] [??] /=. destruct!/=.
+  (* Step in implementation to introduce arguments *)
+  tstep_i.
+  split!. move => ???? H.
+  tstep_s. rewrite -/retOne_spec. go.
+  tstep_s. eexists (_, _, _). go.
+  (* Unify evars *)
+  tstep_s. split!. go.
+  (* Here deal with assumptions *)
+  tstep_s => ?. go.
+  tstep_s => ?. go. destruct!.
+  (* Now, step through implementation *)
+  tstep_i. split!.
+  move => ??. destruct!.
+  rewrite /retOne_prog in H. simplify_map_eq. split!.
+  (* Stack Frame *)
+  tstep_i => ?? [-> ->]. split!.
+  tstep_i. eexists. split!.
+  tstep_i.
+  tstep_s. split!. go.
+  by apply Hloop.
+Qed.
+
 Definition echo_rec : fndef := {|
   fd_args := [];
   fd_static_vars := [];
@@ -98,12 +160,15 @@ Definition echo_rec : fndef := {|
              rec.Call (Val (ValFn "echo")) [];
   fd_static := I
 |}.
+
 Definition echo_prog : gmap string fndef :=
   <["echo" := echo_rec]> $ ∅.
 
 Section echo.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
-
+  (* TODO: Parse this syntactically:
+    Π: What does it do?
+   *)
   Lemma sim_echo Π :
     "echo" ↪ Some echo_rec -∗
     rec_fn_spec_hoare Tgt Π "echo" ({{ es POST0, ⌜es = []⌝ ∗
@@ -117,9 +182,13 @@ Section echo.
           LOOP tt
         }})}})}})}})}}) tt}}).
   Proof.
-    iIntros "#?". iApply rec_fn_spec_hoare_ctx. iIntros "#?".
+    iIntros "#?". iApply rec_fn_spec_hoare_ctx.
+    (* NOTE What's up with the ordinal later stuff - recursion *)
+    iIntros "#?".
     set BODY := (X in bi_loop X).
-    iApply ord_loeb; [done|]. iIntros "!> #IH".
+    iApply ord_loeb. (*; [done|]*)
+    { iAssumption. }
+    iIntros "!> #IH".
     iIntros (es Φ). iDestruct 1 as (->) "HΦ".
     iApply sim_tgt_rec_Call_internal. 2: { done. } { done. }
     iModIntro => /=.
@@ -167,13 +236,69 @@ Lemma echo_refines_echo_spec_direct :
   trefines (rec_mod echo_prog) (spec_mod echo_spec tt).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
-  (* TODO: proof with tstep_i / go_s *)
-Abort.
-
+  (* Handle the initial call from the environment *)
+  tstep_i.
+  split! => ???? H.
+  tstep_s. eexists (_, _, _). go.
+  tstep_s. split!. go.
+  tstep_s => ?. go.
+  tstep_s => ?. go. destruct!.
+  (* Now prove the body by induction *)
+  unshelve eapply tsim_remember. { simpl. exact (λ _ '(Rec e _ f) '(t, _),
+    (* TODO: How does Michael think about this, I guess typically I would phrase an induction hypothesis
+      using an arbitrary kontext here *)
+    exists K,
+    t ≡ Spec.forever echo_spec_body ∧
+    e = expr_fill K ((Call (Val (ValFn "echo"))) (Val <$> [])) ∧
+    f = echo_prog). }
+  { eexists [ReturnExtCtx false]. split!. } { done. }
+  move => n _ Hloop [???] [??] [ctx[?[??]]] /=. destruct!/=.
+  go_s.
+  tstep_s. eexists. go.         (* NOTE: Introducing Heap *)
+  tstep_i. split!.
+  move => ??. destruct!/=.
+  rewrite /echo_prog in H. simplify_map_eq. split!.
+  (* NOTE: Start of getc *)
+  tstep_i => ?? [??]. simplify_eq. split!.
+  tstep_i. split!. move => ?.              (* NOTE - split between internal and external call *)
+  (* NOTE: Here we now have `Waiting true` *)
+  tstep_s. split!. go.
+  tstep_i.
+  split.
+  { (* NOTE: Here I now am getting a call back from the external call, i.e., because of TCallRet immediate UB *)
+    move => ?????.
+    tstep_s. eexists. go.
+    tstep_s. split!. go.
+    by tstep_s. }
+  move => ???.
+  tstep_s. eexists. go.
+  tstep_s. split!. go.
+  tstep_s => ?. go.
+  (* NOTE: Start of putc *)
+  tstep_s. eexists. go.
+  tstep_i. tstep_i. split!. move => ?.
+  tstep_s. split!. go.
+  tstep_i. split!.
+  { (* NOTE: Here I now am getting a call back from the external call, i.e., because of TCallRet immediate UB *)
+    move => ?????.
+    tstep_s. eexists. go.
+    tstep_s. split!. go.
+    by tstep_s. }
+  move => ???.
+  tstep_s. eexists. go.
+  tstep_s. split!. go.
+  tstep_s => ?.
+  rewrite bind_ret_l.
+  go. simplify_eq.
+  tstep_i.
+  eapply Hloop. { done. }
+  eexists ([FreeACtx []] ++ ctx).
+  split!.
+Qed.
 
 Section echo.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
-
+  (* TODO: What's going on here? *)
   Lemma sim_echo_spec Π γσ_s (σ : m_state (spec_trans _ unit)) :
     "echo" ↪ Some echo_rec -∗
     "getc" ↪ None -∗
@@ -381,7 +506,6 @@ switching:
  *)
 
 
-
 Definition getc_rec : fndef := {|
   fd_args := [];
   fd_static_vars := [];
@@ -395,6 +519,8 @@ Definition getc_prog : gmap string fndef :=
 
 Section getc.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
+  (* TODO: Does it make sense to think about it this way
+    { args = [] * ({ ∃ l v, ⌜es = [Val $ ValLoc l; Val $ 1]⌝ ∗ l ↦ v } read { ∃ c, l ↦ c}) } getc { ~res~ = c } *)
 
   Lemma sim_getc Π :
     "getc" ↪ Some getc_rec -∗
@@ -420,6 +546,8 @@ Section getc.
 
 End getc.
 
+(* Does returning the length make any sense? (In DimSum) *)
+(* Read the sequence 0...c into l and return the length? *)
 Definition read_mem_rec : fndef := {|
   fd_args := ["l"; "c"];
   fd_static_vars := [("pos", 1)];
@@ -438,9 +566,9 @@ read (l, c) {
   }
 }
 *)
-
     If (BinOp (Var "c") LeOp (Val 0))
       (Val 0)
+      (* NOTE: There is no sequencing *)
       (LetE "_" (Store (Var "l") (Load (Var "pos"))) $
        LetE "_" (Store (Var "pos") (BinOp (Load (Var "pos")) AddOp (Val 1))) $
        LetE "ret" (rec.Call (Val (ValFn "read")) [
@@ -456,26 +584,435 @@ Section read_mem.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
 
   Lemma sim_read_mem Π (lpos : loc) :
+    (* Given a static/global variable *)
     lpos = (ProvStatic "read" 0, 0) →
+    (* "read" points to the function (internal) *)
     "read" ↪ Some read_mem_rec -∗
     rec_fn_spec_hoare Tgt Π "read" ({{ es POST0, ∃ l vs (pos : Z),
+      (* Arguments are a location and length of a list *)
       ⌜es = [Val (ValLoc l); Val (length vs)]⌝ ∗
+      (* We own the global pointer *)
       lpos ↦ pos ∗
+      (* We own the array [vs[0], vs[1], ... , vs[vs.length - 1]] *)
       ([∗ map] l↦v∈array l vs, l ↦ v) ∗
       POST0 ({{ vret,
+        (* We return the length of the list *)
         ⌜vret = ValNum (length vs)⌝ ∗
+        (* The global pointer has been increased by length of the list *)
         lpos ↦ (pos + length vs) ∗
+        (* We own the array [pos + 0, pos +1, ..., pos + (vs.length - 1)] *)
         ([∗ map] l↦v∈array l (ValNum <$> seqZ pos (length vs)), l ↦ v)
       }})}}).
   Proof.
-    iIntros (Hlpos) "#?".
-    (* TODO: proof *)
-  Abort.
+    iIntros "%Hlpos #?". iApply rec_fn_spec_hoare_ctx. iIntros "#?".
+    iApply ord_loeb. { iAssumption. } iModIntro.
+    iIntros "#IH %es %Φ HΦ/=".
+    iDestruct "HΦ" as (? ? count) "[? [Hlpos [Hl H]]]".
+    (* Base Case *)
+    iDestruct!.
+    iApply sim_tgt_rec_Call_internal. 2: { done. } { done. }
+    (* FIXME: Maybe I can use this to try fiddling with auto indentation *)
+    iModIntro.
+    iApply sim_tgt_rec_AllocA; [done|]. iIntros (lcl) "Hlcl /=".
+    iModIntro.
+    (* NOTE: Bind the BinOp *)
+    iApply (sim_gen_expr_bind _ [IfCtx _ _]).
+    iApply sim_tgt_rec_BinOp. { reflexivity. } iModIntro.
+    iApply sim_tgt_rec_If. iModIntro.
+    (* Split into base and recursive case *)
+    destruct vs; simpl.
+    - iApply sim_gen_expr_stop.
+      iExists 0.
+      iSplit; [done|].
+      iSplitL "Hlcl".
+      { by destruct lcl. }
+      iApply "H". rewrite Z.add_0_r.
+      iSplit!.
+    - (* STORE 1 *)
+      iApply (sim_gen_expr_bind _ [LetECtx _ _]).
+      iApply (sim_gen_expr_bind _ [StoreRCtx _]).
+      iApply (sim_tgt_rec_Load with "Hlpos"). iIntros "Hlpos". iModIntro => /=.
+      (* NOTE: I need to unroll the separating conjunction and pass ownership of the first location *)
+      (* FIXME Why can't I use iRewrite *)
+      (* rewrite array_cons. iRewrite big_sepM_insert  in "Hl". *)
+      rewrite array_cons big_sepM_insert. 2 : { rewrite array_lookup_None. naive_solver lia. }
+      iDestruct "Hl" as "[Hl Hl']".
+      iApply (sim_tgt_rec_Store with "Hl"). iIntros. iModIntro.
+      iApply sim_tgt_rec_LetE. iModIntro. simpl.
+      (* STORE 2 *)
+      iApply (sim_gen_expr_bind _ [LetECtx _ _]).
+      iApply (sim_gen_expr_bind _ [StoreRCtx _]).
+      iApply (sim_gen_expr_bind _ [BinOpLCtx _ _]).
+      iApply (sim_tgt_rec_Load with "Hlpos"). iIntros "Hlpos !> /=".
+      iApply sim_tgt_rec_BinOp. { reflexivity. } iModIntro.
+      iApply (sim_tgt_rec_Store with "Hlpos"). iIntros "Hlpos !>".
+      iApply sim_tgt_rec_LetE. iModIntro. simpl.
+      (* Call + RETURN *)
+      iApply (sim_gen_expr_bind _ [LetECtx _ _]).
+      (* Handle arguments *)
+      iApply (sim_gen_expr_bind _ [CallCtx _ [] _]) => /=.
+      iApply sim_tgt_rec_BinOp. { reflexivity. } iModIntro.
+      iApply (sim_gen_expr_bind _ [CallCtx _ [_] _]).
+      iApply sim_tgt_rec_BinOp => /=.
+      (* FIXME: Why is this so hard :/ *)
+      { instantiate (1 := length vs). f_equal. rewrite Nat2Z.inj_succ.
+        change (_ + -1) with (Z.pred (Z.succ (length vs))). rewrite Z.pred_succ. reflexivity. } iModIntro.
+      (* Induction *)
+      iApply "IH". simpl.
+      (* TODO: That's a little awkward *)
+      do 3 iExists (_).
+      iSplit. { done. }
+      iSplitL "Hlpos". iAssumption.
+      iSplitL "Hl'". iAssumption.
+      iIntros (v') "[-> [Hlpos ?]]".
+      iApply sim_tgt_rec_LetE => /=. iModIntro.
+      iApply (sim_tgt_rec_BinOp). { reflexivity. } iModIntro.
+      iExists (_).
+      iSplit. done.
+      iSplitL "Hlcl". {by destruct lcl. }
+      iApply "H".
+      rewrite! Nat2Z.inj_succ.
+      iSplit. { done. }
+      iSplitL "Hlpos". { rewrite <-Z.add_assoc, Z.add_1_l. iApply "Hlpos". }
+      (* TODO: Rewrite at doesn't work *)
+      (* rewrite seqZ_cons at 2. *)
+      rewrite (seqZ_cons _ (Z.succ _)) => /=. 2 : { lia. }
+      rewrite array_cons.
+      (* FIXME: Why does iRewrite not work? *)
+      rewrite big_sepM_insert Z.pred_succ -Z.add_1_r. 2: { rewrite array_lookup_None. naive_solver lia. }
+      iFrame.
+  Qed.
 
 End read_mem.
 
-(* TODO: compose sim_getc and sim_read_mem *)
+Definition combined_prog : gmap string fndef :=
+  <["read" := read_mem_rec]> $ <["getc" := getc_rec]> $ ∅.
 
+Section combined.
+  Context `{!dimsumGS Σ} `{!recGS Σ}.
+
+  Lemma sim_combined Π (lpos : loc) :
+    (* Given a static/global variable which holds the buffer (index into) *)
+    lpos = (ProvStatic "read" 0, 0) →
+    (* "read" points to the function we defined (internal) *)
+    "read" ↪ Some read_mem_rec -∗
+    "getc" ↪ Some getc_rec -∗
+    rec_fn_spec_hoare Tgt Π "getc" ({{ es POST, ∃ (pos : Z),
+      ⌜es = []⌝ ∗
+      lpos ↦ pos ∗
+      POST ({{ vr, ⌜vr = ValNum pos⌝ ∗ lpos ↦ (pos + 1)}})}}).
+  Proof.
+   iIntros "%Hlpos #Hread #Hgetc %args %Φ Hpre".
+   iApply sim_getc => /=; [done|].
+   iDestruct "Hpre" as "[%count [?[? HΦ]]]". iFrame.
+   rewrite /rec_fn_spec_hoare /rec_fn_spec.
+   iIntros "%args' %Φ' [%l [%v [Hargs' [Hl HΦ']]]]".
+   iApply sim_read_mem => /=. 1-2: done.
+   do 3 iExists (_). iFrame.
+   iSplitL "Hargs'". { instantiate (1 := [v]). iExact "Hargs'". }
+   iSplitL "Hl".
+   { rewrite /array => /=.
+     rewrite insert_empty kmap_singleton offset_loc_0 big_sepM_singleton. iAssumption. }
+   iIntros (v') "[? [? Hl]]" => /=.
+   iApply "HΦ'". iExists (_).
+   iSplitL "Hl".
+   { rewrite Z.add_0_l /array  => /=.
+     rewrite insert_empty kmap_singleton offset_loc_0 big_sepM_singleton. iAssumption. }
+   iIntros (v'') "?".
+   iApply "HΦ". iFrame.
+Qed.
+End combined.
+
+Section sim_spec.
+  Context `{!dimsumGS Σ} `{!recGS Σ}.
+
+  (* TODO 0a: Write a Spec for a program that increases a location *)
+
+  Definition retOneMore_rec : fndef := {|
+    fd_args := [];
+    fd_static_vars := [("pos", 1)];
+    fd_vars := [];
+    fd_body := (LetE "ret" (Load (Var "pos")) $
+                LetE "_" (Store (Var "pos") (BinOp (Var "ret") AddOp (Val 1))) $
+                Var ("ret"));
+    fd_static := I
+  |}.
+
+  Definition retOneMore_prog : gmap string fndef :=
+    <["retOneMore" := retOneMore_rec]> $ ∅.
+
+  Definition retOneMore_spec : spec rec_event unit void :=
+    Spec.forever(
+    '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
+    TAssume (f = "retOneMore");;
+    TAssume (vs = []);;
+    (* NOTE: Here I now want to express that my program returns the value stored at pos *)
+    (* TODO: Is this too weak? *)
+    v ← TAll Z;
+    TAssume ((h_heap h) !! ((ProvStatic "retOneMore" 0), 0) = Some (ValNum v));;
+    TVis (Outgoing, ERReturn (ValNum v) (heap_update h ((ProvStatic "retOneMore" 0), 0) (ValNum (v + 1))))).
+
+  (* TODO 0b: Prove that this spec is satisfied *)
+
+  Lemma retOne_refines_retOneMore_spec_direct :
+    trefines (rec_mod retOneMore_prog) (spec_mod retOneMore_spec tt).
+  Proof.
+    apply: tsim_implies_trefines => n0 /=.
+    unshelve eapply tsim_remember. { simpl. exact (λ _ '(Rec e _ f) '(t, _),
+      t ≡ retOneMore_spec ∧
+      e = Waiting false ∧
+      f = retOneMore_prog). }
+    { split!. } { done. }
+    move => n _ Hloop [???] [??] [??] /=. destruct!/=.
+    (* Step in implementation to introduce arguments *)
+    tstep_i.
+    split!. move => ? f ?? H.
+    tstep_s. rewrite -/retOneMore_spec. go.
+    tstep_s. eexists (_, _, _). go.
+    (* Unify evars *)
+    tstep_s. split!. go.
+    (* Here deal with assumptions *)
+    tstep_s => ?. go.
+    tstep_s => ?. go. destruct!.
+    tstep_s => ?. go.
+    tstep_s => ?. go.
+    (* Now, step through implementation *)
+    tstep_i. split!.
+    move => ??. destruct!.
+    rewrite /retOneMore_prog in H. simplify_map_eq. split!.
+    (* Stack Frame *)
+    tstep_i => ?? [-> ?]. simplify_eq. split!.
+    tstep_i. eexists. split!. { done. }
+    tstep_i. tstep_i. tstep_i. split. { by rewrite /heap_alive. }
+    tstep_i. tstep_i. eexists. split!.
+    tstep_i. tstep_s. split!. go.
+    by apply Hloop.
+  Qed.
+
+  (* TODO 1: Write a Spec Program for getc returning increasing numbers *)
+  (* This Spec is quite specific, in order to reflect the combined program *)
+  Definition getc_spec_heap : spec rec_event unit void :=
+    Spec.forever(
+    (* Incoming call of getc *)
+    '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
+    TAssume (f = "getc");;
+    TAssume (vs = []);;
+    (* There is a current position of the buffer *)
+    v ← TAll Z;
+    TAssume ((h_heap h) !! ((ProvStatic "read" 0), 0) = Some (ValNum v));;
+    (* Return old position, update the location to old position, and the position is updated *)
+    TVis (Outgoing, ERReturn (ValNum v) (heap_update h ((ProvStatic "read" 0), 0) (ValNum (v + 1))))).
+
+  (* TODO 2: Prove a separation logic tuple for it - analogous to sim_locle_spec2 (in ./memmove) *)
+
+  Lemma sim_getc_spec_heap_pure `{!specGS} Π Φ :
+    (* Someone is switching to me *)
+    switch Π ({{ κ σ POST,
+      (* REVIEW: Here, think about do I have to prove this or do I get it *)
+      ∃ f vs h, ⌜κ = Some (Incoming, ERCall f vs h)⌝ ∗
+      (* Here, a bit of intuition is missing for why it goes into the POST *)
+    POST Tgt _ (spec_trans _ unit) ({{ σ' Π',
+      (* REVIEW: Here, think about do I have to prove this or do I get it *)
+      ∃ v, ⌜σ' = σ⌝ ∗ ⌜f = "getc"⌝ ∗ ⌜vs = []⌝ ∗
+           (* REVIEW: Put a points-to here instead? *)
+           ⌜(h_heap h) !! ((ProvStatic "read" 0), 0) = Some (ValNum v)⌝ ∗
+      (* Switch back *)
+    switch Π' ({{ κ σ POST,
+      (* This is optional event, REVIEW: is this related to Π *)
+      ⌜κ = (Some (Outgoing, ERReturn (ValNum v) (heap_update h ((ProvStatic "read" 0), 0) (ValNum (v + 1)))))⌝ ∗
+      (* So what does this mean? *)
+      ⌜σ = (getc_spec_heap, tt)⌝ ∗
+      (* Looks like ghost things *)
+      spec_state ()
+      }})}})}}) -∗
+    (* REVIEW: This is an arbitrary Φ, because danger? *)
+    TGT getc_spec_heap @ Π {{ Φ }}.
+  Proof.
+    iDestruct 1 as "HC".
+    unfold getc_spec_heap at 2. rewrite unfold_forever -/getc_spec_heap.
+    rewrite /TReceive bind_bind bind_bind.
+    iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>".
+    rewrite bind_bind. setoid_rewrite bind_ret_l.
+    iApply (sim_gen_TVis with "[-]").
+    (* Introducing arbitrary state *)
+    iIntros ([]) "Hs !>".
+    iIntros (??) "[% [% _]]". subst.
+    iApply "HC". iSplit!. iIntros (??).
+    iDestruct 1 as (?????) "HC". subst.
+    iApply (sim_gen_expr_intro _ tt with "[Hs]"); simpl; [done..|].
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAll with "[-]"). iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    iApply (sim_gen_TVis with "[-]"). iIntros ([]) "? !>".
+    iIntros (??) "[% [% _]]". subst. iApply "HC". iSplit!.
+  Qed.
+
+  (* TODO 3 *)
+  Definition getc_fn_spec_strong (es : list expr) (POST : (val → iProp Σ) → iProp Σ) : iProp Σ :=
+    let lpos := (ProvStatic "read" 0, 0) in
+    ∃ (pos: Z), ⌜es = []⌝ ∗ lpos ↦ pos ∗
+    POST (λ v, ⌜v = ValNum pos⌝ ∗ lpos ↦ (pos + 1)).
+
+  Definition getc_fn_spec_weak (es : list expr) (POST : (val → iProp Σ) → iProp Σ) : iProp Σ :=
+    let lpos := (ProvStatic "read" 0, 0) in
+    ∃ (pos: Z), ⌜es = []⌝ ∗ lpos ↦ pos ∗
+    POST (λ v, ⌜v = ValNum pos⌝).
+
+  Lemma sim_getc_heap_pure fns Π :
+    rec_fn_auth fns -∗
+    "getc" ↪ None -∗
+    switch_link Tgt Π ({{ σ0 POST,
+      ∃ vs h',
+    POST (ERCall "getc" vs h') (spec_trans _ _) (getc_spec_heap, tt) ({{ _ Πr,
+    switch_link Tgt Πr ({{ σ POST,
+      ∃ v h'', ⌜σ = (getc_spec_heap, tt)⌝ ∗
+    POST (ERReturn v h'') _ σ0 ({{ _ Πx,
+      ⌜Πx = Π⌝}})}})}})}}) -∗
+    rec_fn_spec_hoare Tgt Π "getc" getc_fn_spec_strong.
+  Proof.
+    iIntros "#Hfns #Hf HΠ" (es Φ) "HΦ". iDestruct "HΦ" as (pos ->) "[Hlpos HΦ]".
+    iApply (sim_tgt_rec_Call_external with "[$]").
+    (* We relate the points to predicates to the heap *)
+    iIntros (???) "#?Htoa Haa !>".
+    iIntros (??) "[% [% Hσ]]". subst. iApply "HΠ" => /=. iSplit!. iIntros (??) "[-> HΠi]".
+
+    (* Am I here splitting the heap? *)
+    iMod (mstate_var_alloc unit) as (γ) "?".
+    iMod (mstate_var_split γ tt with "[$]") as "[Hγ _]".
+    pose (Hspec := SpecGS γ).
+
+    iApply (sim_gen_expr_intro _ tt with "[Hγ]"); simpl; [done..|].
+    iApply sim_getc_spec_heap_pure => /=. iIntros (??). iDestruct 1 as (????) "HC". subst.
+    iApply "HΠi". iSplit!. iIntros (??) "[% [% HΠr]]". simplify_eq/=.
+    iApply "HC".
+    iExists (_).
+    (* iDestruct (rec_mapsto_lookup with "Htoa Hlpos") as "%H". *)
+    (* FIXME REVIEW: Why does iSplit! not duplicate the context *)
+    iDestruct (rec_mapsto_lookup with "Htoa Hlpos") as "%".
+    iSplit!; [done|].
+    iIntros (??). iDestruct 1 as (??) "HC".
+    iApply "HΠr". iSplit!. iIntros (??) "[% HΠf]". simplify_eq.
+    (* TODO REVIEW: What Exactly needs to hold for this to work? *)
+    iPoseProof ((rec_mapsto_update _ _ _ (pos + 1)) with "Htoa Hlpos") as ">[Htoa Hlpos]".
+    (* Not exactly sure what this is *)
+    iApply sim_tgt_rec_Waiting_raw.
+    iSplit. { iIntros. iModIntro. iApply "HΠf". iSplit!. iIntros (??) "[% [% ?]]". simplify_eq. }
+    iIntros (???) "!>". iApply "HΠf". iSplit!. iIntros (??[?[??]]). simplify_eq.
+    iApply "Hσ". iSplit!.
+    iSplitL "Htoa". { done. }
+    iSplitR "Hlpos HΦ" => /=. { by rewrite dom_alter_L. }
+    iApply "HΦ". iSplit!.
+Qed.
+
+(* MEETING *)
+(* TODO 4: Now do it with private state *)
+
+  Definition getc_spec_priv : spec rec_event Z void :=
+    Spec.forever(
+    (* Incoming call of getc *)
+    '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
+    TAssume (f = "getc");;
+    TAssume (vs = []);;
+    (* There is a current position of the buffer *)
+    v ← TGet;
+    TPut (v + 1);;
+    (* Return old position *)
+    TVis (Outgoing, ERReturn (ValNum v) h)).
+
+  (* TODO: Prove a separation logic tuple for it - analogous to sim_locle_spec2 (in ./memmove) *)
+
+  Lemma mstate_var_agree {S : TypeState} `{!mstateG Σ} γ (σ1 σ2 : S) :
+    γ ⤳ σ1 -∗ γ ⤳ σ2 -∗ ⌜σ1 = σ2⌝.
+  Proof.
+    iIntros "H1 H2". iDestruct (ghost_var_agree with "[H1] [H2]") as %[=]; [done..|].
+    inv H0. by dimsum.core.axioms.simplify_K.
+  Qed.
+
+  Lemma sim_getc_spec_heap_priv `{!specGS} Π Φ :
+    switch Π ({{ κ σ POST,
+      ∃ f vs h, ⌜κ = Some (Incoming, ERCall f vs h)⌝ ∗
+      POST Tgt _ (spec_trans _ Z) ({{ σ' Π',
+        ∃ v, ⌜σ' = σ⌝ ∗ ⌜f = "getc"⌝ ∗ ⌜vs = []⌝ ∗ (spec_state v) ∗
+      switch Π' ({{ κ σ POST,
+      ⌜κ = (Some (Outgoing, ERReturn (ValNum v) h))⌝ ∗
+      ⌜σ = (getc_spec_priv, (v + 1)%Z)⌝ ∗
+      spec_state (v + 1) ∗ spec_state (v + 1)
+      }})}})}}) -∗
+    (* REVIEW: This is an arbitrary Φ, because danger? *)
+    TGT getc_spec_priv @ Π {{ Φ }}.
+  Proof.
+    iDestruct 1 as "HC".
+    unfold getc_spec_priv at 2. rewrite unfold_forever -/getc_spec_priv.
+    rewrite /TReceive bind_bind bind_bind.
+    iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>".
+    rewrite bind_bind. setoid_rewrite bind_ret_l.
+    iApply (sim_gen_TVis with "[-]").
+    iIntros (v) "Hs !>". simpl.
+    iIntros (??) "[% [% _]]". subst.
+    iApply "HC". iSplit!. iIntros (??).
+    iDestruct 1 as (????) "[Hs' HC]". subst.
+    iApply (sim_gen_expr_intro _ tt with "[Hs]"); simpl; [done..|].
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    rewrite bind_bind. iApply (sim_gen_TGet with "[-]").
+    iSplit. { done. }
+    iIntros "!>".
+    rewrite bind_bind. iApply (sim_gen_TPut with "[Hs']"). { done. }
+    iIntros "Hs". iIntros "!>".
+    iApply (sim_gen_TVis with "[-]"). iIntros (v') "Hs'".
+    iDestruct (mstate_var_agree with "Hs Hs'") as "<-".
+    iIntros "!> /=".
+    iIntros (??) "[% [% H2]]".
+    subst. iApply "HC".
+    iSplit!. iFrame.
+  Qed.
+
+  (* TODO 3 *)
+  Definition getc_fn_spec_priv `{!specGS} (es : list expr) (POST : (val → iProp Σ) → iProp Σ) : iProp Σ :=
+    ∃ v, ⌜es = []⌝ ∗ spec_state v ∗
+    POST (λ v', (⌜v' = ValNum v⌝) ∗ spec_state (v + 1))%I.
+
+  Lemma sim_getc_heap_priv `{!specGS} fns Π (w : Z) :
+    rec_fn_auth fns -∗
+    "getc" ↪ None -∗
+    (spec_state w) -∗
+    switch_link Tgt Π ({{ σ0 POST,
+      ∃ vs h' v,
+    POST (ERCall "getc" vs h') (spec_trans _ Z) (getc_spec_priv, v) ({{ _ Πr,
+    switch_link Tgt Πr ({{ σ POST,
+      ∃ h'' v', ⌜σ = (getc_spec_priv, (v' + 1)%Z)⌝ ∗
+    POST (ERReturn v' h'') _ σ0 ({{ _ Πx,
+      ⌜Πx = Π⌝}})}})}})}}) -∗
+    rec_fn_spec_hoare Tgt Π "getc" getc_fn_spec_priv.
+  Proof.
+    iIntros "#Hfns #Hf Hs HΠ" (es Φ) "HΦ". iDestruct "HΦ" as (v ->) "[Hs' HΦ]".
+    iDestruct (mstate_var_agree with "Hs Hs'") as "->".
+    iApply (sim_tgt_rec_Call_external with "[$]").
+    iIntros (???) "#?Htoa Haa !>".
+    iIntros (??) "[% [% Hσ]]". subst.
+    iApply "HΠ" => /=. iSplit!. iIntros (??) "[-> HΠi]".
+
+    iApply (sim_gen_expr_intro _ tt with "[Hs]"); simpl; [done..|].
+    iApply sim_getc_spec_heap_priv => /=. iIntros (??). iDestruct 1 as (????) "HC". subst.
+    iApply "HΠi". iSplit!. iIntros (??) "[% [% HΠr]]". simplify_eq/=.
+    iApply "HC".
+    iExists (_).
+    iSplit!.
+    iSplitL "Hs'". { done. }
+    iIntros (??). simpl. iDestruct 1 as (??) "[Hs Hs']".
+    iApply "HΠr".
+    iSplit!. iIntros (??) "[% HΠf]". simplify_eq.
+    iApply sim_tgt_rec_Waiting_raw.
+    iSplit. { iIntros. iModIntro. iApply "HΠf". iSplit!. iIntros (??) "[% [% ?]]". simplify_eq. }
+    iIntros (???) "!>". iApply "HΠf". iSplit!. iIntros (??[?[??]]). simplify_eq.
+    iApply "Hσ". iSplit!.
+    iFrame.
+    iApply "HΦ".
+    by iFrame.
+  Qed.
+
+  End sim_spec.
 
 Definition __NR_READ : Z := 0.
 Definition read_addr : Z := 500.
