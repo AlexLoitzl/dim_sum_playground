@@ -973,51 +973,46 @@ Qed.
     ∃ v, ⌜es = []⌝ ∗ spec_state v ∗
     POST (λ v', (⌜v' = ValNum v⌝) ∗ spec_state (v + 1))%I.
 
-  Lemma sim_getc_heap_priv `{!specGS} fns Π :
+  Lemma sim_getc_heap_priv `{!specGS} fns Π (w : Z) :
     rec_fn_auth fns -∗
     "getc" ↪ None -∗
+    (spec_state w) -∗
     switch_link Tgt Π ({{ σ0 POST,
       ∃ vs h' v,
     POST (ERCall "getc" vs h') (spec_trans _ Z) (getc_spec_priv, v) ({{ _ Πr,
     switch_link Tgt Πr ({{ σ POST,
-      ∃ h'' v', ⌜σ = (getc_spec_priv, v')⌝ ∗
+      ∃ h'' v', ⌜σ = (getc_spec_priv, (v' + 1)%Z)⌝ ∗
     POST (ERReturn v' h'') _ σ0 ({{ _ Πx,
       ⌜Πx = Π⌝}})}})}})}}) -∗
     rec_fn_spec_hoare Tgt Π "getc" getc_fn_spec_priv.
   Proof.
-    iIntros "#Hfns #Hf HΠ" (es Φ) "HΦ". iDestruct "HΦ" as (v ->) "[Hs HΦ]".
-
-    (* FIXME REVIEW *)
-    iMod (mstate_var_alloc Z) as (γ) "?".
-    iMod (mstate_var_split γ v with "[$]") as "[Hγ1 Hγ2]".
-    pose (Hspec := SpecGS γ).
-
+    iIntros "#Hfns #Hf Hs HΠ" (es Φ) "HΦ". iDestruct "HΦ" as (v ->) "[Hs' HΦ]".
+    iDestruct (mstate_var_agree with "Hs Hs'") as "->".
     iApply (sim_tgt_rec_Call_external with "[$]").
     iIntros (???) "#?Htoa Haa !>".
     iIntros (??) "[% [% Hσ]]". subst.
     iApply "HΠ" => /=. iSplit!. iIntros (??) "[-> HΠi]".
 
-    (* FIXME REVIEW: Introduce a "name" to refer to this particular state *)
-    (* Or here *)
-
-    iApply (sim_gen_expr_intro _ tt with "[Hγ1]"); simpl; [done..|].
-    iApply sim_getc_spec_heap_priv_weak' => /=. iIntros (??). iDestruct 1 as (????) "HC". subst.
+    iApply (sim_gen_expr_intro _ tt with "[Hs]"); simpl; [done..|].
+    iApply sim_getc_spec_heap_priv => /=. iIntros (??). iDestruct 1 as (????) "HC". subst.
     iApply "HΠi". iSplit!. iIntros (??) "[% [% HΠr]]". simplify_eq/=.
     iApply "HC".
     iExists (_).
-    do 3 (iSplit; [done|]).
-    iSplitL "Hγ2". { done. }
-    iIntros (??). iDestruct 1 as (?) "%HC".
-    iApply "HΠr". iSplit!. iIntros (??) "[% HΠf]". simplify_eq.
+    iSplit!.
+    iSplitL "Hs'". { done. }
+    iIntros (??). simpl. iDestruct 1 as (??) "[Hs Hs']".
+    iApply "HΠr".
+    iSplit!. iIntros (??) "[% HΠf]". simplify_eq.
     iApply sim_tgt_rec_Waiting_raw.
     iSplit. { iIntros. iModIntro. iApply "HΠf". iSplit!. iIntros (??) "[% [% ?]]". simplify_eq. }
     iIntros (???) "!>". iApply "HΠf". iSplit!. iIntros (??[?[??]]). simplify_eq.
     iApply "Hσ". iSplit!.
     iFrame.
-    by iApply "HΦ".
+    iApply "HΦ".
+    by iFrame.
   Qed.
 
-End sim_spec.
+  End sim_spec.
 
 Definition __NR_READ : Z := 0.
 Definition read_addr : Z := 500.
