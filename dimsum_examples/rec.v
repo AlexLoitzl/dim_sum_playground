@@ -816,6 +816,15 @@ Proof.
   contradict Hfresh. move: Hfresh => /lookup_heap_is_Some_elem_of_h_provs//.
 Qed.
 
+Lemma h_block_heap_alloc_ne h l n p:
+  l.1 ≠ p →
+  h_block (heap_alloc h l n) p = h_block h p.
+Proof.
+  move => ?. rewrite /h_block /heap_alloc /=.
+  apply map_eq => i. rewrite !lookup_total_gmap_curry.
+  rewrite lookup_union_r // lookup_kmap_None. naive_solver.
+Qed.
+
 Program Definition heap_add_blocks (h : heap_state) (blocks : gset block_id) : heap_state :=
   Heap (h_heap h) (set_map ProvBlock blocks ∪ h_provs h) _.
 Next Obligation. move => ????. apply: union_subseteq_r. by eapply heap_wf. Qed.
@@ -862,6 +871,21 @@ Proof.
   split => -[?]; rewrite lookup_alter_ne //; congruence.
 Qed.
 
+Lemma h_block_free h l:
+  h_block (heap_free h l) l.1 = ∅.
+Proof.
+  apply map_eq => ?. rewrite !lookup_total_gmap_curry /=.
+  rewrite map_lookup_filter_None_2; naive_solver.
+Qed.
+
+Lemma h_block_free_ne h p l:
+  l.1 ≠ p →
+  h_block (heap_free h l) p = h_block h p.
+Proof.
+  move => ?. apply map_eq => ?. rewrite !lookup_total_gmap_curry /=.
+  by rewrite map_lookup_filter_true.
+Qed.
+
 Program Definition heap_merge (h1 h2 : heap_state) : heap_state :=
   Heap (h_heap h1 ∪ h_heap h2) (h_provs h1 ∪ h_provs h2) _.
 Next Obligation. move => ???. move => /lookup_union_is_Some[/heap_wf?|/heap_wf?]; set_solver. Qed.
@@ -874,6 +898,12 @@ Lemma h_provs_heap_merge h1 h2 :
   h_provs (heap_merge h1 h2) = h_provs h1 ∪ h_provs h2.
 Proof. done. Qed.
 
+Global Instance heap_merge_left_id : LeftId (=) ∅ heap_merge.
+Proof. move => ?. apply heap_state_eq => /=. by rewrite !left_id_L. Qed.
+Global Instance heap_merge_right_id : RightId (=) ∅ heap_merge.
+Proof. move => ?. apply heap_state_eq => /=. by rewrite !right_id_L. Qed.
+Global Instance heap_merge_assoc : Assoc (=) heap_merge.
+Proof. move => ???. apply heap_state_eq => /=. split; [|set_solver]. by rewrite assoc_L. Qed.
 
 Program Definition heap_restrict (h : heap_state) (P : prov → Prop) `{!∀ x, Decision (P x)} : heap_state :=
   Heap (filter (λ x, P x.1.1) h.(h_heap)) h.(h_provs) _.
@@ -901,6 +931,41 @@ Proof. done. Qed.
 Lemma h_provs_heap_from_blocks bs :
   h_provs (heap_from_blocks bs) = dom bs.
 Proof. done. Qed.
+
+Lemma heap_from_blocks_empty :
+  heap_from_blocks ∅ = ∅.
+Proof. by apply heap_state_eq. Qed.
+
+Lemma heap_from_blocks_insert b s bs :
+  bs !! b = None →
+  heap_from_blocks (<[b:=s]>bs) = heap_merge (heap_from_blocks ({[ b := s]})) (heap_from_blocks (bs)).
+Proof.
+  move => ?.
+  apply heap_state_eq => /=. split; [|set_solver].
+  apply map_eq => -[??]. rewrite lookup_union !lookup_gmap_uncurry.
+  apply option_eq => ?. rewrite union_Some !bind_Some !bind_None.
+  setoid_rewrite lookup_singleton_Some. setoid_rewrite lookup_singleton_None.
+  setoid_rewrite lookup_insert_Some. naive_solver.
+Qed.
+
+Lemma h_block_heap_merge_block p b h:
+  p ∉ h_provs h →
+  h_block (heap_merge (heap_from_blocks {[p := b]}) h) p = b.
+Proof.
+  move => ?. rewrite /h_block /heap_alloc /=.
+  apply map_eq => i. rewrite !lookup_total_gmap_curry.
+  rewrite lookup_union_l ?lookup_gmap_uncurry ?lookup_singleton //.
+  apply eq_None_not_Some. move => /lookup_heap_is_Some_elem_of_h_provs. naive_solver.
+Qed.
+
+Lemma h_block_heap_merge_block_ne p p2 b h:
+  p ≠ p2 →
+  h_block (heap_merge (heap_from_blocks {[p := b]}) h) p2 = h_block h p2.
+Proof.
+  move => ?. rewrite /h_block /heap_alloc /=.
+  apply map_eq => i. rewrite !lookup_total_gmap_curry.
+  by rewrite lookup_union_r // lookup_gmap_uncurry lookup_singleton_ne.
+Qed.
 
 Fixpoint heap_fresh_list (xs : list Z) (bs : gset block_id) (h : heap_state) : list loc :=
   match xs with
@@ -1027,6 +1092,24 @@ Proof.
   rewrite -Heq in Hneq.
   naive_solver.
 Qed.
+
+Lemma heap_range_dom_h_block hs ls n:
+  ls.2 = 0%Z →
+  heap_range hs ls n ↔ dom (h_block hs ls.1) = dom (zero_block n).
+Proof.
+  move => ?. rewrite set_eq. setoid_rewrite elem_of_dom_zero_block.
+  setoid_rewrite elem_of_dom. setoid_rewrite h_block_lookup.
+  unfold heap_range. split.
+  - move => + ?. move => ->; naive_solver lia.
+  - move => Heq [??] /= ->. rewrite Heq. lia.
+Qed.
+
+Lemma heap_range_dom_h_block1 hs ls n:
+  ls.2 = 0%Z →
+  heap_range hs ls n →
+  dom (h_block hs ls.1) = dom (zero_block n).
+Proof. move => *. by apply heap_range_dom_h_block. Qed.
+
 
 (** *** heap_preserved *)
 Definition heap_preserved (m : gmap prov (gmap Z val)) (h : heap_state) :=
