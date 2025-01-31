@@ -452,5 +452,41 @@ Section sim_spec.
     iApply "HΦ".
     by iFrame.
   Qed.
-
 End sim_spec.
+
+(* ********************************************************************************************** *)
+(* Prove ⟦echo⟧_rec ⊕ ⟦getc⟧_spec ⪯ ⟦echo_getc⟧_spec *)
+(* ********************************************************************************************** *)
+Section echo_getc.
+  (* TODO - I should probably fix the spec state? *)
+  Context `{!dimsumGS Σ} `{!recGS Σ}.
+
+  (* TODO, experimental *)
+  Definition echo_getc_spec_body : spec rec_event Z unit :=
+    v ← TGet;
+    TPut (v + 1);;
+    h ← TExist _;
+    '(_, h') ← TCallRet "putc" [(ValNum v)] h;
+    TAssume (h = h');;
+    TRet tt.
+
+  Definition echo_getc_spec : spec rec_event Z void :=
+    '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
+    TAssume (f = "echo");;
+    TAssume (vs = []);;
+    Spec.forever echo_getc_spec_body.
+
+  Let m_t := rec_link_trans {["echo"]} {["getc"]} rec_trans (spec_trans rec_event Z).
+
+  Goal m_state (spec_trans rec_event Z) = (spec rec_event Z void * Z)%type. reflexivity. Qed.
+
+  (* TODO: No idea what this even means *)
+  Lemma echo_getc_sim (v : Z):
+    (* TODO: What exactly is the state interp *)
+    rec_state_interp (rec_init echo_prog) None -∗
+    (* TODO: MLFRun? *)
+    (MLFRun None, [], rec_init echo_prog, (getc_spec_priv, v)) ⪯{m_t,
+      spec_trans rec_event Z} (echo_getc_spec, v).
+  Proof. Admitted.
+
+End echo_getc.
