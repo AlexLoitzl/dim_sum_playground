@@ -477,16 +477,68 @@ Section echo_getc.
     Spec.forever echo_getc_spec_body.
 
   Let m_t := rec_link_trans {["echo"]} {["getc"]} rec_trans (spec_trans rec_event Z).
-
-  Goal m_state (spec_trans rec_event Z) = (spec rec_event Z void * Z)%type. reflexivity. Qed.
-
-  (* TODO: No idea what this even means *)
+  (* NOTE: Simulation statement: _ ⪯ (echo_getc_spec, v). The linked module (semantically)
+    refines the spec, i.e., for any sequence of silent (module internal) steps followed by a visible
+    event κ, the spec module can perform steps emitting κ. *)
+  Compute (m_state (spec_trans rec_event Z)).
   Lemma echo_getc_sim (v : Z):
     (* TODO: What exactly is the state interp *)
     rec_state_interp (rec_init echo_prog) None -∗
-    (* TODO: MLFRun? *)
+    (* TODO: Not exactly sure what the list is *)
     (MLFRun None, [], rec_init echo_prog, (getc_spec_priv, v)) ⪯{m_t,
       spec_trans rec_event Z} (echo_getc_spec, v).
-  Proof. Admitted.
+  Proof.
+    iIntros "[#Hfns [Hh Ha]] /=".
+    Check (MLFRun None, [], rec_init echo_prog, (getc_spec_priv, v)).
+    Check m_t.
+    (* REVIEW: Why do I parameterize by rec state, but not by spec state *)
+
+    (* REVIEW: Am I saying here that I have r/w over the modules, and when I step through one
+       I ensure I cannot change the other by splitting the var? *)
+    iMod (mstate_var_alloc (m_state (spec_trans rec_event Z))) as (γσ_s) "Hγσ_s".
+    iMod (mstate_var_alloc (m_state m_t)) as (γσ_t) "Hγσ_t".
+    iMod (mstate_var_alloc (option rec_event)) as (γκ) "Hγκ".
+
+    iMod (mstate_var_alloc Z) as (γs) "?".
+    iMod (mstate_var_split γs v with "[$]") as "[Hγs Hγs']".
+    pose (Hspec := SpecGS γs).
+
+    iApply (sim_tgt_constP_intro γσ_t γσ_s γκ with "Hγσ_t Hγσ_s Hγκ [-]"). iIntros "Hγσ_s".
+    iApply (sim_tgt_link_None with "[-]"). iIntros "!>" (??????).
+    (* NOTE: Case splitting on the linking case, which can only be a call because of the empty list  *)
+    (* TODO: What is the empty list here, is it previous events? *)
+    destruct!/=. case_match; destruct!/=. clear H3.
+
+    (* NOTE: Changing to source module *)
+    iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
+    iIntros "Hγσ_s Hγσ_t Hγκ".
+    (* NOTE: Now, going into module local reasoning *)
+    iApply (sim_gen_expr_intro _ tt with "[Hγs] [-]"); [simpl; done..|].
+    iEval (unfold echo_getc_spec). rewrite /TReceive bind_bind.
+    iApply (sim_src_TExist (_, _, _)).
+    rewrite bind_bind. setoid_rewrite bind_ret_l.
+    iApply sim_gen_TVis. iIntros (v') "Hγs".
+    (* TODO: switch_id here *)
+    iIntros (??) "[-> [-> _]]".
+    iApply (sim_src_constP_next with "[Hγσ_t] [Hγκ] [Hγσ_s] [%] [-]"); [done..|].
+    iIntros "Hγσ_s". iApply sim_gen_stop.
+    (* NOTE: I am here going right back into the src module, to get the function name from the assume *)
+    iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
+    iIntros "Hγσ_s Hγσ_t Hγκ".
+    iApply (sim_gen_expr_intro _ tt with "[Hγs] [-]"); [simpl; done..|].
+    iApply sim_src_TAssume. iIntros (?).
+    iApply sim_src_TAssume. iIntros (?). simplify_eq.
+    iApply sim_gen_expr_None => /=. iIntros (? [] ?) "Hγs".
+    iIntros (??) "[-> [-> _]]".
+
+    (* NOTE: Changing into target *)
+    rewrite bool_decide_true; [|done].
+    iApply (sim_src_constP_next with "[Hγσ_t] [Hγκ] [Hγσ_s] [%] [-]"); [done..|].
+    iIntros "Hγσ_s".
+    iApply (sim_tgt_link_left_recv with "[-]").
+    (* NOTE: Again, this waiting_raw, which has the extra case for returning events *)
+    iApply (sim_tgt_rec_Waiting_raw _ []).
+    iSplit; [|by iIntros].
+Admitted.
 
 End echo_getc.
