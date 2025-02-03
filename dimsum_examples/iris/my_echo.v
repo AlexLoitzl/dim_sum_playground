@@ -525,7 +525,7 @@ Section echo_getc.
     h ← TExist _;
     '(_, h') ← TCallRet "putc" [(ValNum v)] h;
     TAssume (h = h');;
-    TRet tt.
+    TUb.
 
   Definition echo_getc_spec : spec rec_event Z void :=
     '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
@@ -533,13 +533,49 @@ Section echo_getc.
     TAssume (vs = []);;
     Spec.forever echo_getc_spec_body.
 
-  (* FIXME: How do I talk about the value? - and also, here should be loop? - compare with old spec *)
+  (* REVIEW *)
   Lemma sim_echo `{!specGS} Π :
     "echo" ↪ Some echo_rec -∗
     □ rec_fn_spec_hoare Tgt Π "getc" getc_fn_spec_priv -∗
-    rec_fn_spec_hoare Tgt Π "echo" (λ es POST, ⌜es = []⌝ ∗
-      rec_fn_spec_hoare Tgt Π "putc" (λ es POST', ⌜es = ⌝ ∗ )
-    POST (λ _, ⌜True⌝) ).
+    rec_fn_spec_hoare Tgt Π "echo" ({{ es POST0, ⌜es = []⌝ ∗
+      ∃ v,
+      (* TODO: This is a little awkward *)
+      spec_state v ∗
+      spec_state v ∗
+      rec_fn_spec_hoare Tgt Π "putc" ({{ es POST,
+        ⌜es = [Val (ValNum v)]⌝ ∗
+        POST ({{ _,
+        spec_state (v + 1) ∗
+        spec_state (v + 1)
+      }})}})}}).
+    Proof. Admitted.
+
+  (* FIXME *)
+  Lemma sim_echo_full `{!specGS} Π γσ_s (σ : m_state (spec_trans _ Z)) :
+    "echo" ↪ Some echo_rec -∗
+    "putc" ↪ None -∗
+    □ rec_fn_spec_hoare Tgt Π "getc" getc_fn_spec_priv -∗
+    γσ_s ⤳ σ -∗
+    ⌜σ.1 ≡ Spec.forever echo_getc_spec_body⌝ -∗
+    rec_fn_spec_hoare Tgt Π "main" (λ es POST,
+      ⌜es = []⌝ ∗
+      □ switch_external Π (λ κ σ POST,
+          ∃ vs h σ_s, ⌜κ = Some (Outgoing, ERCall "putc" vs h)⌝ ∗ γσ_s ⤳ σ_s ∗
+        POST (spec_trans _ unit) σ_s (λ _ Π',
+          ∃ e,
+        switch Π' (λ κ'' σ_s3 POST,
+          ⌜κ'' = Some (Incoming, e)⌝ ∗
+        POST Src _ _ (λ σ_s3' Π_s'',
+          ⌜σ_s3' = σ_s3⌝ ∗
+        switch Π_s'' (λ κ'' σ'' POST,
+          ∃ v h', ⌜e = ERReturn v h'⌝ ∗ ⌜κ'' = None⌝ ∗
+        POST Tgt _ _ (λ σ' Π',
+          ⌜σ' = σ⌝ ∗ γσ_s ⤳ σ'' ∗
+        switch Π' (λ κ σ POST,
+          ∃ e', ⌜κ = Some (Incoming, e')⌝ ∗
+        POST Tgt _ _ (λ σ' Π',
+          ⌜σ' = σ⌝ ∗ ⌜e = e'⌝ ∗ ⌜Π = Π'⌝)))))))) ∗
+      POST (λ vr, ∃ σ_s, γσ_s ⤳ σ_s ∗ (∀ Π, σ_s ≈{ spec_trans rec_event Z }≈>ₛ Π) ∗ ⌜vr = 0⌝)).
   Proof. Admitted.
 
   Let m_t := rec_link_trans {["echo"]} {["getc"]} rec_trans (spec_trans rec_event Z).
