@@ -1,4 +1,61 @@
 From iris.proofmode Require Import proofmode.
+From iris.bi.lib Require Import fixpoint.
+
+(* NOTE - BI the logic of "bunched implications" *)
+Section bi_loop.
+  Context {PROP : bi} {A : Type} (body : (A → PROP) → (A → PROP)).
+
+  Definition bi_loop_pre (bi_loop : leibnizO A -d> PROP) :
+    leibnizO A -d> PROP := λ a,
+    (∀ Φ, □ (∀ x, bi_loop x -∗ Φ x) -∗ body Φ a)%I.
+
+  Global Instance bi_loop_pre_ne n:
+    Proper ((dist n ==> dist n) ==> dist n ==> dist n) bi_loop_pre.
+  Proof.
+    move => ?? Hsim ?? ->. rewrite /bi_loop_pre.
+    repeat (f_equiv || eapply Hsim || reflexivity).
+  Qed.
+
+  Lemma bi_loop_pre_mono loop1 loop2:
+    ⊢ □ (∀ a, loop1 a -∗ loop2 a)
+    → ∀ a , bi_loop_pre loop1 a -∗ bi_loop_pre loop2 a.
+  Proof.
+    iIntros "#Hinner" (a) "Hsim". iIntros (?) "#HC".
+    iApply "Hsim". iIntros "!>" (?) "?". iApply "HC". by iApply "Hinner".
+  Qed.
+
+  Local Instance bi_loop_pre_monotone :
+    BiMonoPred bi_loop_pre.
+  Proof.
+    constructor.
+    - iIntros (Π Ψ ??) "#Hinner". iIntros (?) "Hsim" => /=. iApply bi_loop_pre_mono; [|done].
+      iIntros "!>" (?) "HΠ". by iApply ("Hinner" $! _).
+    - move => bi_loop Hsim n a1 a2 /= ?.
+      apply bi_loop_pre_ne; eauto. move => ??? /=. by apply: Hsim.
+  Qed.
+End bi_loop.
+
+Definition bi_loop {PROP : bi} {A} (body : (A → PROP) → (A → PROP)) (a : A) :=
+  bi_greatest_fixpoint (bi_loop_pre body) a.
+
+Section bi_loop.
+  Context {PROP : bi} {A : Type} (body : (A → PROP) → (A → PROP)).
+
+  Local Existing Instance bi_loop_pre_monotone.
+  Lemma bi_loop_eq a:
+    bi_loop body a ⊣⊢ bi_loop_pre body (bi_loop body) a.
+  Proof. rewrite /bi_loop.
+         apply: greatest_fixpoint_unfold.
+  Qed.
+
+  Lemma bi_loop_step a:
+    (∀ Φ, □ (∀ a, bi_loop body a -∗ Φ a) -∗ body Φ a) ⊢ bi_loop body a.
+  Proof. by rewrite bi_loop_eq. Qed.
+
+  Lemma bi_loop_unfold a:
+    bi_loop body a ⊢ body (bi_loop body) a.
+  Proof. rewrite bi_loop_eq. iIntros "Hl". iApply "Hl". iIntros "!>" (?) "$". Qed.
+End bi_loop.
 
 From dimsum.examples.iris Require Import asm rec2.
 Set Default Proof Using "Type".
@@ -458,7 +515,7 @@ End sim_spec.
 (* Prove ⟦echo⟧_rec ⊕ ⟦getc⟧_spec ⪯ ⟦echo_getc⟧_spec *)
 (* ********************************************************************************************** *)
 Section echo_getc.
-  (* TODO - I should probably fix the spec state? *)
+  (* TODO - Should I fix the spec state? *)
   Context `{!dimsumGS Σ} `{!recGS Σ}.
 
   (* TODO, experimental *)
@@ -476,13 +533,21 @@ Section echo_getc.
     TAssume (vs = []);;
     Spec.forever echo_getc_spec_body.
 
+  (* FIXME: How do I talk about the value? - and also, here should be loop? - compare with old spec *)
+  Lemma sim_echo `{!specGS} Π :
+    "echo" ↪ Some echo_rec -∗
+    □ rec_fn_spec_hoare Tgt Π "getc" getc_fn_spec_priv -∗
+    rec_fn_spec_hoare Tgt Π "echo" (λ es POST, ⌜es = []⌝ ∗
+      rec_fn_spec_hoare Tgt Π "putc" (λ es POST', ⌜es = ⌝ ∗ )
+    POST (λ _, ⌜True⌝) ).
+  Proof. Admitted.
+
   Let m_t := rec_link_trans {["echo"]} {["getc"]} rec_trans (spec_trans rec_event Z).
   (* NOTE: Simulation statement: _ ⪯ (echo_getc_spec, v). The linked module (semantically)
     refines the spec, i.e., for any sequence of silent (module internal) steps followed by a visible
     event κ, the spec module can perform steps emitting κ. *)
-  Compute (m_state (spec_trans rec_event Z)).
   Lemma echo_getc_sim (v : Z):
-    (* TODO: What exactly is the state interp *)
+    (* TODO: What exactly is the state interp - ownership of rec resources? *)
     rec_state_interp (rec_init echo_prog) None -∗
     (* TODO: Not exactly sure what the list is *)
     (MLFRun None, [], rec_init echo_prog, (getc_spec_priv, v)) ⪯{m_t,
@@ -539,6 +604,19 @@ Section echo_getc.
     (* NOTE: Again, this waiting_raw, which has the extra case for returning events *)
     iApply (sim_tgt_rec_Waiting_raw _ []).
     iSplit; [|by iIntros].
-Admitted.
+    iIntros (???? Hin) "!> %". simplify_map_eq.
+
+    iApply (sim_tgt_link_left with "[-]").
+    (* TODO: Ghost state... I am just fixing the heap here? What about splitting? - or does that not make sense *)
+    iMod (rec_mapsto_alloc_big (h_heap h) with "Hh") as "[Hh _]". { apply map_disjoint_empty_r. }
+
+    iApply (sim_gen_expr_intro _ [] with "[Hh Ha]"). { done. }
+    { rewrite /= /rec_state_interp dom_empty_L right_id_L /=. iFrame "#∗". by iApply rec_alloc_fake. }
+
+    set (Π := link_tgt_leftP _ _ _ _).
+
+    iApply (sim_gen_expr_bind _ [ReturnExtCtx _] with "[-]") => /=.
+
+  Admitted.
 
 End echo_getc.
