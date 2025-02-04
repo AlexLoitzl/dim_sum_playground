@@ -428,6 +428,7 @@ Section sim_spec.
     inv H0. by dimsum.core.axioms.simplify_K.
   Qed.
 
+  (* REVIEW: Do I get all my states back? *)
   Lemma sim_getc_spec_heap_priv `{!specGS} Π Φ :
     switch Π ({{ κ σ POST,
       ∃ f vs h, ⌜κ = Some (Incoming, ERCall f vs h)⌝ ∗
@@ -471,6 +472,7 @@ Section sim_spec.
     ∃ v, ⌜es = []⌝ ∗ spec_state v ∗
     POST (λ v', (⌜v' = ValNum v⌝) ∗ spec_state (v + 1))%I.
 
+  (* REVIEW: Do I, or how do I get my state back? *)
   Lemma sim_getc_heap_priv `{!specGS} fns Π (w : Z) :
     rec_fn_auth fns -∗
     "getc" ↪ None -∗
@@ -509,6 +511,7 @@ Section sim_spec.
     iApply "HΦ".
     by iFrame.
   Qed.
+
 End sim_spec.
 
 (* ********************************************************************************************** *)
@@ -536,7 +539,8 @@ Section echo_getc.
   (* REVIEW *)
   Lemma sim_echo `{!specGS} Π :
     "echo" ↪ Some echo_rec -∗
-    □ rec_fn_spec_hoare Tgt Π "getc" getc_fn_spec_priv -∗
+    (* FIXME: Okay, this is now a little bit awkward. :( *)
+    (* □ *) rec_fn_spec_hoare Tgt Π "getc" getc_fn_spec_priv -∗
     rec_fn_spec_hoare Tgt Π "echo" ({{ es POST0, ⌜es = []⌝ ∗
       ∃ v,
       (* TODO: This is a little awkward *)
@@ -548,20 +552,21 @@ Section echo_getc.
         spec_state (v + 1) ∗
         spec_state (v + 1)
       }})}})}}).
-    Proof. Admitted.
+  Proof. Admitted.
 
   (* FIXME *)
   Lemma sim_echo_full `{!specGS} Π γσ_s (σ : m_state (spec_trans _ Z)) :
     "echo" ↪ Some echo_rec -∗
     "putc" ↪ None -∗
-    □ rec_fn_spec_hoare Tgt Π "getc" getc_fn_spec_priv -∗
+    (* NOTE: Same here *)
+    (* □ *) rec_fn_spec_hoare Tgt Π "getc" getc_fn_spec_priv -∗
     γσ_s ⤳ σ -∗
     ⌜σ.1 ≡ Spec.forever echo_getc_spec_body⌝ -∗
-    rec_fn_spec_hoare Tgt Π "main" (λ es POST,
+    rec_fn_spec_hoare Tgt Π "echo" (λ es POST,
       ⌜es = []⌝ ∗
       □ switch_external Π (λ κ σ POST,
           ∃ vs h σ_s, ⌜κ = Some (Outgoing, ERCall "putc" vs h)⌝ ∗ γσ_s ⤳ σ_s ∗
-        POST (spec_trans _ unit) σ_s (λ _ Π',
+        POST (spec_trans _ Z) σ_s (λ _ Π',
           ∃ e,
         switch Π' (λ κ'' σ_s3 POST,
           ⌜κ'' = Some (Incoming, e)⌝ ∗
@@ -575,7 +580,7 @@ Section echo_getc.
           ∃ e', ⌜κ = Some (Incoming, e')⌝ ∗
         POST Tgt _ _ (λ σ' Π',
           ⌜σ' = σ⌝ ∗ ⌜e = e'⌝ ∗ ⌜Π = Π'⌝)))))))) ∗
-      POST (λ vr, ∃ σ_s, γσ_s ⤳ σ_s ∗ (∀ Π, σ_s ≈{ spec_trans rec_event Z }≈>ₛ Π) ∗ ⌜vr = 0⌝)).
+      POST (λ vr, ∃ σ_s, γσ_s ⤳ σ_s ∗ (∀ Π, σ_s ≈{ spec_trans rec_event Z }≈>ₛ Π))).
   Proof. Admitted.
 
   Let m_t := rec_link_trans {["echo"]} {["getc"]} rec_trans (spec_trans rec_event Z).
@@ -600,6 +605,7 @@ Section echo_getc.
     iMod (mstate_var_alloc (m_state m_t)) as (γσ_t) "Hγσ_t".
     iMod (mstate_var_alloc (option rec_event)) as (γκ) "Hγκ".
 
+    (* NOTE: I create my Spec State *)
     iMod (mstate_var_alloc Z) as (γs) "?".
     iMod (mstate_var_split γs v with "[$]") as "[Hγs Hγs']".
     pose (Hspec := SpecGS γs).
@@ -613,23 +619,26 @@ Section echo_getc.
     (* NOTE: Changing to source module *)
     iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
     iIntros "Hγσ_s Hγσ_t Hγκ".
-    (* NOTE: Now, going into module local reasoning *)
+    (* NOTE: Now, going into module local reasoning - Giving up one half of the state *)
     iApply (sim_gen_expr_intro _ tt with "[Hγs] [-]"); [simpl; done..|].
     iEval (unfold echo_getc_spec). rewrite /TReceive bind_bind.
     iApply (sim_src_TExist (_, _, _)).
     rewrite bind_bind. setoid_rewrite bind_ret_l.
     iApply sim_gen_TVis. iIntros (v') "Hγs".
     (* TODO: switch_id here *)
-    iIntros (??) "[-> [-> _]]".
+    (* FIXME, discarding something here *)
+    iIntros (??) "[-> [-> ?]]".
     iApply (sim_src_constP_next with "[Hγσ_t] [Hγκ] [Hγσ_s] [%] [-]"); [done..|].
     iIntros "Hγσ_s". iApply sim_gen_stop.
     (* NOTE: I am here going right back into the src module, to get the function name from the assume *)
     iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
     iIntros "Hγσ_s Hγσ_t Hγκ".
+    (* NOTE - Here I give up my state again *)
     iApply (sim_gen_expr_intro _ tt with "[Hγs] [-]"); [simpl; done..|].
     iApply sim_src_TAssume. iIntros (?).
     iApply sim_src_TAssume. iIntros (?). simplify_eq.
     iApply sim_gen_expr_None => /=. iIntros (? [] ?) "Hγs".
+    (* NOTE: Got it back again - and it's linked to the state *)
     iIntros (??) "[-> [-> _]]".
 
     (* NOTE: Changing into target *)
@@ -643,7 +652,8 @@ Section echo_getc.
     iIntros (???? Hin) "!> %". simplify_map_eq.
 
     iApply (sim_tgt_link_left with "[-]").
-    (* TODO: Ghost state... I am just fixing the heap here? What about splitting? - or does that not make sense *)
+    (* NOTE: Might as well rewrite for good measure *)
+    iDestruct (mstate_var_agree with "Hγs Hγs'") as "%Heq". rewrite <-Heq.
     iMod (rec_mapsto_alloc_big (h_heap h) with "Hh") as "[Hh _]". { apply map_disjoint_empty_r. }
 
     iApply (sim_gen_expr_intro _ [] with "[Hh Ha]"). { done. }
@@ -652,7 +662,59 @@ Section echo_getc.
     set (Π := link_tgt_leftP _ _ _ _).
 
     iApply (sim_gen_expr_bind _ [ReturnExtCtx _] with "[-]") => /=.
-
-  Admitted.
+    (* NOTE: Here I am now dividing my state *)
+    iApply (sim_echo_full with "[] [] [Hγs] Hγσ_s"). 1-2: by iApply (rec_fn_intro with "[$]"). 2: done.
+    { (* NOTE: And immediately give it up *)
+      iApply (sim_getc_heap_priv with "[] [] [Hγs]").
+      1: done. 1: by iApply (rec_fn_intro with "[$]"). 1: iAssumption.
+      iIntros (??) => /=. iDestruct 1 as (???->) "HC" => /=.
+      iIntros (??????). destruct!/=. rewrite bool_decide_false // bool_decide_true //.
+      iApply (sim_tgt_link_right_recv with "[-]"). iApply "HC". iSplit!.
+      (* TODO: How can I unify this? *) admit.
+      iIntros (??). iDestruct 1 as (? ->) "HC" => /=.
+      iIntros (?). simplify_eq.
+      iApply (sim_tgt_link_right with "[-]"). iApply "HC". iSplit!.
+      iIntros (??). iDestruct 1 as (?? -> ->) "HC" => /=.
+      iIntros (??????). destruct!/=.
+      iApply (sim_tgt_link_left_recv with "[-]"). iApply "HC". iSplit!.
+      iIntros (??). iDestruct 1 as (? ->) "HC" => /=.
+      iIntros (?). simplify_eq.
+      iApply (sim_tgt_link_left with "[-]"). iApply "HC". iSplit!.
+      (* TODO: I definitely cannot unify this *)
+      admit.
+    }
+    iSplit!.
+    (* TODO: This is just copied over... *)
+    - iIntros "!>" (??). iDestruct 1 as (??? ->) "[Hγσ_s HC]" => /=.
+      iIntros  (??????). destruct!/=. rewrite !bool_decide_false //.
+      iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
+      iIntros "Hγσ_s Hγσ_t Hγκ".
+      iApply "HC". iSplit!. iIntros (??). iDestruct 1 as (->) "HC".
+      iApply (sim_src_constP_next with "[Hγσ_t] [Hγκ] [Hγσ_s] [%] [-]"); [done..|].
+      iIntros "Hγσ_s".
+      iApply (sim_tgt_link_None with "[-]"). iIntros "!>" (??????). destruct!/=.
+      iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
+      iIntros "Hγσ_s Hγσ_t Hγκ".
+      iApply "HC". iSplit!. iIntros (??) "[% HC]". simplify_eq.
+      iApply (sim_src_constP_next with "[Hγσ_t] [Hγκ] [Hγσ_s] [%] [-]"); [done..|].
+      iIntros "Hγσ_s". iApply sim_gen_stop.
+      iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
+      iIntros "Hγσ_s Hγσ_t Hγκ".
+      iApply "HC". iSplit!. iIntros (??). iDestruct 1 as (?? -> ->) "HC".
+      iApply (sim_src_constP_next with "[Hγσ_t] [Hγκ] [Hγσ_s] [%] [-]"); [done..|].
+      iIntros "Hγσ_s". destruct!/=.
+      iApply (sim_tgt_link_left_recv with "[-]").
+      iApply ("HC" with "[-]"). iFrame. iSplit!.
+      iIntros (??). iDestruct 1 as (? ->) "HC".
+      iIntros (?). simplify_eq.
+      iApply (sim_tgt_link_left with "[-]").
+      iApply "HC". iSplit!.
+    - iIntros (?) "[% [Hγσ_s Hs]]". iApply sim_tgt_rec_ReturnExt.
+      iIntros (???) "Hfns''' Hh Ha !>".
+      iIntros (??) "[-> [-> _]]" => /=. iIntros (??????). destruct!/=.
+      iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
+      iIntros "Hγσ_s Hγσ_t Hγκ".
+      iApply "Hs".
+    Admitted.
 
 End echo_getc.
