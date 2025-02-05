@@ -513,6 +513,49 @@ Section sim_spec.
     by iFrame.
   Qed.
 
+  (* Let's try without ghost state weaker precondition, but pretty much the same*)
+  (* Lemma sim_getc_heap_priv' `{!specGS} fns Π (w : Z) : *)
+  (*   rec_fn_auth fns -∗ *)
+  (*   "getc" ↪ None -∗ *)
+  (*   (spec_state w) -∗ *)
+  (*   switch_link Tgt Π ({{ σ0 POST, *)
+  (*     ∃ vs h', *)
+  (*   POST (ERCall "getc" vs h') (spec_trans _ Z) (getc_spec_priv, w) ({{ _ Πr, *)
+  (*   switch_link Tgt Πr ({{ σ POST, *)
+  (*     ∃ h'', ⌜σ = (getc_spec_priv, (w + 1)%Z)⌝ ∗ *)
+  (*   POST (ERReturn w h'') _ σ0 ({{ _ Πx, *)
+  (*     ∀ k e, Π k e -∗ Πx k e}})}})}})}}) -∗ *)
+  (*   rec_fn_spec_hoare Tgt Π "getc" getc_fn_spec_priv. *)
+  (* Proof. *)
+  (*   iIntros "#Hfns #Hf Hs HΠ" (es Φ) "HΦ". iDestruct "HΦ" as (v ->) "[Hs' HΦ]". *)
+  (*   iDestruct (mstate_var_agree with "Hs Hs'") as "->". *)
+  (*   iApply (sim_tgt_rec_Call_external with "[$]"). *)
+  (*   iIntros (???) "#?Htoa Haa !>". *)
+  (*   iIntros (??) "[% [% Hσ]]". subst. *)
+  (*   iApply "HΠ" => /=. iSplit!. iIntros (??) "[-> HΠi]". *)
+
+  (*   iApply (sim_gen_expr_intro _ tt with "[Hs]"); simpl; [done..|]. *)
+  (*   iApply sim_getc_spec_heap_priv => /=. iIntros (??). iDestruct 1 as (????) "HC". subst. *)
+  (*   iApply "HΠi". iSplit!. iIntros (??) "[% [% HΠr]]". simplify_eq/=. *)
+  (*   iApply "HC". *)
+  (*   iExists (_). *)
+  (*   iSplit!. *)
+  (*   iSplitL "Hs'". { done. } *)
+  (*   iIntros (??). simpl. iDestruct 1 as (??) "[Hs Hs']". *)
+  (*   iApply "HΠr". *)
+  (*   iSplit!. iIntros (??) "[% HΠf]". simplify_eq. *)
+  (*   iApply sim_tgt_rec_Waiting_raw. *)
+  (*   iSplit. { iIntros. iModIntro. iApply "HΠf". iSplit!. iIntros (??) "[% [% ?]]". simplify_eq. } *)
+  (*   iIntros (???) "!>". iApply "HΠf". iSplit!. *)
+  (*   iIntros (??) "[% [% H]]". simplify_eq. *)
+  (*   (* iIntros (??[?[??]]). simplify_eq. *) *)
+  (*   iApply (sim_gen_wand Tgt rec_trans with "[-H] [H//]"). *)
+  (*   iApply "Hσ". iSplit!. *)
+  (*   iFrame. *)
+  (*   iApply "HΦ". *)
+  (*   by iFrame. *)
+  (* Qed. *)
+
   (* Let's try without ghost state *)
   Lemma sim_getc_heap_priv' `{!specGS} fns Π (w : Z) :
     rec_fn_auth fns -∗
@@ -524,7 +567,7 @@ Section sim_spec.
     switch_link Tgt Πr ({{ σ POST,
       ∃ h'', ⌜σ = (getc_spec_priv, (w + 1)%Z)⌝ ∗
     POST (ERReturn w h'') _ σ0 ({{ _ Πx,
-      ∀ k e, Π k e -∗ Πx k e}})}})}})}}) -∗
+     ⌜Πx = Π⌝}})}})}})}}) -∗
     rec_fn_spec_hoare Tgt Π "getc" getc_fn_spec_priv.
   Proof.
     iIntros "#Hfns #Hf Hs HΠ" (es Φ) "HΦ". iDestruct "HΦ" as (v ->) "[Hs' HΦ]".
@@ -547,9 +590,7 @@ Section sim_spec.
     iApply sim_tgt_rec_Waiting_raw.
     iSplit. { iIntros. iModIntro. iApply "HΠf". iSplit!. iIntros (??) "[% [% ?]]". simplify_eq. }
     iIntros (???) "!>". iApply "HΠf". iSplit!.
-    iIntros (??) "[% [% H]]". simplify_eq.
-    (* iIntros (??[?[??]]). simplify_eq. *)
-    iApply (sim_gen_wand Tgt rec_trans with "[-H] [H//]").
+    iIntros (??[?[??]]). simplify_eq.
     iApply "Hσ". iSplit!.
     iFrame.
     iApply "HΦ".
@@ -733,6 +774,7 @@ Section echo_getc.
       iIntros (??). iDestruct 1 as (? ->) "HC" => /=.
       iIntros (?). simplify_eq.
       iApply (sim_tgt_link_left with "[-]"). iApply "HC". iSplit!.
+      (* TODO FIXME: link_tgt_leftP Do I have to switch out to update the state? *)
       (* TODO: I definitely cannot unify this *)
       admit.
     }
