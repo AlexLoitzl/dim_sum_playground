@@ -478,8 +478,8 @@ Section sim_spec.
     "getc" ↪ None -∗
     (spec_state w) -∗
     switch_link Tgt Π ({{ σ0 POST,
-      ∃ vs h' v, (* Obligation *)
-    POST (ERCall "getc" vs h') (spec_trans _ Z) (getc_spec_priv, v) ({{ _ Πr,
+      ∃ vs h', (* v *)
+    POST (ERCall "getc" vs h') (spec_trans _ Z) (getc_spec_priv, w (* v *)) ({{ _ Πr,
     switch_link Tgt Πr ({{ σ POST,
       ∃ h'' v', ⌜σ = (getc_spec_priv, (v' + 1)%Z)⌝ ∗ (spec_state (v' + 1)) ∗ (* Obligation *)
     POST (ERReturn v' h'') _ σ0 ({{ _ Πx,
@@ -782,10 +782,9 @@ Section echo_getc.
     { (* NOTE: And immediately give it up *)
       iApply (sim_getc_heap_priv with "[] [] [Hγs_t]").
       1: done. 1: by iApply (rec_fn_intro with "[$]"). 1: iAssumption.
-      iIntros (??) => /=. iDestruct 1 as (???->) "HC". iIntros => /=.
+      iIntros (??) => /=. iDestruct 1 as (??->) "HC". iIntros => /=.
       iIntros (??????). destruct!/=. rewrite bool_decide_false // bool_decide_true //.
       iApply (sim_tgt_link_right_recv with "[-]") => /=. iApply "HC". iSplit!.
-      (* TODO: How can I unify this? *) admit.
       iIntros (??). iDestruct 1 as (? ->) "HC" => /=.
       iIntros (?). simplify_eq.
       iApply (sim_tgt_link_right with "[-]"). iApply "HC". iSplit!.
@@ -831,6 +830,6 @@ Section echo_getc.
       iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
       iIntros "Hγσ_s Hγσ_t Hγκ".
       iApply "Hs".
-    Admitted.
+    Qed.
 
 End echo_getc.
