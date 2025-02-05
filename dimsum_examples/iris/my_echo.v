@@ -473,7 +473,6 @@ Section sim_spec.
     POST (λ v', (⌜v' = ValNum v⌝) ∗ spec_state (v + 1))%I.
 
   (* REVIEW: Do I, or how do I get my state back? *)
-
   Lemma sim_getc_heap_priv `{!specGS} fns Π (w : Z) :
     rec_fn_auth fns -∗
     "getc" ↪ None -∗
@@ -482,7 +481,7 @@ Section sim_spec.
       ∃ vs h' v, (* Obligation *)
     POST (ERCall "getc" vs h') (spec_trans _ Z) (getc_spec_priv, v) ({{ _ Πr,
     switch_link Tgt Πr ({{ σ POST,
-      ∃ h'' v', ⌜σ = (getc_spec_priv, (v' + 1)%Z)⌝ ∗ (* Obligation *)
+      ∃ h'' v', ⌜σ = (getc_spec_priv, (v' + 1)%Z)⌝ ∗ (spec_state (v' + 1)) ∗ (* Obligation *)
     POST (ERReturn v' h'') _ σ0 ({{ _ Πx,
      (* Assumption *) ⌜Πx = Π⌝}})}})}})}}) -∗
     rec_fn_spec_hoare Tgt Π "getc" getc_fn_spec_priv.
@@ -503,7 +502,8 @@ Section sim_spec.
     iSplitL "Hs'". { done. }
     iIntros (??). simpl. iDestruct 1 as (??) "[Hs Hs']".
     iApply "HΠr".
-    iSplit!. iIntros (??) "[% HΠf]". simplify_eq.
+    iSplit!. 1: done. iSplitL "Hs". 1: done. iSplit. 1: done.
+    iIntros (??) "[% HΠf]". simplify_eq.
     iApply sim_tgt_rec_Waiting_raw.
     iSplit. { iIntros. iModIntro. iApply "HΠf". iSplit!. iIntros (??) "[% [% ?]]". simplify_eq. }
     iIntros (???) "!>". iApply "HΠf". iSplit!. iIntros (??[?[??]]). simplify_eq.
@@ -692,7 +692,7 @@ Section echo_getc.
 
     (* NOTE: I create my Spec State - Be careful! How many do I need? *)
 
-    iMod (mstate_var_alloc Z) as (γs_s) "?".
+    iMod (mstate_var_alloc Z) as (γs_s) "Hγs_t".
     iMod (mstate_var_split γs_s v with "[$]") as "[Hγs_s Hγs_s']".
     pose (HSrcSpec := SpecGS γs_s).
 
@@ -747,6 +747,7 @@ Section echo_getc.
     iSplit; [|by iIntros].
     iIntros (???? Hin) "!> %". simplify_map_eq.
 
+    (* TODO: Here switching *)
     iApply (sim_tgt_link_left with "[-]").
     iMod (rec_mapsto_alloc_big (h_heap h) with "Hh") as "[Hh _]". { apply map_disjoint_empty_r. }
 
@@ -759,44 +760,45 @@ Section echo_getc.
     iApply (sim_gen_expr_bind _ [ReturnExtCtx _] with "[-]") => /=.
     (* NOTE: Here I am using my state *)
     iApply (sim_echo_full with "[] [] [Hγs_t Hγs_t'] Hγσ_s"). 1-2: by iApply (rec_fn_intro with "[$]"). 2: done.
-    { (* NOTE: And immediately give it up *)
-      iApply (sim_getc_heap_priv' with "[] [] [Hγs_t]").
-      1: done. 1: by iApply (rec_fn_intro with "[$]"). 1: iAssumption.
-      iIntros (??) => /=. iDestruct 1 as (??->) "HC". iIntros => /=.
-      iIntros (??????). destruct!/=. rewrite bool_decide_false // bool_decide_true //.
-      iApply (sim_tgt_link_right_recv with "[-]") => /=. iApply "HC". iSplit!.
-      iIntros (??). iDestruct 1 as (? ->) "HC" => /=.
-      iIntros (?). simplify_eq.
-      iApply (sim_tgt_link_right with "[-]"). iApply "HC". iSplit!.
-      iIntros (??) => /=. iDestruct 1 as (? -> ->) "HC" => /=.
-      iIntros (??????). destruct!/=.
-      iApply (sim_tgt_link_left_recv with "[-]"). iApply "HC". iSplit!.
-      iIntros (??). iDestruct 1 as (? ->) "HC" => /=.
-      iIntros (?). simplify_eq.
-      iApply (sim_tgt_link_left with "[-]"). iApply "HC". iSplit!.
-      (* TODO FIXME: link_tgt_leftP Do I have to switch out to update the state? *)
-      (* TODO: I definitely cannot unify this *)
-      admit.
-    }
     (* { (* NOTE: And immediately give it up *) *)
-    (*   iApply (sim_getc_heap_priv with "[] [] [Hγs]"). *)
+    (*   iApply (sim_getc_heap_priv' with "[] [] [Hγs_t]"). *)
     (*   1: done. 1: by iApply (rec_fn_intro with "[$]"). 1: iAssumption. *)
-    (*   iIntros (??) => /=. iDestruct 1 as (???->) "HC". iIntros => /=. *)
+    (*   iIntros (??) => /=. iDestruct 1 as (??->) "HC". iIntros => /=. *)
     (*   iIntros (??????). destruct!/=. rewrite bool_decide_false // bool_decide_true //. *)
     (*   iApply (sim_tgt_link_right_recv with "[-]") => /=. iApply "HC". iSplit!. *)
-    (*   (* TODO: How can I unify this? *) admit. *)
     (*   iIntros (??). iDestruct 1 as (? ->) "HC" => /=. *)
     (*   iIntros (?). simplify_eq. *)
     (*   iApply (sim_tgt_link_right with "[-]"). iApply "HC". iSplit!. *)
-    (*   iIntros (??) => /=. iDestruct 1 as (?? -> ->) "HC" => /=. *)
+    (*   iIntros (??) => /=. iDestruct 1 as (? -> ->) "HC" => /=. *)
     (*   iIntros (??????). destruct!/=. *)
     (*   iApply (sim_tgt_link_left_recv with "[-]"). iApply "HC". iSplit!. *)
     (*   iIntros (??). iDestruct 1 as (? ->) "HC" => /=. *)
     (*   iIntros (?). simplify_eq. *)
     (*   iApply (sim_tgt_link_left with "[-]"). iApply "HC". iSplit!. *)
+    (*   (* TODO FIXME: link_tgt_leftP Do I have to switch out to update the state? *) *)
     (*   (* TODO: I definitely cannot unify this *) *)
     (*   admit. *)
     (* } *)
+    { (* NOTE: And immediately give it up *)
+      iApply (sim_getc_heap_priv with "[] [] [Hγs_t]").
+      1: done. 1: by iApply (rec_fn_intro with "[$]"). 1: iAssumption.
+      iIntros (??) => /=. iDestruct 1 as (???->) "HC". iIntros => /=.
+      iIntros (??????). destruct!/=. rewrite bool_decide_false // bool_decide_true //.
+      iApply (sim_tgt_link_right_recv with "[-]") => /=. iApply "HC". iSplit!.
+      (* TODO: How can I unify this? *) admit.
+      iIntros (??). iDestruct 1 as (? ->) "HC" => /=.
+      iIntros (?). simplify_eq.
+      iApply (sim_tgt_link_right with "[-]"). iApply "HC". iSplit!.
+      iIntros (??) => /=. iDestruct 1 as (?? ->) "[Hγs_t [-> HC]]" => /=.
+      iIntros (??????). destruct!/=.
+      iApply (sim_tgt_link_left_recv with "[-]"). iApply "HC". iSplit!.
+      iIntros (??). iDestruct 1 as (? ->) "HC" => /=.
+      iIntros (?). simplify_eq.
+      iApply (sim_tgt_link_left with "[-]"). iApply "HC".
+
+      iDestruct (mstate_var_agree with "Hγs_t Hγs_t'") as "->".
+      iSplit!.
+    }
     iSplit!.
     (* TODO: This is just copied over... *)
     - iIntros "!>" (??). iDestruct 1 as (??? ->) "[Hγσ_s HC]" => /=.
