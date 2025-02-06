@@ -3,7 +3,7 @@ From iris.algebra Require Import agree gset.
 From dimsum.core Require Export proof_techniques prepost.
 From dimsum.core Require Import link.
 From dimsum.core Require Import axioms.
-From dimsum.examples Require Import rec.
+From dimsum.examples Require Export rec.
 From dimsum.examples Require Export heapUR.
 
 Set Default Proof Using "Type".
