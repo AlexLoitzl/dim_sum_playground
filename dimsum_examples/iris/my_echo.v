@@ -631,11 +631,12 @@ Section echo_getc.
       (* TODO: This is a little awkward *)
       spec_state v ∗
       rec_fn_spec_hoare Tgt Π "putc" ({{ es POST,
-        ⌜es = [Val (ValNum v)]⌝ ∗
-        POST ({{ _,
-        spec_state (v + 1) ∗
-        spec_state (v + 1)
-      }})}})}}).
+          ⌜es = [Val (ValNum v)]⌝ ∗
+          spec_state (v + 1)
+        (* POST ({{ _, *)
+        (* spec_state (v + 1) ∗ *)
+        (* spec_state (v + 1) *)
+      }})}}).
   Proof.
     iIntros "#? Hf". iIntros (es Φ). iDestruct 1 as (->) "[%v [Hs HΦ]]".
     iApply sim_tgt_rec_Call_internal. 2: { done. } { done. }
@@ -647,11 +648,17 @@ Section echo_getc.
     iApply sim_tgt_rec_LetE. iIntros "!>" => /=.
     iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
     iApply "HΦ" => /=. iSplit!.
-    (* FIXME - I have three states here :D *)
-    iIntros (?) "[Hs' Hs'']".
-    iApply sim_tgt_rec_LetE. iIntros "!>" => /=.
-    (* NOTE: I have done one iteration. Now what?  *)
-  Admitted.
+  Qed.
+  (* Admitted. *)
+  (*   (* FIXME - I have three states here :D *) *)
+  (*   iIntros (?) "[Hs' Hs'']". *)
+
+  (*   iApply sim_gen_expr_stop => /=. iSplit!. iFrame. by iApply "HΦ". *)
+  (*   iApply sim_tgt_rec_LetE. iIntros "!>" => /=. *)
+  (*   (* NOTE: I have done one iteration. Now what?  *) *)
+  (*   iApply sim_gen_expr_stop => /=. iSplit!. iFrame. by iApply "HΦ". *)
+
+  (* Admitted. *)
 
   Lemma sim_echo_full `{!specGS} Π γσ_s (σ : m_state (spec_trans _ Z)) :
     "echo" ↪ Some echo_rec -∗
