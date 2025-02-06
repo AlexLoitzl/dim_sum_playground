@@ -1,6 +1,6 @@
 From iris.algebra.lib Require Import gmap_view.
 From iris.algebra Require Import agree gset.
-From dimsum.core Require Export biown.
+From dimsum.core.iris Require Export biown.
 From dimsum.examples Require Import rec.
 
 Set Default Proof Using "Type".
