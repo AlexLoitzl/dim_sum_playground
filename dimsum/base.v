@@ -344,12 +344,6 @@ Section map_filter.
   Lemma map_lookup_filter_true m i :
     (∀ x, m !! i = Some x → P (i, x)) → filter P m !! i = m !! i.
   Proof. move => ?. rewrite map_lookup_filter. destruct (m !! i) => //=. case_guard; naive_solver. Qed.
-
-(* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/394 *)
-  Lemma map_filter_empty_iff_2 m :
-    map_Forall (λ i x, ¬P (i,x)) m →
-    filter P m = ∅.
-  Proof. apply map_filter_empty_iff. Qed.
 End map_filter.
 
 Section curry_uncurry.
@@ -1425,4 +1419,28 @@ Section map2.
   Qed.
 
 End map2.
+End big_op.
+
+(** * Lemmas about [big_sepS] *)
+Section big_op.
+Context {PROP : bi}.
+Implicit Types P Q : PROP.
+Implicit Types Ps Qs : list PROP.
+Implicit Types A : Type.
+Section gset.
+  Context `{Countable A}.
+  Implicit Types X : gset A.
+  Implicit Types Φ : A → PROP.
+
+  Lemma big_sepS_exist {V} (Φ : A → V → PROP) s :
+    ([∗ set] k∈ s, ∃ v, Φ k v) ⊢ ∃ m, ⌜s = dom m⌝ ∗ ([∗ map] k↦v ∈ m, Φ k v).
+  Proof.
+    induction s as [|k s Hk IH] using set_ind_L.
+    { iIntros "?". iExists ∅. by iSplit. }
+    rewrite big_sepS_insert // IH.
+    iIntros "[[%v ?] [%m [-> ?]]]".
+    iExists (<[k:=v]>m). rewrite big_sepM_insert. 2: by apply not_elem_of_dom.
+    iFrame. iPureIntro. set_solver.
+  Qed.
+End gset.
 End big_op.

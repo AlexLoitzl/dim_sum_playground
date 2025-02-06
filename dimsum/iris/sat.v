@@ -213,6 +213,14 @@ Section sat.
   Context `{!satG Σ M} {Hdiscrete : CmraDiscrete M}.
   Implicit Types (P : uPred M).
 
+  Global Instance sat_ne γ n : Proper ((dist n) ==> (dist n)) (sat γ).
+  Proof.
+    move => P1 P2 [Heq].
+    unfold sat. f_equiv => x. do 2 f_equiv.
+    destruct (AxClassic (✓{0} x)); [naive_solver lia|].
+    (* There should be a way to prove this. *)
+  Abort.
+
   Global Instance sat_proper γ : Proper ((≡) ==> (≡)) (sat γ).
   Proof.
     move => P1 P2 [Heq].
@@ -235,6 +243,11 @@ Section sat.
     destruct (AxClassic (✓{0} m)); [iPureIntro; naive_solver|].
     by iDestruct (uPred.cmra_valid_elim with "Hvalid") as %?.
   Qed.
+
+  Global Instance sat_mono_proper γ : Proper ((⊢) ==> (⊢)) (sat γ).
+  Proof. move => ??. apply sat_mono. Qed.
+  Global Instance sat_mono_proper_flip γ : Proper (flip (⊢) ==> flip (⊢)) (sat γ).
+  Proof. move => ??. apply sat_mono. Qed.
 
   Lemma sat_bupd γ P :
     sat_open γ -∗
@@ -282,6 +295,10 @@ Section sat.
       iIntros. by iExists _.
   Qed.
 
+  Lemma sat_forall A γ (P : A → _) :
+    (∀ x, sat γ (P x)) ⊢ sat γ (∀ x : A, P x).
+  Proof. iIntros "HP". iExists _. (* This does not hold! *) Abort.
+
   Lemma sat_pure γ Φ :
     sat γ ⌜Φ⌝ ⊢ ⌜Φ⌝.
   Proof. iIntros "[%m [%Hholds H]]". do [uPred.unseal] in Hholds. done. Qed.
@@ -296,6 +313,16 @@ Section sat.
     iModIntro. iSplit; [|done].
     iPureIntro. move: Hholds1. uPred.unseal. done.
   Qed.
+
+  Lemma sat_persistently_2 γ P :
+    <pers> sat γ P ⊢ sat γ (<pers> P).
+  Proof.
+    iIntros "[%m1 [%Hholds1 H1]]".
+    iDestruct "H1" as "#H1".
+    (* Likely does not hold?! *)
+    iExists (m1). iFrame "H1".
+    iPureIntro. move: Hholds1. uPred.unseal.
+  Abort.
 
   Lemma sat_affinely γ P :
     sat γ (<affine> P) ⊣⊢ <affine> sat γ P.
