@@ -11,7 +11,6 @@ dimsum/axioms.v
 dimsum/universes.v
 dimsum/ordinal.v
 dimsum/satisfiable.v
-dimsum/biown.v
 dimsum/module.v
 dimsum/trefines.v
 dimsum/srefines.v
@@ -52,6 +51,8 @@ dimsum_examples/print.v
 dimsum_examples/int_ptr_cast.v
 dimsum_examples/memmove.v
 dimsum_examples/coroutine_example.v
+dimsum/iris/biown.v
+dimsum/iris/weak_embed.v
 dimsum/iris/sat.v
 dimsum/iris/mono_ord.v
 dimsum/iris/ord_later.v
