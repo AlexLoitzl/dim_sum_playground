@@ -45,6 +45,20 @@ Definition switch_id `{!dimsumGS Σ} {EV} (ts : tgt_src) (m : mod_trans EV)
   switch Π ({{ κs σs POST, ⌜κs = κ⌝ ∗ ⌜σs = σ⌝ ∗
   POST ts _ m ({{ σ' Πs, ⌜Πs = Π⌝ ∗ C σ'}})}})%I.
 
+Lemma test `{!dimsumGS Σ} {EV} (ts : tgt_src) (m : mod_trans EV)
+  (Π : option EV → m.(m_state) → iProp Σ)
+  (κ : option EV) (σ : m.(m_state)) (C : m.(m_state) → iProp Σ) :
+  switch_id ts m Π κ σ C ⊣⊢ ((∀ σ', C σ' -∗ σ' ≈{ts, m}≈> Π) -∗ Π κ σ).
+Proof.
+  iSplit.
+  - iIntros "Hs HC".
+    iApply "Hs" => /=. iSplit!.
+    iIntros (??) "[-> HC']".
+    by iApply "HC".
+  - iIntros "H" (??) => /= . iIntros "[-> [-> Hs]]".
+    iApply "H". iIntros (?) "HC". iApply "Hs". iSplit!.
+Qed.
+
 Lemma switch_id_mono `{!dimsumGS Σ} {EV} ts (m : mod_trans EV)
   (Π : option EV → m.(m_state) → iProp Σ) κ σ C1 C2 :
   switch_id ts m Π κ σ C1 -∗
@@ -97,6 +111,17 @@ Section sim_gen_expr.
           mstate_interp Λ σ' ∗ Φ e') ∨
         (switch_id ts Λ Π κ σ' (λ σ'',
          ∃ e', ⌜mexpr_rel Λ σ'' (mfill Λ K e')⌝ ∗ mstate_interp Λ σ'' ∗ sim_gen_expr e' Φ))))%I.
+
+  (* For Spec *)
+  (* Definition sim_gen_expr_pre' (Π : option EV → m_state Λ → iProp Σ) *)
+  (*   (sim_gen_expr : leibnizO (mexpr Λ) -d> (leibnizO (mexpr Λ) -d> iPropO Σ) -d> iPropO Σ) : *)
+  (*   leibnizO (mexpr Λ) -d> (leibnizO (mexpr Λ) -d> iPropO Σ) -d> iPropO Σ := λ e Φ, *)
+  (*   (∀ σ, ⌜σ.1 ≡ e⌝ -∗ (spec_state σ.2) -∗ *)
+  (*      σ ≈{ ts, Λ }≈> (λ κ σ', *)
+  (*       (∃ e', ⌜κ = None⌝ ∗ ⌜σ'.1 ≡ e'⌝ ∗ *)
+  (*         spec_state σ'.2 ∗ Φ e') ∨ *)
+  (*       (switch_id ts Λ Π κ σ' (λ σ'', *)
+  (*        ∃ e', ⌜σ''.1 ≡ e'⌝ ∗ spec_state σ'' ∗ sim_gen_expr e' Φ))))%I. *)
 
   Global Instance sim_gen_expr_pre_ne Π n:
     Proper ((dist n ==> dist n ==> dist n) ==> dist n ==> dist n ==> dist n) (sim_gen_expr_pre Π).
