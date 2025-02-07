@@ -1,4 +1,4 @@
-From iris.bi Require Import fixpoint.
+From iris.bi Require Import fixpoint_mono.
 From iris.proofmode Require Export proofmode.
 From iris.base_logic.lib Require Export fancy_updates.
 From iris.base_logic.lib Require Export ghost_var.

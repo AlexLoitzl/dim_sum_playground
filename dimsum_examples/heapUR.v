@@ -1,3 +1,4 @@
+From iris.algebra Require Export dfrac.
 From iris.algebra.lib Require Import gmap_view.
 From iris.algebra Require Import agree gset.
 From dimsum.core.iris Require Export biown.
