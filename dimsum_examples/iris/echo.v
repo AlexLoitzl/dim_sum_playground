@@ -1,4 +1,4 @@
-From iris.bi.lib Require Import fixpoint.
+From iris.bi.lib Require Import fixpoint_mono.
 From iris.proofmode Require Import proofmode.
 
 Section bi_loop.
