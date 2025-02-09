@@ -123,6 +123,16 @@ Lemma sim_src_TCallRet f vs h (k: _ → spec rec_event S void) Π Φ :
     }}) -∗
   (SRC (Spec.bind (TCallRet f vs h) k) @ Π {{ Φ }})%I.
 Proof.
+  iIntros "HC" => /=. rewrite /TCallRet bind_bind.
+  iApply sim_gen_TVis. iIntros (s) "Hs % % /= [% [% HΠ]]". subst.
+  iApply "HC" => /=. iSplit!. iIntros "% % [<- [% HC]]". subst.
+  iApply "HΠ". iSplit!. iSplitL "Hs". 1: { done. }
+  rewrite bind_bind. iApply sim_src_TExist.
+  rewrite bind_bind. iApply sim_gen_TVis.
+  iIntros (s') "Hs' % % /= [% [% HΠ]]".
+  (* TODO: Here now I think I want to already be talking about what I am seeing *)
+  iApply "HC" => /=. iExists _. subst. done.
+  Admitted.
 
 
 
