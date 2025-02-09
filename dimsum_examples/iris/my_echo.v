@@ -96,6 +96,38 @@ Definition TCallRet {S} (f : string) (vs : list val) (h : heap_state) :
   else
     TUb.
 
+(* NOTE: Trying to formulate some things for TCallRet *)
+Section TCallRet.
+
+Context `{!dimsumGS Σ} `{!specGS} {S : Type}.
+(* Canonical Structure spec_mod_lang. *)
+
+(* NOTE - In src position we only need to ensure `Outgoing Call` and any incoming event *)
+(* This cannot be quite true, in case it's not undefined, I'll have to refine it ? *)
+
+(* The statement holds, assuming the following restriction on Π.
+   ...
+ *)
+Lemma sim_src_TCallRet f vs h (k: _ → spec rec_event S void) Π Φ :
+  switch Π ({{κ σ POST,
+    ∃ f vs h,
+      ⌜κ = Some (Outgoing, ERCall f vs h)⌝ ∗
+      POST Src _ _ ({{σ' Π',
+        (* REVIEW: This are going to be assumptions? *)
+        ⌜Π = Π'⌝ ∗ (* NOTE: This seems a bit iffy - What exactly am I requiring here  *)
+        ⌜σ = σ'⌝ ∗ (* NOTE: This seems a bit iffy - and here... What is sigma *)
+        switch Π' ({{κ σ POST,
+          ∃ e, ⌜κ = Some (Incoming, e)⌝
+          }})
+        }})
+    }}) -∗
+  (SRC (Spec.bind (TCallRet f vs h) k) @ Π {{ Φ }})%I.
+Proof.
+
+
+
+End TCallRet.
+
 Definition echo_spec_body : spec rec_event unit unit :=
   h ← TExist _;
   '(c, h') ← TCallRet "getc" [] h;
