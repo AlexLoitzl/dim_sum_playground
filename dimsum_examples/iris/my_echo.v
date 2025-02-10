@@ -534,19 +534,20 @@ Section sim_spec.
     ∃ v, ⌜es = []⌝ ∗ P v ∗
     POST (λ v', (⌜v' = ValNum v⌝) ∗ P (v + 1))%I.
 
-  (* REVIEW: Do I, or how do I get my state back? *)
-  Lemma sim_getc_heap_priv `{!specGS} Q fns Π (w : Z) :
+  (* The actual P?: λ v. ∃ σs. spec_state v ∗ Q σs ∗ (TGT Spec.forever ... @ Π {}) -∗ σs ≈≈> Π *)
+  Lemma sim_getc_heap_priv Q fns Π (w : Z) :
     rec_fn_auth fns -∗
     "getc" ↪ None -∗
     Q (Spec.forever getc_spec_priv, w) -∗
-    switch_link Tgt Π ({{ σ0 POST,
-    ∃ vs h' σs,
-    Q σs ∗
-    POST (ERCall "getc" vs h') (spec_trans _ Z) σs ({{ _ Πr,
-    switch_link Tgt Πr ({{ σ POST,
-      ∃ h'' v', ⌜σ = (Spec.forever getc_spec_priv, (v' + 1)%Z)⌝ ∗ (spec_state (v' + 1)) ∗
-    POST (ERReturn v' h'') _ σ0 ({{ _ Πx, ⌜Πx = Π⌝ ∗ (spec_state (v' + 1))}})}})}})}}) -∗
-    rec_fn_spec_hoare Tgt Π "getc" (getc_fn_spec_priv spec_state).
+    □ switch_link Tgt Π ({{ σr POST,
+      ∃ vs h' σs,
+      Q σs ∗
+      POST (ERCall "getc" vs h') (spec_trans _ Z) σs ({{ _ Πr,
+        switch_link Tgt Πr ({{ σs' POST,
+          ∃ h'' v',
+            POST (ERReturn v' h'') _ σr ({{ _ Πx,
+              ⌜Πx = Π⌝ ∗ Q σs' }})}})}})}}) -∗
+    |==> ∃ P, P 0 ∗ □ rec_fn_spec_hoare Tgt Π "getc" (getc_fn_spec_priv P).
   Proof. Admitted.
 
 End sim_spec.
