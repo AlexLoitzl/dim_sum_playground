@@ -10,11 +10,12 @@ Record WeakEmbed (A B : Type) := {
 }.
 Global Arguments weak_embed {_ _} _ _%_I : simpl never.
 Global Arguments weak_embed_tok {_ _} _ : simpl never.
-Notation "⌈ P @ W ⌉" := (weak_embed W P) : bi_scope.
-Notation "⌈{ W }⌉" := (weak_embed_tok W) : bi_scope.
+Notation "⌈ P @ W ⌉" := (weak_embed W P) (format "⌈ P  @  W ⌉") : bi_scope.
+Notation "⌈{ W }⌉" := (weak_embed_tok W) (format "⌈{ W }⌉") : bi_scope.
 Global Instance: Params (@weak_embed) 2 := {}.
 Global Typeclasses Opaque weak_embed.
 Global Typeclasses Opaque weak_embed_tok.
+
 
 (* Mixins allow us to create instances easily without having to use Program *)
 Record BiWeakEmbedMixin (PROP1 PROP2 : bi) (W : WeakEmbed PROP1 PROP2) := {
@@ -57,9 +58,21 @@ Record BiWeakEmbed (PROP1 PROP2 : bi) := {
 }.
 Global Arguments bi_weak_embed_embed : simpl never.
 
+
+Definition weak_embed_bupd {PROP1 PROP2 : bi} (W : WeakEmbed PROP1 PROP2)
+  `{!BiBUpd PROP2} (P : PROP2) : PROP2 :=
+  ⌈{W}⌉ ==∗ ⌈{W}⌉ ∗ P.
+Global Typeclasses Opaque weak_embed_bupd.
+
+Notation "|==>⌈ W ⌉ Q" := (weak_embed_bupd W Q)
+  (at level 99, Q at level 200, format "'[  ' |==>⌈ W ⌉  '/' Q ']'") : bi_scope.
+Notation "P ==∗⌈ W ⌉ Q" := (P -∗ |==>⌈W⌉ Q)%I
+  (at level 99, Q at level 200, format "'[' P  ==∗⌈ W ⌉  '/' Q ']'") : bi_scope.
+Notation "P ==∗⌈ W ⌉ Q" := (P -∗ |==>⌈W⌉ Q) : stdpp_scope.
+
 Class BiWeakEmbedBUpd {PROP1 PROP2 : bi} (W : BiWeakEmbed PROP1 PROP2)
     `{!BiBUpd PROP1, !BiBUpd PROP2} :=
-  weak_embed_bupd P : ⌈{W}⌉ -∗ ⌈|==> P @ W⌉ ==∗ ⌈{W}⌉ ∗ ⌈P @ W⌉.
+  weak_embed_bupd_bupd P : ⌈|==> P @ W⌉ ==∗⌈W⌉ ⌈P @ W⌉.
 Global Hint Mode BiWeakEmbedBUpd ! ! ! - - : typeclass_instances.
 
 
@@ -217,6 +230,13 @@ Section weak_embed_class_instances.
   Local Notation "⌈ P ⌉" := (weak_embed W P) : bi_scope.
   Implicit Types P Q R : PROP1.
 
+Global Instance as_emp_valid_weak_embed (φ : Prop) (P : PROP1) :
+  AsEmpValid0 φ P → AsEmpValid φ ⌈P @ W⌉.
+Proof.
+  rewrite /AsEmpValid0/AsEmpValid => ->. split; [apply weak_embed_emp_valid_2|].
+  admit.
+Admitted. (* TODO: remove this, once https://gitlab.mpi-sws.org/iris/iris/-/merge_requests/1104 is merged *)
+
 Global Instance into_pure_weak_embed P φ :
   IntoPure P φ → IntoPure ⌈P⌉ φ.
 Proof. rewrite /IntoPure=> ->. by rewrite weak_embed_pure. Qed.
@@ -224,6 +244,10 @@ Proof. rewrite /IntoPure=> ->. by rewrite weak_embed_pure. Qed.
 Global Instance from_pure_weak_embed a P φ `{!BiAffine PROP1} `{!BiAffine PROP2} :
   FromPure a P φ → FromPure a ⌈P⌉ φ.
 Proof. rewrite /FromPure=> <-. by rewrite -weak_embed_pure weak_embed_affinely_if. Qed.
+
+Global Instance into_wand_weak_embed p q R P Q :
+  IntoWand false false R P Q → IntoWand p q ⌈R⌉ ⌈P⌉ ⌈Q⌉.
+Proof. by rewrite /IntoWand/= !bi.intuitionistically_if_elim -weak_embed_wand_1=> ->. Qed.
 
 Global Instance from_and_weak_embed P Q1 Q2 :
   FromAnd P Q1 Q2 → FromAnd ⌈P⌉ ⌈Q1⌉ ⌈Q2⌉.
@@ -307,6 +331,55 @@ Proof. by rewrite /FromModal. Qed.
 
 End weak_embed_class_instances.
 
+(** *** BUpd class instances_ *)
+Section weak_embed_bupd_class_instances.
+  Context {PROP1 PROP2 : bi} (W : BiWeakEmbed PROP1 PROP2).
+  Context `{!BiBUpd PROP1} `{!BiBUpd PROP2} `{!BiWeakEmbedBUpd W}.
+  Local Notation "⌈ P ⌉" := (weak_embed W P) : bi_scope.
+  Implicit Types P Q R : PROP2.
+
+Global Instance weak_embed_bupd_ne : NonExpansive (weak_embed_bupd W).
+Proof. solve_proper. Qed.
+
+Global Instance weak_embed_bupd_proper :
+  Proper ((≡) ==> (≡)) (weak_embed_bupd W) := ne_proper _.
+
+Global Instance weak_embed_bupd_mono' : Proper ((⊢) ==> (⊢)) (weak_embed_bupd W).
+Proof. solve_proper. Qed.
+
+Global Instance weak_embed_bupd_mono_flip : Proper (flip (⊢) ==> flip (⊢)) (weak_embed_bupd W).
+Proof. solve_proper. Qed.
+
+Global Instance from_pure_weak_embed_bupd a P φ :
+  FromPure a P φ → FromPure a (|==>⌈W⌉ P) φ.
+Proof. rewrite /FromPure=> <-. rewrite /weak_embed_bupd. by iIntros "$ $". Qed.
+
+Global Instance from_modal_weak_embed_bupd P :
+  FromModal True modality_id (|==>⌈W⌉ P) (|==>⌈W⌉ P) P.
+Proof. rewrite /FromModal /=/weak_embed_bupd. by iIntros (_) "$ $". Qed.
+
+Global Instance elim_modal_weak_embed_bupd p P Q :
+  ElimModal True p false (|==>⌈W⌉ P) P (|==>⌈W⌉ Q) (|==>⌈W⌉ Q).
+Proof.
+  rewrite /ElimModal bi.intuitionistically_if_elim/=/weak_embed_bupd.
+  iIntros (_) "[H1 H2] Htok". iMod ("H1" with "[$]") as "[??]".
+  iApply ("H2" with "[$] [$]").
+Qed.
+
+Global Instance elim_modal_weak_embed_bupd_bupd p (P : PROP1) Q :
+  ElimModal True p false (⌈|==> P⌉) ⌈P⌉ (|==>⌈W⌉ Q) (|==>⌈W⌉ Q).
+Proof using BiWeakEmbedBUpd0.
+  rewrite /ElimModal bi.intuitionistically_if_elim/=.
+  iIntros (_) "[H1 H2]". iMod (@weak_embed_bupd_bupd with "[$]") as "?".
+  iApply ("H2" with "[$]").
+Qed.
+
+Global Instance frame_weak_embed_bupd p R P Q :
+  Frame p R P Q → Frame p R (|==>⌈W⌉ P) (|==>⌈W⌉ Q) | 2.
+Proof. rewrite /Frame/weak_embed_bupd =><-. by iIntros "[$ ?]". Qed.
+End weak_embed_bupd_class_instances.
+
+
 (** ** Instances *)
 (** *** weak_embed_id *)
 Definition weak_embed_id_embed {A : bi} : WeakEmbed A A := {|
@@ -326,7 +399,7 @@ Definition weak_embed_id {PROP : bi} : BiWeakEmbed PROP PROP :=
   {| bi_weak_embed_mixin := weak_embed_id_mixin PROP |}.
 
 Global Instance weak_embed_id_bupd {PROP : bi} `{!BiBUpd PROP} : BiWeakEmbedBUpd (@weak_embed_id PROP).
-Proof. iIntros (?) "$ ?". by rewrite /weak_embed/=. Qed.
+Proof. rewrite/BiWeakEmbedBUpd/weak_embed_bupd. iIntros (?) "? $". by rewrite /weak_embed/=. Qed.
 
 (** *** weak_embed_embed *)
 Section weak_embed_embed.
@@ -358,7 +431,6 @@ Section weak_embed_embed.
     BiWeakEmbedBUpd (weak_embed_embed).
   Proof.
     move => ???. rewrite /weak_embed/weak_embed_tok/=.
-    iIntros "[Htok1 Htok2] HP".
     (* This should be provable *)
   Abort.
 End weak_embed_embed.

@@ -254,6 +254,30 @@ Section sat.
     by iDestruct (uPred.cmra_valid_elim with "Hvalid") as %?.
   Qed.
 
+(*
+  Lemma sat_emp_valid_inj P :
+    (⊢ ⌈P⌉) → ⊢ P.
+  Proof.
+    rewrite /weak_embed/=.
+    (* move => ?. *)
+    (* Set Printing All. *)
+    setoid_rewrite <-bi.persistent_and_sep. 2: apply _.
+    rewrite /bi_emp_valid/bi_entails.
+    uPred.unseal.
+    move => [Hx]. ogeneralize* (Hx 0 ε). 1: admit. 1: done.
+    rewrite {1}/uPred_holds/= {1}/uPred_holds/= {1}/uPred_holds/=.
+    move => [m [? Hor]].
+    have ? : m ≼ ε.
+    - destruct Hor as [?|Hown] => //.
+      move: Hown. rewrite own.own_eq/own.own_def.
+      uPred.unseal.
+      rewrite /uPred_holds/=/own.iRes_singleton.
+      admit.
+    - constructor. move => ????. apply: uPred_mono; [done| |].
+      1: admit. admit. (* This is a problem, how do we know that P is independent of the step index? *)
+  Abort.
+*)
+
   Lemma sat_emp :
     ⊢ ⌈emp⌉.
   Proof. iExists ε. iSplit; [|by iLeft]. iPureIntro. by uPred.unseal. Qed.
@@ -360,12 +384,10 @@ Section sat.
 
 
   Lemma sat_bupd P :
-    ⌈{sat_embed γ}⌉ -∗
-    ⌈|==> P⌉ ==∗
-    ⌈{sat_embed γ}⌉ ∗ ⌈P⌉.
+    ⌈|==> P⌉ ==∗⌈sat_embed γ⌉ ⌈P⌉.
   Proof using Hdiscrete.
-    rewrite /weak_embed/weak_embed_tok/=.
-    iIntros "[%ma Ha] [%mf [%Hholds Hf]]".
+    rewrite /weak_embed_bupd/weak_embed/weak_embed_tok/=.
+    iIntros "[%mf [%Hholds Hf]] [%ma Ha]".
     iAssert (|==> own γ (◯ mf))%I with "[Hf]" as ">Hf". {
       iDestruct "Hf" as "[%Hincl|$]"; [|done]. iMod (own_unit _ γ) as "Ho".
       iModIntro. iApply (own_mono with "Ho"). by apply auth_frag_mono. }
@@ -441,12 +463,12 @@ Section sat.
   Qed.
 
   Lemma sat_switch_bupd γ P Q G :
-    (P ⊢ |==> ∃ P', P' ∗ ⌜⌈{sat γ}⌉ ∗ ⌈P' @ sat γ⌉ ∗ Q -∗ G⌝) →
-    ⌈{sat γ}⌉ ∗ ⌈P @ sat γ⌉ ∗ Q ==∗ G.
+    (P ⊢ |==> ∃ P', P' ∗ ⌜⌈P' @ sat γ⌉ ∗ Q ==∗⌈sat γ⌉ G⌝) →
+     ⌈P @ sat γ⌉ ∗ Q ==∗⌈sat γ⌉ G.
   Proof using Hdiscrete.
-    iIntros (Himpl) "[Hauth [Hsat HQ]]".
+    iIntros (Himpl) "[Hsat HQ]".
     iDestruct (weak_embed_mono with "Hsat") as "Hsat"; [done|].
-    iMod (weak_embed_bupd with "Hauth Hsat") as "[Hauth Hsat]".
+    iMod (weak_embed_bupd_bupd with "Hsat") as "Hsat".
     iDestruct "Hsat" as (P') "[Hsat1 %HG]".
     iApply HG. by iFrame.
   Qed.
