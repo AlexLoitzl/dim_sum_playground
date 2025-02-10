@@ -513,32 +513,31 @@ Section sim_spec.
   Qed.
 
   (* REVIEW: Do I get all my states back? *)
-  Lemma sim_getc_spec_heap_priv1 `{!specGS} Π Φ k :
+  Lemma sim_getc_spec_heap_priv `{!specGS} Π Φ k :
     switch Π ({{ κ σ POST,
       ∃ f vs h, ⌜κ = Some (Incoming, ERCall f vs h)⌝ ∗
       POST Tgt _ (spec_trans _ Z) ({{ σ' Π',
         ∃ v, ⌜σ' = σ⌝ ∗ ⌜f = "getc"⌝ ∗ ⌜vs = []⌝ ∗ (spec_state v) ∗
       switch Π' ({{ κ σ POST,
       ⌜κ = (Some (Outgoing, ERReturn (ValNum v) h))⌝ ∗
-      (* ⌜σ = (getc_spec_priv, (v + 1)%Z)⌝ ∗ *)
-      spec_state (v + 1) ∗ (* TODO: When I use this Lemma *)
+      spec_state (v + 1) ∗
       POST Tgt _ (spec_trans _ Z) ({{σ'' Π'',
         ⌜Π'' = Π⌝ ∗
         TGT k tt @ Π {{ Φ }}
         }})
       }})}})}}) -∗
     TGT Spec.bind getc_spec_priv k @ Π {{ Φ }}.
-  Proof. Admitted.
+  Proof.
 
+  Admitted.
   Definition getc_fn_spec_priv (P: Z → iProp Σ) (es : list expr) (POST : (val → iProp Σ) → iProp Σ) : iProp Σ :=
     ∃ v, ⌜es = []⌝ ∗ P v ∗
     POST (λ v', (⌜v' = ValNum v⌝) ∗ P (v + 1))%I.
 
   (* The actual P?: λ v. ∃ σs. spec_state v ∗ Q σs ∗ (TGT Spec.forever ... @ Π {}) -∗ σs ≈≈> Π *)
-  Lemma sim_getc_heap_priv Q fns Π (w : Z) :
+  Lemma sim_getc_heap_priv Q fns Π :
     rec_fn_auth fns -∗
     "getc" ↪ None -∗
-    Q (Spec.forever getc_spec_priv, w) -∗
     □ switch_link Tgt Π ({{ σr POST,
       ∃ vs h' σs,
       Q σs ∗
