@@ -523,13 +523,42 @@ Section sim_spec.
       spec_state (v + 1) ∗
       POST Tgt _ (spec_trans _ Z) ({{σ'' Π'',
         ⌜Π'' = Π⌝ ∗
+        ⌜σ''.1 = k tt⌝ ∗ (* NOTE - This is new *)
+        ⌜σ''.2 = (v + 1)%Z⌝ ∗ (* NOTE - This is new *)
         TGT k tt @ Π {{ Φ }}
         }})
       }})}})}}) -∗
     TGT Spec.bind getc_spec_priv k @ Π {{ Φ }}.
   Proof.
+    iDestruct 1 as "HC".
+    rewrite /TReceive bind_bind bind_bind.
+    iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>".
+    rewrite bind_bind. setoid_rewrite bind_ret_l.
+    iApply (sim_gen_TVis with "[-]").
+    iIntros (v) "Hs !>". simpl.
+    iIntros (??) "[% [% HΠ]]". simpl.
+    subst.
+    iApply "HC". simpl. iSplit!. iIntros (??).
+    iDestruct 1 as (????) "[Hs' HC]". subst.
+    iApply (sim_gen_expr_intro _ tt with "[Hs]"); simpl; [done..|].
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    rewrite bind_bind. iApply (sim_gen_TGet with "[-]").
+    iSplit. 1: done.
+    iIntros "!>".
+    rewrite bind_bind. iApply (sim_gen_TPut with "[Hs']"). 1: done.
+    iIntros "Hs". iIntros "!>".
+    iApply (sim_gen_TVis with "[-]"). iIntros (v') "Hs'".
+    iDestruct (mstate_var_agree with "Hs Hs'") as "<-".
+    iIntros "!> /=".
+    iIntros (??) "[% [% _]]" => /=. simplify_eq.
+    iApply "HC". simpl.
+    iSplit!. iFrame.
+    (* Here I need strong assumptions *)
+    iIntros (??) "[-> [<- [<- HΦ]]]".
+    iApply "HΠ". by iFrame.
+  Qed.
 
-  Admitted.
   Definition getc_fn_spec_priv (P: Z → iProp Σ) (es : list expr) (POST : (val → iProp Σ) → iProp Σ) : iProp Σ :=
     ∃ v, ⌜es = []⌝ ∗ P v ∗
     POST (λ v', (⌜v' = ValNum v⌝) ∗ P (v + 1))%I.
