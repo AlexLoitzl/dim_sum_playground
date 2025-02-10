@@ -114,36 +114,37 @@ Compute m_state (spec_trans (io_type * rec_ev) S).
 
 Lemma sim_src_TCallRet f vs h (k: _ → spec rec_event S void) Π Φ :
   switch Π ({{κ σ POST,
-    ∃ f vs h,
+    ∃ f' vs' h1,
+      ⌜f' = f⌝ ∗ ⌜vs' = vs⌝ ∗ ⌜h1 = h⌝ ∗
       ⌜κ = Some (Outgoing, ERCall f vs h)⌝ ∗
-      POST Src _ _ ({{σ' Π',
-        (* REVIEW: This are going to be assumptions? *)
-        ⌜Π = Π'⌝ ∗ (* NOTE: This seems a bit iffy - What exactly am I requiring here  *)
-        ⌜σ = σ'⌝ ∗ (* NOTE: This seems a bit iffy - and here... What is sigma. Should this not be the different module *)
+      (* Here I actually kind of don't care I suppose? *)
+      POST Src _ (spec_trans rec_event S) ({{σ' Π',
+      (*   (* ⌜Π = Π'⌝ ∗ (* NOTE: This seems a bit iffy - What exactly am I requiring here  *) *) *)
+        ⌜σ = σ'⌝ ∗ ∃ v h',
         switch Π' ({{κ σ POST,
-          (* TODO: What should this be for source - assumption or obligation *)
-          ∃ v h', ⌜κ = Some (Incoming, ERReturn v h')⌝ ∗
-          (* TODO this is annoying *)
-          POST Src _ _ (λ (σ'' : m_state (spec_trans (io_type * rec_ev) S) (* spec rec_event S void * S *)) Π'',
-            ⌜Π' = Π''⌝ ∗ ⌜σ''.1 = (k (v, h'))⌝
-            )
-          }})
+          ⌜κ = Some (Incoming, ERReturn v h')⌝ ∗
+          POST Src _ (spec_trans rec_event S) ({{ σ'' Π'',
+            ⌜σ = σ''⌝ ∗
+            ⌜Π = Π''⌝ ∗
+            SRC (k (v, h')) @ Π {{ Φ }}
+            }})
+        }})
         }})
     }}) -∗
-  (SRC (Spec.bind (TCallRet f vs h) k) @ Π {{ Φ }})%I.
+  SRC (Spec.bind (TCallRet f vs h) k) @ Π {{ Φ }}.
 Proof.
   iIntros "HC" => /=. rewrite /TCallRet bind_bind.
-  iApply sim_gen_TVis. iIntros (s) "Hs % % /= [% [% HΠ]]". subst.
-  iApply "HC" => /=. iSplit!. iIntros "% % [<- [% HC]]". subst.
-  iApply "HΠ". iSplit!. iSplitL "Hs". 1: { done. }
-  rewrite bind_bind. iApply sim_src_TExist.
-  rewrite bind_bind. iApply sim_gen_TVis.
-  iIntros (s') "Hs' % % /= [% [% HΠ]]".
-  (* TODO: Here now I think I want to already be talking about what I am seeing *)
-  iApply "HC" => /=.
-  Admitted.
-
-
+  iApply sim_gen_TVis. iIntros (s) "Hs". iIntros "% % /=". iIntros "[% [% HΠ]]". subst.
+  iApply "HC" => /=. iSplit!.
+  iIntros (??) "[% [% [% HC]]]" => /=. subst.
+  iApply (sim_gen_expr_intro _ tt with "[Hs] [-]"); simpl; [done..|].
+  rewrite bind_bind.  iApply sim_src_TExist.
+  rewrite bind_bind. iApply sim_gen_TVis. iIntros (s') "Hs". iIntros (??) "[% [% HΠ']]" => /=.
+  subst. iApply "HC" => /=. iSplit!.
+  iIntros (??) "[% [% H']]". subst.
+  iApply "HΠ". iSplit!. iSplitL "Hs". 1: done.
+  by rewrite bind_ret_l.
+  Qed.
 
 End TCallRet.
 
