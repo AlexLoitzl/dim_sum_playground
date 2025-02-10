@@ -14,6 +14,7 @@ Definition heapUR : ucmra :=
   (prodUR (gmap_viewUR loc (agreeR valO))
      (gmap_viewUR prov (agreeR (gsetO Z)))).
 
+
 Global Instance : Shrink (gmap_viewUR loc (agreeR valO)).
 Proof. solve_shrink. Qed.
 Global Instance : Shrink (gmap_viewUR prov (agreeR (gsetO Z))).
@@ -50,23 +51,34 @@ Section heapUR.
   Definition heapUR_inv (h : heap_state) : PROP :=
     heapUR_ptsto_auth (h_heap h) ∗
     heapUR_dom_auth (set_to_map (λ p, (p, dom (h_block h p))) (h_provs h)).
+End heapUR.
+
+Notation "l ↦[ O ] dq v" := (heapUR_ptsto O l dq v)
+  (at level 20, dq custom dfrac at level 1, format "l  ↦[ O ] dq  v") : bi_scope.
+Notation "p ↦∗[ O ] dq b" := (heapUR_block O p dq b)
+  (at level 20, dq custom dfrac at level 1, format "p  ↦∗[ O ] dq  b") : bi_scope.
+Notation "p ↪[ O ] dq d" := (heapUR_dom O p dq d)
+  (at level 20, dq custom dfrac at level 1, format "p  ↪[ O ] dq  d") : bi_scope.
+
+Section heapUR.
+  Context {PROP : bi} `{!BiBUpd PROP} (O : BiOwn PROP heapUR).
 
   (** _auth lemmas are internal lemmas *)
   Lemma heapUR_ptsto_auth_ext h h':
     h = h' →
-    heapUR_ptsto_auth h ⊢ heapUR_ptsto_auth h'.
+    heapUR_ptsto_auth O h ⊢ heapUR_ptsto_auth O h'.
   Proof. by move => ->. Qed.
 
   Lemma heapUR_dom_auth_ext d d':
     d = d' →
-    heapUR_dom_auth d ⊢ heapUR_dom_auth d'.
+    heapUR_dom_auth O d ⊢ heapUR_dom_auth O d'.
   Proof. by move => ->. Qed.
 
 
   Lemma heapUR_ptsto_auth_alloc h l v :
     h !! l = None →
-    heapUR_ptsto_auth h ⊢ |==>
-    heapUR_ptsto_auth (<[l:=v]>h) ∗ heapUR_ptsto l (DfracOwn 1) v.
+    heapUR_ptsto_auth O h ⊢ |==>
+    heapUR_ptsto_auth O (<[l:=v]>h) ∗ l ↦[O] v.
   Proof.
     move => ?. rewrite -bi_own_op. apply bi_own_bupd.
     apply prod_update; [|done] => /=. rewrite fmap_insert.
@@ -75,8 +87,8 @@ Section heapUR.
 
   Lemma heapUR_ptsto_auth_alloc_big h' h :
     h' ##ₘ h →
-    heapUR_ptsto_auth h ==∗
-    heapUR_ptsto_auth (h' ∪ h) ∗ [∗ map] l↦v∈h', heapUR_ptsto l (DfracOwn 1) v.
+    heapUR_ptsto_auth O h ==∗
+    heapUR_ptsto_auth O (h' ∪ h) ∗ [∗ map] l↦v∈h', l ↦[O] v.
   Proof.
     iIntros (?) "Hh".
     iInduction h' as [|l v h' ?] "IH" using map_ind;
@@ -89,8 +101,8 @@ Section heapUR.
   Qed.
 
   Lemma heapUR_ptsto_auth_lookup h l dq v :
-    heapUR_ptsto_auth h -∗
-    heapUR_ptsto l dq v -∗
+    heapUR_ptsto_auth O h -∗
+    l ↦[O]{dq} v -∗
     ⌜h !! l = Some v⌝.
   Proof.
     apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id.
@@ -102,8 +114,8 @@ Section heapUR.
   Qed.
 
   Lemma heapUR_ptsto_auth_lookup_big h h' dq:
-    heapUR_ptsto_auth h -∗
-    ([∗ map] l↦v∈h', heapUR_ptsto l dq v) -∗
+    heapUR_ptsto_auth O h -∗
+    ([∗ map] l↦v∈h', l ↦[O]{dq} v) -∗
     ⌜h' ⊆ h⌝.
   Proof.
     iIntros "Hh Hh'".
@@ -117,8 +129,8 @@ Section heapUR.
 
 
   Lemma heapUR_ptsto_auth_update v' h l v :
-    heapUR_ptsto_auth h ∗ heapUR_ptsto l (DfracOwn 1) v ⊢ |==>
-    heapUR_ptsto_auth (<[l:=v']>h) ∗ heapUR_ptsto l (DfracOwn 1) v'.
+    heapUR_ptsto_auth O h ∗ l ↦[O] v ⊢ |==>
+    heapUR_ptsto_auth O (<[l:=v']>h) ∗ l ↦[O] v'.
   Proof.
     rewrite -!bi_own_op. apply bi_own_bupd. rewrite -!pair_op.
     apply prod_update; [|done] => /=. rewrite fmap_insert.
@@ -126,8 +138,8 @@ Section heapUR.
   Qed.
 
   Lemma heapUR_ptsto_auth_free h l v :
-    heapUR_ptsto_auth h ∗ heapUR_ptsto l (DfracOwn 1) v ⊢ |==>
-    heapUR_ptsto_auth (delete l h).
+    heapUR_ptsto_auth O h ∗ l ↦[O] v ⊢ |==>
+    heapUR_ptsto_auth O (delete l h).
   Proof.
     rewrite -!bi_own_op. rewrite -!pair_op. apply bi_own_bupd.
     apply prod_update; [|done] => /=. rewrite fmap_delete.
@@ -135,9 +147,9 @@ Section heapUR.
   Qed.
 
   Lemma heapUR_ptsto_auth_free_big h' h :
-    heapUR_ptsto_auth h -∗
-    ([∗ map] l↦v∈h', heapUR_ptsto l (DfracOwn 1) v) ==∗
-    heapUR_ptsto_auth (h ∖ h').
+    heapUR_ptsto_auth O h -∗
+    ([∗ map] l↦v∈h', l ↦[O] v) ==∗
+    heapUR_ptsto_auth O (h ∖ h').
   Proof.
     iIntros "Hh Hh'".
     iInduction h' as [|l v h' ?] "IH" using map_ind;
@@ -152,8 +164,8 @@ Section heapUR.
 
   Lemma heapUR_dom_auth_alloc d p s :
     d !! p = None →
-    heapUR_dom_auth d ⊢ |==>
-    heapUR_dom_auth (<[p:=s]>d) ∗ heapUR_dom p (DfracOwn 1) s.
+    heapUR_dom_auth O d ⊢ |==>
+    heapUR_dom_auth O (<[p:=s]>d) ∗ p ↪[O] s.
   Proof.
     move => ?. rewrite -bi_own_op. rewrite -pair_op. apply bi_own_bupd.
     apply prod_update; [done|] => /=. rewrite fmap_insert.
@@ -161,8 +173,8 @@ Section heapUR.
   Qed.
 
   Lemma heapUR_dom_auth_lookup d p dq s :
-    heapUR_dom_auth d -∗
-    heapUR_dom p dq s -∗
+    heapUR_dom_auth O d -∗
+    p ↪[O]{dq} s -∗
     ⌜d !! p = Some s⌝.
   Proof.
     apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id.
@@ -174,8 +186,8 @@ Section heapUR.
   Qed.
 
   Lemma heapUR_dom_auth_update s' d p s :
-    heapUR_dom_auth d ∗ heapUR_dom p (DfracOwn 1) s ⊢ |==>
-    heapUR_dom_auth (<[p:=s']>d) ∗ heapUR_dom p (DfracOwn 1) s'.
+    heapUR_dom_auth O d ∗ p ↪[O] s ⊢ |==>
+    heapUR_dom_auth O (<[p:=s']>d) ∗ p ↪[O] s'.
   Proof.
     rewrite -!bi_own_op. rewrite -!pair_op. apply bi_own_bupd.
     apply prod_update; [done|] => /=. rewrite fmap_insert.
@@ -184,7 +196,7 @@ Section heapUR.
 
   (** clients should not unfold _inv and only use the lemmas starting from here *)
   Lemma heapUR_uninit_block_eq p dq d `{!BiAffine PROP}:
-    heapUR_uninit_block p dq d ⊣⊢ ∃ b, ⌜d = dom b⌝ ∗ heapUR_block p dq b.
+    heapUR_uninit_block O p dq d ⊣⊢ ∃ b, ⌜d = dom b⌝ ∗ p ↦∗[O]{dq} b.
   Proof.
     iSplit.
     - iIntros "[? Hd]". rewrite big_opS_set_map.
@@ -196,7 +208,7 @@ Section heapUR.
   Qed.
 
   Lemma heapUR_dom_excl p d1 d2 :
-    heapUR_dom p (DfracOwn 1) d1 -∗ heapUR_dom p (DfracOwn 1) d2 -∗ False.
+    p ↪[O] d1 -∗ p ↪[O] d2 -∗ False.
   Proof.
     apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id.
     rewrite -bi_own_op. etrans; [apply bi_own_valid|]. iPureIntro.
@@ -205,7 +217,7 @@ Section heapUR.
   Qed.
 
   Lemma heapUR_ptsto_excl l v1 v2 :
-    heapUR_ptsto l (DfracOwn 1) v1 -∗ heapUR_ptsto l (DfracOwn 1) v2 -∗ False.
+    l ↦[O] v1 -∗ l ↦[O] v2 -∗ False.
   Proof.
     apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id.
     rewrite -bi_own_op. etrans; [apply bi_own_valid|]. iPureIntro.
@@ -214,14 +226,14 @@ Section heapUR.
   Qed.
 
   Lemma heapUR_block_excl p d1 d2 :
-    heapUR_block p (DfracOwn 1) d1 -∗ heapUR_block p (DfracOwn 1) d2 -∗ False.
+    p ↦∗[O] d1 -∗ p ↦∗[O] d2 -∗ False.
   Proof. iIntros "[??] [??]". iDestruct (heapUR_dom_excl with "[$] [$]") as %[]. Qed.
 
   Lemma heapUR_alloc h l n :
     heap_is_fresh h l →
-    heapUR_inv h ==∗
-    heapUR_inv (heap_alloc h l n) ∗
-    heapUR_block l.1 (DfracOwn 1) (zero_block n).
+    heapUR_inv O h ==∗
+    heapUR_inv O (heap_alloc h l n) ∗
+    l.1 ↦∗[O] zero_block n.
   Proof.
     iIntros ([Hl [? ?]]) "[Hh Hd]".
     iMod (heapUR_ptsto_auth_alloc_big with "Hh") as "[Hh $]". {
@@ -237,9 +249,8 @@ Section heapUR.
 
   Lemma heapUR_alloc_block h p b:
     p ∉ h_provs h →
-    heapUR_inv h ==∗
-    heapUR_inv (heap_merge (heap_from_blocks {[p := b]}) h) ∗
-    heapUR_block p (DfracOwn 1) b.
+    heapUR_inv O h ==∗
+    heapUR_inv O (heap_merge (heap_from_blocks {[p := b]}) h) ∗ p ↦∗[O] b.
   Proof.
     iIntros (?) "[Hh Hd]".
     iMod (heapUR_ptsto_auth_alloc_big with "Hh") as "[Hh $]". {
@@ -259,9 +270,9 @@ Section heapUR.
 
   Lemma heapUR_alloc_blocks h bs :
     dom bs ## h_provs h →
-    heapUR_inv h ==∗
-    heapUR_inv (heap_merge (heap_from_blocks bs) h) ∗
-    [∗ map] p↦b∈ bs, heapUR_block p (DfracOwn 1) b.
+    heapUR_inv O h ==∗
+    heapUR_inv O (heap_merge (heap_from_blocks bs) h) ∗
+    [∗ map] p↦b∈ bs, p ↦∗[O] b.
   Proof.
     iIntros (Hbs) "Hinv".
     iInduction bs as [|???] "IH" using map_ind forall (h Hbs). {
@@ -275,8 +286,8 @@ Section heapUR.
   Qed.
 
   Lemma heapUR_lookup h l dq v:
-    heapUR_inv h -∗
-    heapUR_ptsto l dq v -∗
+    heapUR_inv O h -∗
+    l ↦[O]{dq} v -∗
     ⌜h_heap h !! l = Some v⌝.
   Proof.
     iIntros "[Hh Hd] Hl".
@@ -284,8 +295,8 @@ Section heapUR.
   Qed.
 
   Lemma heapUR_lookup_dom h p dq d:
-    heapUR_inv h -∗
-    heapUR_dom p dq d -∗
+    heapUR_inv O h -∗
+    p ↪[O]{dq} d -∗
     ⌜dom (h_block h p) = d⌝.
   Proof.
     iIntros "[Hh Hd] Hdom".
@@ -294,8 +305,8 @@ Section heapUR.
   Qed.
 
   Lemma heapUR_lookup_dom_prov h p dq d:
-    heapUR_inv h -∗
-    heapUR_dom p dq d -∗
+    heapUR_inv O h -∗
+    p ↪[O]{dq} d -∗
     ⌜p ∈ h_provs h⌝.
   Proof.
     iIntros "[??] ?".
@@ -304,8 +315,8 @@ Section heapUR.
   Qed.
 
   Lemma heapUR_lookup_block h p dq b:
-    heapUR_inv h -∗
-    heapUR_block p dq b -∗
+    heapUR_inv O h -∗
+    p ↦∗[O]{dq} b -∗
     ⌜h_block h p = b⌝.
   Proof.
     iIntros "[Hh Hd] [Hdom Hpts]".
@@ -320,8 +331,8 @@ Section heapUR.
 
   Lemma heapUR_lookup_block1 h dq b l v:
     h_heap h !! l = Some v →
-    heapUR_inv h -∗
-    heapUR_block l.1 dq b -∗
+    heapUR_inv O h -∗
+    l.1 ↦∗[O]{dq} b -∗
     ⌜b !! l.2 = Some v⌝.
   Proof.
     iIntros (?) "Hinv Hblock".
@@ -330,15 +341,15 @@ Section heapUR.
   Qed.
 
   Lemma heapUR_lookup_block_prov h p dq b:
-    heapUR_inv h -∗
-    heapUR_block p dq b -∗
+    heapUR_inv O h -∗
+    p ↦∗[O]{dq} b -∗
     ⌜p ∈ h_provs h⌝.
   Proof. iIntros "?[??]". iApply (heapUR_lookup_dom_prov with "[$] [$]"). Qed.
 
   Lemma heapUR_update v' h l v:
-    heapUR_inv h -∗
-    heapUR_ptsto l (DfracOwn 1) v ==∗
-    heapUR_inv (heap_update h l v') ∗ heapUR_ptsto l (DfracOwn 1) v'.
+    heapUR_inv O h -∗
+    l ↦[O] v ==∗
+    heapUR_inv O (heap_update h l v') ∗ l ↦[O] v'.
   Proof.
     iIntros "[Hh Hd] Hl".
     iDestruct (heapUR_ptsto_auth_lookup with "[$] [$]") as %?.
@@ -354,9 +365,9 @@ Section heapUR.
 
   Lemma heapUR_update_block v' h l b:
     heap_alive h l →
-    heapUR_inv h -∗
-    heapUR_block l.1 (DfracOwn 1) b ==∗
-    heapUR_inv (heap_update h l v') ∗ heapUR_block l.1 (DfracOwn 1) (<[l.2:=v']> b).
+    heapUR_inv O h -∗
+    l.1 ↦∗[O] b ==∗
+    heapUR_inv O (heap_update h l v') ∗ l.1 ↦∗[O] <[l.2:=v']> b.
   Proof.
     iIntros ([??]) "? [Hdom Hl]".
     iDestruct (heapUR_lookup_block with "[$] [$]") as %<-.
@@ -371,9 +382,9 @@ Section heapUR.
   Qed.
 
   Lemma heapUR_free l h b:
-    heapUR_inv h -∗
-    heapUR_block l.1 (DfracOwn 1) b ==∗
-    heapUR_inv (heap_free h l) ∗ heapUR_block l.1 (DfracOwn 1) ∅.
+    heapUR_inv O h -∗
+    l.1 ↦∗[O] b ==∗
+    heapUR_inv O (heap_free h l) ∗ l.1 ↦∗[O] ∅.
   Proof.
     iIntros "Hinv Hb".
     iDestruct (heapUR_lookup_block with "[$] [$]") as %<-.
@@ -400,9 +411,9 @@ Section heapUR.
   Qed.
 
   Lemma heapUR_free_uninit l h b `{!BiAffine PROP}:
-    heapUR_inv h -∗
-    heapUR_uninit_block l.1 (DfracOwn 1) b ==∗
-    heapUR_inv (heap_free h l) ∗ heapUR_block l.1 (DfracOwn 1) ∅.
+    heapUR_inv O h -∗
+    heapUR_uninit_block O l.1 (DfracOwn 1) b ==∗
+    heapUR_inv O (heap_free h l) ∗ l.1 ↦∗[O] ∅.
   Proof.
     iIntros "Hinv Hb".
     iDestruct (heapUR_uninit_block_eq with "Hb") as (? ->) "?".
@@ -418,9 +429,9 @@ Section heapUR.
   Proof. split; by eapply (gmap_view_auth_dfrac_valid _ (DfracOwn 1)). Qed.
 
   Lemma heapUR_init_own :
-    bi_own Own heapUR_init ⊢ heapUR_inv ∅.
+    bi_own O heapUR_init ⊢ heapUR_inv O ∅.
   Proof.
-    have ? := bi_own_proper _ _ Own. rewrite /heapUR_init pair_split bi_own_op.
+    have ? := bi_own_proper _ _ O. rewrite /heapUR_init pair_split bi_own_op.
     iIntros "[$ Ho]" => /=. iApply (heapUR_dom_auth_ext with "Ho").
     apply map_eq => ?. apply option_eq => ?. by rewrite lookup_set_to_map.
   Qed.
