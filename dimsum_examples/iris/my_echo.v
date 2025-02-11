@@ -563,20 +563,21 @@ Section sim_spec.
     POST (λ v', (⌜v' = ValNum v⌝) ∗ P (v + 1))%I.
 
   (* The actual P?: λ v. ∃ σs. spec_state v ∗ Q σs ∗ (TGT Spec.forever ... @ Π {}) -∗ σs ≈≈> Π *)
-  Lemma sim_getc_heap_priv Q fns Π :
+  Lemma sim_getc_heap_priv Q fns Πr :
     rec_fn_auth fns -∗
     "getc" ↪ None -∗
-    □ switch_link Tgt Π ({{ σr POST,
+    Q (Spec.forever getc_spec_priv, 0) -∗ (* NOTE: Q needs to hold for the initial state of the module? *)
+    □ switch_link Tgt Πr ({{ σr POST,
       ∃ vs h' σs,
       Q σs ∗
-      POST (ERCall "getc" vs h') (spec_trans _ Z) σs ({{ _ Πr,
-        switch_link Tgt Πr ({{ σs' POST,
+      POST (ERCall "getc" vs h') (spec_trans _ Z) σs ({{ _ Πs,
+        switch_link Tgt Πs ({{ σs' POST,
           ∃ h'' v',
-            POST (ERReturn v' h'') _ σr ({{ _ Πx,
-              ⌜Πx = Π⌝ ∗ Q σs' }})}})}})}}) -∗
-    |==> ∃ P, P 0 ∗ □ rec_fn_spec_hoare Tgt Π "getc" (getc_fn_spec_priv P).
+            POST (ERReturn v' h'') _ σr ({{ _ Πr',
+              ⌜Πr' = Πr⌝ ∗ Q σs' }})}})}})}}) -∗
+    |==> ∃ P, P 0 ∗ □ rec_fn_spec_hoare Tgt Πr "getc" (getc_fn_spec_priv P).
   Proof.
-    iIntros "#Hfns #Hf #Hl /=".
+    iIntros "#Hfns #Hf HQ #Hl /=".
 
     iMod (mstate_var_alloc Z) as (γ) "Hγ".
     iMod (mstate_var_split γ 0 with "[$]") as "[Hγ Hγ']".
@@ -587,33 +588,39 @@ Section sim_spec.
     set (P := (λ (v : Z), (∃ σs, spec_state v ∗ Q σs ∗ (TGT (Spec.forever getc_spec_priv) @ Π' {{ λ v', False }} -∗ σs ≈{spec_trans rec_event Z}≈>ₜ Π'))%I)).
     iExists P.
     iModIntro. iSplit.
-    - simpl. iExists (_, 0).
-      iSplitL "Hγ". 1: done.
-      (* (spec (io_type * rec_ev) Z void * Z)%type *)
+    - iExists (_, 0).
+      iFrame.
+      iIntros "?".
+      iApply (sim_gen_expr_intro with "[Hγ]") => /=.
+      + done.
+      + done.
+      + instantiate (1 := ()). simpl.
       admit.
     - iIntros "!> % % [% [-> [[% [Hs [HQ Hσs]]] HΦ]]]".
       iApply (sim_tgt_rec_Call_external with "[$]").
       iIntros (???) "#?Htoa Haa !>".
-      iIntros (? σr) "[% [% HΠ]]" => /=.
-      iApply "Hl" => /=. subst. iSplit!. iFrame. iSplit!.
-      iIntros (? Π'') "[-> HΠ'']".
+      iIntros (? σr) "[% [% HΠr]]" => /=. subst.
+      iApply "Hl" => /=. iSplit!. iFrame. iSplit!.
+      iIntros (? Π'') "[-> HΠ'']" => /=.
+      (* Here now I need to be talking about this specific Π - Should I pass this as parameter to the lemma? *)
       assert (HProblem : Π'' = Π') by admit. subst.
       iApply "Hσs". rewrite unfold_forever.
       iApply sim_getc_spec_heap_priv.
-      iIntros (??) "[% [% [% [% Hsomething]]]]" => /=.
+      iIntros (??) "[% [% [% [% Hσ]]]]" => /=.
       iApply "HΠ''" => /=. subst. iSplit!.
-      iIntros (??) "[% [% H2]]". simplify_eq.
-      iApply "Hsomething". iSplit!. iFrame.
-      iIntros (??) "[% [Hs Hwhat]]" => /=.
-      iApply "H2" => /=. subst. iSplit!.
-      iIntros (??) "[% HIncoming]". subst.
+      (* Π''' probably same as Π', but I don't care *)
+      iIntros (? Π''') "[% [% HΠ''']]". simplify_eq.
+      iApply "Hσ". iSplit!. iFrame.
+      iIntros (??) "[% [? HΠ']]" => /=.
+      iApply "HΠ'''" => /=. subst. iSplit!.
+      iIntros (? HΠr2) "[% HΠr2]". subst.
       iApply sim_tgt_rec_Waiting_raw.
-      iSplit. { iIntros. iModIntro. iApply "HIncoming". iSplit!. iIntros (??) "[% [% ?]]". simplify_eq. }
-      iIntros (???) "!>". iApply "HIncoming" => /=. iSplit!. iIntros (??) "[% [% [% HQ]]]". simplify_eq.
-      iApply "HΠ". iSplit!. iFrame.
+      iSplit. { iIntros. iModIntro. iApply "HΠr2". iSplit!. iIntros (??) "[% [% ?]]". simplify_eq. }
+      iIntros (???) "!>". iApply "HΠr2" => /=. iSplit!. iIntros (??) "[% [% [% HQ]]]". simplify_eq.
+      iApply "HΠr". iSplit!. iFrame.
       iApply "HΦ". iSplit!. iFrame.
-      iIntros "Hsomething".
-      iApply "Hwhat". iSplit!.
+      iIntros "Hspec".
+      iApply "HΠ'". iSplit!.
   Admitted.
 
 
