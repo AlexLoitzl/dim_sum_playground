@@ -67,15 +67,20 @@ Definition heap_inj_statics (provs : gset prov) :=
 Notation heap_inj_inv_s := (heapUR_inv own_heap_s).
 Notation heap_inj_inv_i := (heapUR_inv own_heap_i).
 
-Notation "l '↦hs' v" := (heapUR_ptsto own_heap_s l (DfracOwn 1) v)
-  (at level 20, format "l  ↦hs  v") : bi_scope.
-Notation "l '↦hi' v" := (heapUR_ptsto own_heap_i l (DfracOwn 1) v)
-  (at level 20, format "l  ↦hi  v") : bi_scope.
+Notation "l '↦hs' dq v" := (heapUR_ptsto own_heap_s l dq v)
+  (at level 20, dq custom dfrac, format "l  ↦hs dq  v") : bi_scope.
+Notation "l '↦hi' dq v" := (heapUR_ptsto own_heap_i l dq v)
+  (at level 20, dq custom dfrac,format "l  ↦hi dq  v") : bi_scope.
 
-Notation heap_inj_dom_s p := (heapUR_dom own_heap_s p (DfracOwn 1)).
-Notation heap_inj_dom_i p := (heapUR_dom own_heap_i p (DfracOwn 1)).
-Notation heap_inj_block_s p := (heapUR_block own_heap_s p (DfracOwn 1)).
-Notation heap_inj_block_i p := (heapUR_block own_heap_i p (DfracOwn 1)).
+Notation "p '↪hs' dq d" := (heapUR_dom own_heap_s p dq d)
+  (at level 20, dq custom dfrac at level 1, format "p  '↪hs' dq  d") : bi_scope.
+Notation "p '↪hi' dq d" := (heapUR_dom own_heap_i p dq d)
+  (at level 20, dq custom dfrac at level 1, format "p  '↪hi' dq  d") : bi_scope.
+
+Notation "p '↦∗hs' dq b" := (heapUR_block own_heap_s p dq b)
+  (at level 20, dq custom dfrac at level 1, format "p  '↦∗hs' dq  b") : bi_scope.
+Notation "p '↦∗hi' dq b" := (heapUR_block own_heap_i p dq b)
+  (at level 20, dq custom dfrac at level 1, format "p  '↦∗hi' dq  b") : bi_scope.
 
 (** ** Ghost state lemmas *)
 Lemma heap_inj_statics_eq h1 h2 :
@@ -161,7 +166,7 @@ Qed.
 Definition heap_in_inj_inv (inj : gmap prov loc) (rem : list prov) :
   uPred heap_injUR :=
     [∗ map] ps↦li0∈inj, ⌜ps ∈ rem⌝ ∨
-      ∃ b, heap_inj_block_s ps b ∗
+      ∃ b, ps ↦∗hs b ∗
       [∗ map] o↦vs∈b, ∃ vi, (li0 +ₗ o) ↦hi vi ∗ val_in_inj vi vs.
 
 Definition heap_in_inj (rem : list prov) : uPred heap_injUR :=
@@ -172,7 +177,7 @@ Lemma heap_in_inj_inv_borrow ps li0 rem inj :
   ps ∉ rem →
   inj !! ps = Some li0 →
   heap_in_inj_inv inj rem -∗
-  ∃ b, heap_inj_block_s ps b ∗ heap_in_inj_inv inj (ps :: rem) ∗
+  ∃ b, ps ↦∗hs b ∗ heap_in_inj_inv inj (ps :: rem) ∗
   [∗ map] o↦vs∈b, ∃ vi, (li0 +ₗ o) ↦hi vi ∗ val_in_inj vi vs.
 Proof.
   iIntros (??) "Hinj".
@@ -187,7 +192,7 @@ Lemma heap_in_inj_inv_return i ps b li0 rem inj :
   rem !! i = Some ps →
   inj !! ps = Some li0 →
   heap_in_inj_inv inj rem -∗
-  heap_inj_block_s ps b -∗
+  ps ↦∗hs b -∗
   ([∗ map] o↦vs∈b, ∃ vi, (li0 +ₗ o) ↦hi vi ∗ val_in_inj vi vs) -∗
   heap_in_inj_inv inj (delete i rem).
 Proof.
@@ -204,7 +209,7 @@ Qed.
 Lemma heap_in_inj_inv_return0 ps b li0 rem inj :
   inj !! ps = Some li0 →
   heap_in_inj_inv inj (ps :: rem) -∗
-  heap_inj_block_s ps b -∗
+  ps ↦∗hs b -∗
   ([∗ map] o↦vs∈b, ∃ vi, (li0 +ₗ o) ↦hi vi ∗ val_in_inj vi vs) -∗
   heap_in_inj_inv inj rem.
 Proof. iIntros (?) "???". by iApply (heap_in_inj_inv_return 0 with "[$] [$] [$]"). Qed.
@@ -218,7 +223,7 @@ Lemma heap_in_inj_borrow ps li0 rem :
   ps ∉ rem →
   heap_in_inj rem -∗
   heap_inj_shared ps li0 -∗
-  ∃ b, heap_inj_block_s ps b ∗ heap_in_inj (ps :: rem) ∗
+  ∃ b, ps ↦∗hs b ∗ heap_in_inj (ps :: rem) ∗
   [∗ map] o↦vs∈b, ∃ vi, (li0 +ₗ o) ↦hi vi ∗ val_in_inj vi vs.
 Proof.
   iIntros (?) "[%inj [? [Hinj ?]]] Hsh".
@@ -231,7 +236,7 @@ Lemma heap_in_inj_return i ps b li0 rem :
   rem !! i = Some ps →
   heap_in_inj rem -∗
   heap_inj_shared ps li0 -∗
-  heap_inj_block_s ps b -∗
+  ps ↦∗hs b -∗
   ([∗ map] o↦vs∈b, ∃ vi, (li0 +ₗ o) ↦hi vi ∗ val_in_inj vi vs) -∗
   heap_in_inj (delete i rem).
 Proof.
@@ -243,7 +248,7 @@ Qed.
 Lemma heap_in_inj_return0 ps b li0 rem :
   heap_in_inj (ps :: rem) -∗
   heap_inj_shared ps li0 -∗
-  heap_inj_block_s ps b -∗
+  ps ↦∗hs b -∗
   ([∗ map] o↦vs∈b, ∃ vi, (li0 +ₗ o) ↦hi vi ∗ val_in_inj vi vs) -∗
   heap_in_inj rem.
 Proof. iIntros "????". by iApply (heap_in_inj_return 0 with "[$] [$] [$] [$]"). Qed.
@@ -292,7 +297,7 @@ Lemma heap_in_inj_share li ls rem b :
   ls.1 ∉ rem →
   ls.2 = 0%Z →
   heap_in_inj rem -∗
-  heap_inj_block_s ls.1 b -∗
+  ls.1 ↦∗hs b -∗
   ([∗ map] o↦vs ∈ b, ∃ vi : val, (li +ₗ o) ↦hi vi ∗ val_in_inj vi vs) ==∗
   heap_in_inj rem ∗
   loc_in_inj li ls.
@@ -356,36 +361,36 @@ Proof.
   iPureIntro. by eexists _.
 Qed.
 
-Lemma heap_inj_inv_lookup_dom_i p hi hs d rem:
+Lemma heap_inj_inv_lookup_dom_i p hi hs d rem dq:
   heap_inj_inv hi hs rem -∗
-  heap_inj_dom_i p d -∗
+  p ↪hi{dq} d -∗
   ⌜dom (h_block hi p) = d⌝.
 Proof.
   iIntros "[Hinvi [Hinvs[?[??]]]] ?".
   by iApply (heapUR_lookup_dom with "Hinvi").
 Qed.
 
-Lemma heap_inj_inv_lookup_dom_s p hi hs d rem:
+Lemma heap_inj_inv_lookup_dom_s p hi hs d rem dq:
   heap_inj_inv hi hs rem -∗
-  heap_inj_dom_s p d -∗
+  p ↪hs{dq} d -∗
   ⌜dom (h_block hs p) = d⌝.
 Proof.
   iIntros "[Hinvi [Hinvs[?[??]]]] ?".
   by iApply (heapUR_lookup_dom with "Hinvs").
 Qed.
 
-Lemma heap_inj_inv_lookup_block_i p hi hs b rem:
+Lemma heap_inj_inv_lookup_block_i p hi hs b rem dq:
   heap_inj_inv hi hs rem -∗
-  heap_inj_block_i p b -∗
+  p ↦∗hi{dq} b -∗
   ⌜h_block hi p = b⌝.
 Proof.
   iIntros "[Hinvi [Hinvs[?[??]]]] ?".
   by iApply (heapUR_lookup_block with "Hinvi").
 Qed.
 
-Lemma heap_inj_inv_lookup_block_s p hi hs b rem:
+Lemma heap_inj_inv_lookup_block_s p hi hs b rem dq:
   heap_inj_inv hi hs rem -∗
-  heap_inj_block_s p b -∗
+  p ↦∗hs{dq} b -∗
   ⌜h_block hs p = b⌝.
 Proof.
   iIntros "[Hinvi [Hinvs[?[??]]]] ?".
@@ -408,9 +413,9 @@ Qed.
 Lemma heap_inj_inv_update_block_i hi hs li v rem b :
   heap_alive hi li →
   heap_inj_inv hi hs rem -∗
-  heap_inj_block_i li.1 b ==∗
+  li.1 ↦∗hi b ==∗
   heap_inj_inv (heap_update hi li v) hs rem ∗
-  heap_inj_block_i li.1 (<[li.2 :=v]> b).
+  li.1 ↦∗hi (<[li.2 :=v]> b).
 Proof.
   iIntros (?) "(?&$&$&?&$) ?".
   iMod (heapUR_update_block with "[$] [$]") as "[$ $]"; [done|].
@@ -420,9 +425,9 @@ Qed.
 Lemma heap_inj_inv_update_block_s hi hs ls vs rem b :
   heap_alive hs ls →
   heap_inj_inv hi hs rem -∗
-  heap_inj_block_s ls.1 b ==∗
+  ls.1 ↦∗hs b ==∗
   heap_inj_inv hi (heap_update hs ls vs) rem ∗
-  heap_inj_block_s ls.1 (<[ls.2:=vs]> b).
+  ls.1 ↦∗hs (<[ls.2:=vs]> b).
 Proof.
   iIntros (?) "($&Hinvs&$&$&?) ?".
   iMod (heapUR_update_block with "[$] [$]") as "[$ $]"; [done|].
@@ -433,7 +438,7 @@ Lemma heap_inj_inv_alloc_i hi hs li n rem:
   heap_is_fresh hi li →
   heap_inj_inv hi hs rem ==∗
   heap_inj_inv (heap_alloc hi li n) hs rem ∗
-  heap_inj_block_i li.1 (zero_block n).
+  li.1 ↦∗hi (zero_block n).
 Proof.
   iIntros (Hf) "(?&$&$&?&$)". iMod (heapUR_alloc with "[$]") as "[$ $]"; [done|].
   rewrite h_static_provs_heap_alloc //. by destruct Hf as [?[??]].
@@ -443,7 +448,7 @@ Lemma heap_inj_inv_alloc_s hi hs ls n rem:
   heap_is_fresh hs ls →
   heap_inj_inv hi hs rem ==∗
   heap_inj_inv hi (heap_alloc hs ls n) rem ∗
-  heap_inj_block_s ls.1 (zero_block n).
+  ls.1 ↦∗hs (zero_block n).
 Proof.
   iIntros (Hf) "($&?&$&$&?)". iMod (heapUR_alloc with "[$]") as "[$ $]"; [done|].
   rewrite h_static_provs_heap_alloc //. by destruct Hf as [?[??]].
@@ -456,7 +461,7 @@ Lemma heap_inj_inv_alloc hi hs li ls n rem:
   heap_inj_inv hi hs rem ==∗
   heap_inj_inv (heap_alloc hi li n) (heap_alloc hs ls n) rem ∗
   loc_in_inj li ls ∗
-  heap_inj_dom_i li.1 (dom (zero_block n)).
+  li.1 ↪hi (dom (zero_block n)).
 Proof.
   iIntros (Hi Hs ?) "?". have Hli0 : li.2 = 0 by destruct Hi as [?[??]].
   iMod (heap_inj_inv_alloc_i with "[$]") as "[? [? Hpts]]"; [done|].
@@ -475,7 +480,7 @@ Lemma heap_inj_inv_alloc_list hi hs hi' hs' xs lsi lss:
   heap_inj_inv hi hs [] ==∗
   heap_inj_inv hi' hs' [] ∗
   ([∗ list] li;ls∈lsi;lss, loc_in_inj li ls) ∗
-  [∗ list] li;n∈lsi;xs, heap_inj_dom_i li.1 (dom (zero_block n)).
+  [∗ list] li;n∈lsi;xs, li.1 ↪hi (dom (zero_block n)).
 Proof.
   iIntros (Hi Hs) "Hinv".
   iInduction xs as [] "IH" forall (lsi lss hi hi' hs hs' Hi Hs); simplify_eq/=; destruct!/=.
@@ -486,8 +491,8 @@ Qed.
 
 Lemma heap_inj_inv_free_i l hi hs b rem:
   heap_inj_inv hi hs rem -∗
-  heap_inj_block_i l.1 b ==∗
-  heap_inj_inv (heap_free hi l) hs rem ∗ heap_inj_block_i l.1 ∅.
+  l.1 ↦∗hi b ==∗
+  heap_inj_inv (heap_free hi l) hs rem ∗ l.1 ↦∗hi ∅.
 Proof.
   iIntros "[Hinvi [Hinvs[?[??]]]] ?".
   iMod (heapUR_free with "Hinvi [$]") as "[$ $]". iFrame.
@@ -496,8 +501,8 @@ Qed.
 
 Lemma heap_inj_inv_free_s l hi hs b rem:
   heap_inj_inv hi hs rem -∗
-  heap_inj_block_s l.1 b ==∗
-  heap_inj_inv hi (heap_free hs l) rem ∗ heap_inj_block_s l.1 ∅.
+  l.1 ↦∗hs b ==∗
+  heap_inj_inv hi (heap_free hs l) rem ∗ l.1 ↦∗hs ∅.
 Proof.
   iIntros "[Hinvi [Hinvs[?[??]]]] ?".
   iMod (heapUR_free with "Hinvs [$]") as "[$ $]". iFrame.
@@ -511,8 +516,8 @@ Lemma heap_inj_inv_free hi hs li ls rem n:
   heap_range hs ls n →
   heap_inj_inv hi hs rem -∗
   loc_in_inj li ls -∗
-  heap_inj_dom_i li.1 (dom (zero_block n)) ==∗
-  heap_inj_inv (heap_free hi li) (heap_free hs ls) rem ∗ heap_inj_block_i li.1 ∅.
+  li.1 ↪hi (dom (zero_block n)) ==∗
+  heap_inj_inv (heap_free hi li) (heap_free hs ls) rem ∗ li.1 ↦∗hi ∅.
 Proof.
   iIntros (? ?? ?) "[Hinvi [Hinvs [? [? ?]]]] Hl Hdom".
   iMod (heap_in_inj_free with "[$] [$] [$]") as "[$ [$ ?]]"; [done..|].
@@ -533,7 +538,7 @@ Lemma heap_inj_inv_free_list hi hs hs' lis lss lis' lss' xsi xss hi0 hi0' hs0 hs
   heap_alloc_list xss lss' hs0 hs0' →
   heap_inj_inv hi hs [] -∗
   ([∗ list] li;ls∈lis';lss', loc_in_inj li ls) -∗
-  ([∗ list] li;n∈lis';lis.*2, heap_inj_dom_i li.1 (dom (zero_block n))) ==∗
+  ([∗ list] li;n∈lis';lis.*2, li.1 ↪hi (dom (zero_block n))) ==∗
   ∃ hi', ⌜heap_free_list lis hi hi'⌝ ∗ heap_inj_inv hi' hs' [].
 Proof.
   iIntros (Hf Hl2 -> -> Hai Has) "Hinv Hls Hdom".
@@ -552,8 +557,8 @@ Qed.
 since this suffices for statics *)
 Lemma heap_inj_inv_share hi hs p h:
   heap_inj_inv hi hs [] -∗
-  heap_inj_block_i p h -∗
-  heap_inj_block_s p h -∗
+  p ↦∗hi h -∗
+  p ↦∗hs h -∗
   ([∗ map] v∈h, val_in_inj v v) ==∗
   heap_inj_inv hi hs [] ∗ loc_in_inj (p, 0%Z) (p, 0%Z).
 Proof.
@@ -566,8 +571,8 @@ Qed.
 
 Lemma heap_inj_inv_share_big hi hs m:
   heap_inj_inv hi hs [] -∗
-  ([∗ map] p↦h∈m, heap_inj_block_i p h) -∗
-  ([∗ map] p↦h∈m, heap_inj_block_s p h) -∗
+  ([∗ map] p↦h∈m, p ↦∗hi h) -∗
+  ([∗ map] p↦h∈m, p ↦∗hs h) -∗
   ([∗ map] p↦h∈m, [∗ map] v∈h, val_in_inj v v) ==∗
   heap_inj_inv hi hs [] ∗ ([∗ map] p↦h∈m, loc_in_inj (p, 0%Z) (p, 0%Z)).
 Proof.
@@ -579,7 +584,7 @@ Proof.
 Qed.
 
 Definition rec_heap_inj_init (h0 : gmap prov (gmap Z val)) : uPred heap_injUR :=
-  (([∗ map]p↦v∈h0, heap_inj_block_i p v) ∗ ([∗ map]p↦v∈h0, heap_inj_block_s p v)).
+  (([∗ map]p↦v∈h0, p ↦∗hi v) ∗ ([∗ map]p↦v∈h0, p ↦∗hs v)).
 
 Lemma rec_heap_inj_init_union h1 h2:
   h1 ##ₘ h2 →
