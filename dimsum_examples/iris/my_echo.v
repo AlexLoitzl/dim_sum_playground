@@ -613,6 +613,7 @@ Section sim_spec.
       iApply "HΠ". iSplit!. iFrame.
       iApply "HΦ". iSplit!. iFrame.
       iIntros "Hsomething".
+      iApply "Hwhat". iSplit!.
   Admitted.
 
 
