@@ -562,11 +562,22 @@ Section sim_spec.
     ∃ v, ⌜es = []⌝ ∗ P v ∗
     POST (λ v', (⌜v' = ValNum v⌝) ∗ P (v + 1))%I.
 
+(* Definition switch_link `{!dimsumGS Σ} {S EV} (ts : tgt_src) (Π : option (io_event EV) → S → iProp Σ) *)
+(*   (K : _) : iProp Σ := *)
+(*   switch Π ({{ κ σ0 POST, *)
+(*     K σ0 ({{ e m2 σ2 K2, ⌜κ = Some (Outgoing, e)⌝ ∗ *)
+(*   POST ts _ m2 ({{ σi Πi, *)
+(*     ⌜σi = σ2⌝ ∗ *)
+(*   switch Πi ({{ κ' σ POST, *)
+(*     ∃ e', ⌜κ' = Some (Incoming, e')⌝ ∗ *)
+(*   POST ts _ m2 ({{ σr Πr, *)
+(*     ⌜σr = σ⌝ ∗ ⌜e' = e⌝ ∗ K2 σ Πr}})}})}})}})}})%I. *)
+
   (* The actual P?: λ v. ∃ σs. spec_state v ∗ Q σs ∗ (TGT Spec.forever ... @ Π {}) -∗ σs ≈≈> Π *)
   Lemma sim_getc_heap_priv Q fns Πr :
     rec_fn_auth fns -∗
     "getc" ↪ None -∗
-    Q (Spec.forever getc_spec_priv, 0) -∗ (* NOTE: Q needs to hold for the initial state of the module? *)
+    Q (Spec.forever getc_spec_priv, 0) -∗ (* NOTE: Q needs to hold for the initial state of the module? - Am I okay with giving up Q? *)
     □ switch_link Tgt Πr ({{ σr POST,
       ∃ vs h' σs,
       Q σs ∗
@@ -585,7 +596,7 @@ Section sim_spec.
 
     (* TODO: What should this things be? *)
     have Π' : option (io_type * rec_ev) → m_state (spec_trans (io_type * rec_ev) Z) → iProp Σ. admit.
-    set (P := (λ (v : Z), (∃ σs, spec_state v ∗ Q σs ∗ (TGT (Spec.forever getc_spec_priv) @ Π' {{ λ v', False }} -∗ σs ≈{spec_trans rec_event Z}≈>ₜ Π'))%I)).
+    set (P := (λ (v : Z), (∃ σs, spec_state v ∗ Q σs ∗ (TGT (Spec.forever getc_spec_priv) @ Π' {{ e', sim_post Tgt () Π' e' }} -∗ σs ≈{spec_trans rec_event Z}≈>ₜ Π'))%I)).
     iExists P.
     iModIntro. iSplit.
     - iExists (_, 0).
@@ -594,8 +605,7 @@ Section sim_spec.
       iApply (sim_gen_expr_intro with "[Hγ]") => /=.
       + done.
       + done.
-      + instantiate (1 := ()). simpl.
-      admit.
+      + done.
     - iIntros "!> % % [% [-> [[% [Hs [HQ Hσs]]] HΦ]]]".
       iApply (sim_tgt_rec_Call_external with "[$]").
       iIntros (???) "#?Htoa Haa !>".
@@ -622,7 +632,6 @@ Section sim_spec.
       iIntros "Hspec".
       iApply "HΠ'". iSplit!.
   Admitted.
-
 
 End sim_spec.
 
