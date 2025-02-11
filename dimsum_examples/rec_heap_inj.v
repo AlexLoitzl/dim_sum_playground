@@ -163,11 +163,23 @@ Proof.
 Qed.
 
 (** * heap_in_inj *)
+(* TODO: make this actually an injection. See
+b611b0e2cb0e6c903638048347ff51d618f995f6 for a version that is not
+vertically compositional. Try the following version that should be vertically
+compositional (note the 1/2 fraction for the dom):
+
 Definition heap_in_inj_inv (inj : gmap prov loc) (rem : list prov) :
   uPred heap_injUR :=
     [∗ map] ps↦li0∈inj, ⌜ps ∈ rem⌝ ∨
-      ∃ b, ps ↦∗hs b ∗
-      [∗ map] o↦vs∈b, ∃ vi, (li0 +ₗ o) ↦hi vi ∗ val_in_inj vi vs.
+      ∃ d, heap_inj_dom_s ps (1/2) d ∗
+      [∗ map] o∈d, ∃ vi vs, (li0 +ₗ o) ↦hi vi ∗ (p, o) ↦hs vs ∗ val_in_inj vi vs.
+
+ *)
+Definition heap_in_inj_inv (inj : gmap prov loc) (rem : list prov) :
+  uPred heap_injUR :=
+    [∗ map] ps↦li0∈inj, ⌜ps ∈ rem⌝ ∨
+      ∃ bi bs, ⌜li0.2 = 0%Z⌝ ∗ li0.1 ↦∗hi bi ∗ ps ↦∗hs bs ∗
+      [∗ map] o↦vi;vs∈bi;bs, val_in_inj vi vs.
 
 Definition heap_in_inj (rem : list prov) : uPred heap_injUR :=
   ∃ inj, heap_inj_shared_auth inj ∗ heap_in_inj_inv inj rem ∗
@@ -177,42 +189,44 @@ Lemma heap_in_inj_inv_borrow ps li0 rem inj :
   ps ∉ rem →
   inj !! ps = Some li0 →
   heap_in_inj_inv inj rem -∗
-  ∃ b, ps ↦∗hs b ∗ heap_in_inj_inv inj (ps :: rem) ∗
-  [∗ map] o↦vs∈b, ∃ vi, (li0 +ₗ o) ↦hi vi ∗ val_in_inj vi vs.
+  ∃ bi bs, ⌜li0.2 = 0%Z⌝ ∗ heap_in_inj_inv inj (ps::rem) ∗
+  li0.1 ↦∗hi bi ∗ ps ↦∗hs bs ∗ [∗ map] o↦vi;vs∈bi;bs, val_in_inj vi vs.
 Proof.
   iIntros (??) "Hinj".
-  iDestruct (big_sepM_lookup_acc_impl with "Hinj") as "[[%|[%b [$ $]]] Hinj]";
-    [done..|].
-  iApply "Hinj".
-  - iIntros "!>" (????) "[%|$]". iLeft. iPureIntro. set_solver.
-  - iLeft. iPureIntro. set_solver.
+  iDestruct (big_sepM_lookup_acc_impl with "Hinj") as "[[%|[% [% [% $]]]] Hinj]";[done..|].
+  iSplit!. iApply "Hinj". 2: by iLeft; iPureIntro; set_solver.
+  iIntros "!>" (????) "[%|$]". by iLeft; iPureIntro; set_solver.
 Qed.
 
-Lemma heap_in_inj_inv_return i ps b li0 rem inj :
+Lemma heap_in_inj_inv_return i ps bi bs li0 rem inj :
   rem !! i = Some ps →
   inj !! ps = Some li0 →
+  li0.2 = 0%Z →
   heap_in_inj_inv inj rem -∗
-  ps ↦∗hs b -∗
-  ([∗ map] o↦vs∈b, ∃ vi, (li0 +ₗ o) ↦hi vi ∗ val_in_inj vi vs) -∗
+  li0.1 ↦∗hi bi -∗
+  ps ↦∗hs bs -∗
+  ([∗ map] o↦vi;vs∈bi;bs, val_in_inj vi vs) -∗
   heap_in_inj_inv inj (delete i rem).
 Proof.
-  iIntros (??) "Hinj Hsh Hvs".
+  iIntros (???) "Hinj Hi Hs Hvs".
   iDestruct (big_sepM_lookup_acc_impl with "Hinj") as "[Hprev Hinj]";
     [done|].
   iApply "Hinj".
   - iIntros "!>" (????) "[%Hin|$]". iLeft. iPureIntro.
     rewrite delete_take_drop. erewrite <-take_drop_middle in Hin; [|done].
     set_solver.
-  - iRight. iFrame.
+  - iRight. by iFrame.
 Qed.
 
-Lemma heap_in_inj_inv_return0 ps b li0 rem inj :
+Lemma heap_in_inj_inv_return0 ps bi bs li0 rem inj :
   inj !! ps = Some li0 →
+  li0.2 = 0%Z →
   heap_in_inj_inv inj (ps :: rem) -∗
-  ps ↦∗hs b -∗
-  ([∗ map] o↦vs∈b, ∃ vi, (li0 +ₗ o) ↦hi vi ∗ val_in_inj vi vs) -∗
+  li0.1 ↦∗hi bi -∗
+  ps ↦∗hs bs -∗
+  ([∗ map] o↦vi;vs∈bi;bs, val_in_inj vi vs) -∗
   heap_in_inj_inv inj rem.
-Proof. iIntros (?) "???". by iApply (heap_in_inj_inv_return 0 with "[$] [$] [$]"). Qed.
+Proof. iIntros (??) "????". by iApply (heap_in_inj_inv_return 0 with "[$] [$] [$]"). Qed.
 
 
 Lemma heap_in_inj_init :
@@ -223,36 +237,61 @@ Lemma heap_in_inj_borrow ps li0 rem :
   ps ∉ rem →
   heap_in_inj rem -∗
   heap_inj_shared ps li0 -∗
-  ∃ b, ps ↦∗hs b ∗ heap_in_inj (ps :: rem) ∗
-  [∗ map] o↦vs∈b, ∃ vi, (li0 +ₗ o) ↦hi vi ∗ val_in_inj vi vs.
+  ∃ bi bs, ⌜li0.2 = 0%Z⌝ ∗ heap_in_inj (ps :: rem) ∗
+  li0.1 ↦∗hi bi ∗ ps ↦∗hs bs ∗ [∗ map] o↦vi;vs∈bi;bs, val_in_inj vi vs.
 Proof.
   iIntros (?) "[%inj [? [Hinj ?]]] Hsh".
   iDestruct (heap_inj_shared_lookup with "[$] [$]") as %?.
-  iDestruct (heap_in_inj_inv_borrow with "[$]") as (?) "[$ [$ $]]" => //.
-  iFrame.
+  iDestruct (heap_in_inj_inv_borrow with "[$]") as (???) "[$ [$ $]]" => //.
+  by iFrame.
 Qed.
 
-Lemma heap_in_inj_return i ps b li0 rem :
+Lemma heap_in_inj_return i ps bi bs li0 rem :
   rem !! i = Some ps →
+  li0.2 = 0%Z →
   heap_in_inj rem -∗
   heap_inj_shared ps li0 -∗
-  ps ↦∗hs b -∗
-  ([∗ map] o↦vs∈b, ∃ vi, (li0 +ₗ o) ↦hi vi ∗ val_in_inj vi vs) -∗
+  li0.1 ↦∗hi bi -∗
+  ps ↦∗hs bs -∗
+  ([∗ map] o↦vi;vs∈bi;bs, val_in_inj vi vs) -∗
   heap_in_inj (delete i rem).
 Proof.
-  iIntros (?) "[%inj [? [Hinj ?]]] Hsh Hb Hvs".
+  iIntros (??) "[%inj [? [Hinj ?]]] Hsh Hi Hs Hvs".
   iDestruct (heap_inj_shared_lookup with "[$] [$]") as %?.
-  iExists _. iFrame. by iApply (heap_in_inj_inv_return with "[$] [$]").
+  iExists _. iFrame. by iApply (heap_in_inj_inv_return with "[$] [$] [$]").
 Qed.
 
-Lemma heap_in_inj_return0 ps b li0 rem :
+Lemma heap_in_inj_return0 ps bi bs li0 rem :
+  li0.2 = 0%Z →
   heap_in_inj (ps :: rem) -∗
   heap_inj_shared ps li0 -∗
-  ps ↦∗hs b -∗
-  ([∗ map] o↦vs∈b, ∃ vi, (li0 +ₗ o) ↦hi vi ∗ val_in_inj vi vs) -∗
+  li0.1 ↦∗hi bi -∗
+  ps ↦∗hs bs -∗
+  ([∗ map] o↦vi;vs∈bi;bs, val_in_inj vi vs) -∗
   heap_in_inj rem.
-Proof. iIntros "????". by iApply (heap_in_inj_return 0 with "[$] [$] [$] [$]"). Qed.
+Proof. iIntros (?) "????". by iApply (heap_in_inj_return 0 with "[$] [$] [$] [$]"). Qed.
 
+
+Lemma heap_in_inj_range hi hs l1 l2 z rem:
+  l2.2 = 0%Z →
+  heap_range hs l2 z →
+  l2.1 ∉ rem →
+  heap_inj_inv_i hi -∗
+  heap_inj_inv_s hs -∗
+  heap_in_inj rem -∗
+  loc_in_inj l1 l2 -∗
+  ⌜heap_range hi l1 z⌝.
+Proof.
+  iIntros (? Hr ?) "Hinv1 Hinv2 ? [% [% ?]]". subst.
+  iDestruct (heap_in_inj_borrow with "[$] [$]") as (bi bs ?) "[?[?[??]]]"; [done|].
+  iDestruct (heapUR_lookup_block with "Hinv1 [$]") as %<-.
+  iDestruct (heapUR_lookup_block with "Hinv2 [$]") as %<-.
+  iDestruct (big_sepM2_dom with "[$]") as %Heq.
+  iPureIntro.
+  move: Hr => /heap_range_dom_h_block1 Hr.
+  apply heap_range_dom_h_block => /=; [lia|].
+  by rewrite Heq Hr.
+Qed.
 
 Lemma heap_in_inj_lookup hi hs l1 l2 v rem:
   h_heap hs !! l2 = Some v →
@@ -264,10 +303,11 @@ Lemma heap_in_inj_lookup hi hs l1 l2 v rem:
   ∃ v', ⌜h_heap hi !! l1 = Some v'⌝ ∗ val_in_inj v' v.
 Proof.
   iIntros (??) "Hinvi ? Hh [% [-> ?]]".
-  iDestruct (heap_in_inj_borrow with "[$] [$]") as (b) "[?[??]]"; [done|].
+  iDestruct (heap_in_inj_borrow with "[$] [$]") as (bi bs Hl0) "[?[?[??]]]"; [done|].
   iDestruct (heapUR_lookup_block1 with "[$] [$]") as %?; [done|].
-  iDestruct (big_sepM_lookup with "[$]") as (?) "[??]"; [done|]. iFrame.
-  by iApply (heapUR_lookup with "Hinvi [-]").
+  iDestruct (big_sepM2_lookup_r with "[$]") as (??) "$"; [done|].
+  iDestruct (heapUR_lookup_block with "Hinvi [$]") as %<-.
+  iPureIntro. by rewrite /offset_loc Hl0 Z.add_0_l -h_block_lookup.
 Qed.
 
 Lemma heap_in_inj_update h1 h2 l1 l2 v1 v2 rem:
@@ -282,51 +322,61 @@ Lemma heap_in_inj_update h1 h2 l1 l2 v1 v2 rem:
   heap_inj_inv_s (heap_update h2 l2 v2) ∗
   heap_in_inj rem.
 Proof.
-  iIntros (? [??]) "Hinvi Hinvs Hinj [% [-> #?]] ?".
-  iDestruct (heap_in_inj_borrow with "[$] [$]") as (b) "[?[??]]"; [done|].
-  iDestruct (heapUR_lookup_block with "[$] [$]") as %<-.
+  iIntros (? [? Ha]) "Hinvi Hinvs Hinj [% [-> #?]] Hv".
+  iDestruct (heap_in_inj_borrow with "[$] [$]") as (bi bs Hli0) "[?[Hli[??]]]"; [done|].
+  iDestruct (heapUR_lookup_block with "Hinvs [$]") as %<-.
+  iDestruct (heapUR_lookup_block with "Hinvi [$]") as %<-.
   iMod (heapUR_update_block with "[$] [$]") as "[$ ?]"; [eexists _; done|].
-  iDestruct (big_sepM_insert_acc _ _ l2.2 with "[$]") as "[[% [??]] Hbig]".
-  { by rewrite h_block_lookup -surjective_pairing. }
-  iMod (heapUR_update with "[$] [$]") as "[$ ?]". iModIntro.
-  iApply (heap_in_inj_return0 with "[$] [$] [$]").
-  iApply "Hbig". iFrame.
+  iDestruct (big_sepM2_lookup_r with "[$]") as (??) "#_".
+  { move: Ha. by rewrite h_block_lookup2. }
+  iMod (heapUR_update_block with "[$] [Hli]") as "[$ ?]" => /=.
+  { eexists _. by rewrite h_block_lookup2 /= Hli0 Z.add_0_l. } { done. }
+  iModIntro. rewrite Hli0 Z.add_0_l.
+  iApply (heap_in_inj_return0 with "[$] [$] [$] [$]"); [done|].
+  by iApply (big_sepM2_insert_2 with "[Hv] [$]").
 Qed.
 
-Lemma heap_in_inj_share li ls rem b :
+Lemma heap_in_inj_share li ls rem bi bs :
   ls.1 ∉ rem →
+  li.2 = 0%Z →
   ls.2 = 0%Z →
   heap_in_inj rem -∗
-  ls.1 ↦∗hs b -∗
-  ([∗ map] o↦vs ∈ b, ∃ vi : val, (li +ₗ o) ↦hi vi ∗ val_in_inj vi vs) ==∗
+  li.1 ↦∗hi bi -∗
+  ls.1 ↦∗hs bs -∗
+  ([∗ map] o↦vi;vs∈bi;bs, val_in_inj vi vs) ==∗
   heap_in_inj rem ∗
   loc_in_inj li ls.
 Proof.
-  iIntros (? Hl0) "[%inj[?[??]]] ??".
+  iIntros (? ? Hl0) "[%inj[?[??]]] ???".
   destruct (inj !! ls.1) eqn:?. {
-    iDestruct (heap_in_inj_inv_borrow with "[$]") as (?) "[? ?]"; [done..|].
+    iDestruct (heap_in_inj_inv_borrow with "[$]") as (???) "[? [?[??]]]"; [done..|].
     iDestruct (heapUR_block_excl with "[$] [$]") as %[]. }
   iMod (heap_inj_shared_alloc with "[$]") as "[? #$]"; [done|]. iModIntro.
   iSplit. 2: { iPureIntro. by rewrite Hl0 offset_loc_0. } iFrame. iSplit.
-  - iApply big_sepM_insert; [done|]. iFrame. iRight. iFrame.
+  - iApply big_sepM_insert; [done|]. iFrame. iRight. by iFrame.
   - iApply big_sepM_insert; [done|]. iFrame "#∗".
 Qed.
 
-Lemma heap_in_inj_free hs li ls rem:
+Lemma heap_in_inj_free hi hs li ls rem:
   ls.1 ∉ rem →
+  ls.2 = 0%Z →
+  heap_inj_inv_i hi -∗
   heap_inj_inv_s hs -∗
   loc_in_inj li ls -∗
   heap_in_inj rem ==∗
-  heap_in_inj rem ∗ heap_inj_inv_s (heap_free hs ls) ∗
-  ([∗ map] o↦vs ∈ h_block hs ls.1, ∃ vi : val, (li +ₗ -ls.2 +ₗ o) ↦hi vi ∗ val_in_inj vi vs).
+  heap_in_inj rem ∗
+  heap_inj_inv_i (heap_free hi li) ∗
+  heap_inj_inv_s (heap_free hs ls).
 Proof.
-  iIntros (?) "Hinvs [% [-> #Hl]] Hinj".
-  iDestruct (heap_in_inj_borrow with "[$] [$]") as (?) "[? [??]]"; [done|].
-  iDestruct (heapUR_lookup_block with "[$] [$]") as %<-.
-  setoid_rewrite (offset_loc_add_sub li0); [|lia]. iFrame.
+  iIntros (? Hls2) "Hinvi Hinvs [% [-> #Hl]] Hinj".
+  rewrite Hls2 offset_loc_0.
+  iDestruct (heap_in_inj_borrow with "[$] [$]") as (???) "[? [? [??]]]"; [done|].
+  iDestruct (heapUR_lookup_block with "Hinvi [$]") as %<-.
+  iDestruct (heapUR_lookup_block with "Hinvs [$]") as %<-.
+  iMod (heapUR_free with "[$] [$]") as "[$ ?]".
   iMod (heapUR_free with "[$] [$]") as "[$ ?]". iModIntro.
-  iApply (heap_in_inj_return0 with "[$] [$] [$]").
-  by iApply big_sepM_empty.
+  iApply (heap_in_inj_return0 with "[$] [$] [$] [$]"); [done|].
+  by iApply big_sepM2_empty.
 Qed.
 
 (** * heap_inj_inv *)
@@ -460,18 +510,16 @@ Lemma heap_inj_inv_alloc hi hs li ls n rem:
   ls.1 ∉ rem →
   heap_inj_inv hi hs rem ==∗
   heap_inj_inv (heap_alloc hi li n) (heap_alloc hs ls n) rem ∗
-  loc_in_inj li ls ∗
-  li.1 ↪hi (dom (zero_block n)).
+  loc_in_inj li ls.
 Proof.
   iIntros (Hi Hs ?) "?". have Hli0 : li.2 = 0 by destruct Hi as [?[??]].
-  iMod (heap_inj_inv_alloc_i with "[$]") as "[? [? Hpts]]"; [done|].
+  iMod (heap_inj_inv_alloc_i with "[$]") as "[? ?]"; [done|].
   iMod (heap_inj_inv_alloc_s with "[$]") as "[Hinv ?]"; [done|].
-  iDestruct "Hinv" as "(?&?&?&?&?)".
-  iMod (heap_in_inj_share with "[$] [$] [Hpts]") as "[??]"; [done| | |by iFrame].
+  iDestruct "Hinv" as "($ & $ &?& $ & $)".
+  iMod (heap_in_inj_share with "[$] [$] [$] []") as "[$ $]"; [done..| | |done].
   { destruct Hs. naive_solver. }
-  rewrite big_sepM_kmap_intro.
-  iApply (big_sepM_impl with "[$]"). iIntros "!>" (??[-> ?]%zero_block_lookup_Some).
-  iIntros "?". iExists _. rewrite /offset_loc Hli0 Z.add_0_l. by iFrame.
+  iApply big_sepM_sepM2_diag. iApply big_sepM_intro.
+  iIntros "!>" (??[-> ?]%zero_block_lookup_Some). done.
 Qed.
 
 Lemma heap_inj_inv_alloc_list hi hs hi' hs' xs lsi lss:
@@ -479,13 +527,12 @@ Lemma heap_inj_inv_alloc_list hi hs hi' hs' xs lsi lss:
   heap_alloc_list xs lss hs hs' →
   heap_inj_inv hi hs [] ==∗
   heap_inj_inv hi' hs' [] ∗
-  ([∗ list] li;ls∈lsi;lss, loc_in_inj li ls) ∗
-  [∗ list] li;n∈lsi;xs, li.1 ↪hi (dom (zero_block n)).
+  ([∗ list] li;ls∈lsi;lss, loc_in_inj li ls).
 Proof.
   iIntros (Hi Hs) "Hinv".
   iInduction xs as [] "IH" forall (lsi lss hi hi' hs hs' Hi Hs); simplify_eq/=; destruct!/=.
   { by iFrame. }
-  iMod (heap_inj_inv_alloc with "Hinv") as "[Hinv [$ $]]"; [done..|set_solver|].
+  iMod (heap_inj_inv_alloc with "Hinv") as "[Hinv $]"; [done..|set_solver|].
   by iApply "IH".
 Qed.
 
@@ -515,18 +562,12 @@ Lemma heap_inj_inv_free hi hs li ls rem n:
   ls.2 = 0%Z →
   heap_range hs ls n →
   heap_inj_inv hi hs rem -∗
-  loc_in_inj li ls -∗
-  li.1 ↪hi (dom (zero_block n)) ==∗
-  heap_inj_inv (heap_free hi li) (heap_free hs ls) rem ∗ li.1 ↦∗hi ∅.
+  loc_in_inj li ls ==∗
+  heap_inj_inv (heap_free hi li) (heap_free hs ls) rem.
 Proof.
-  iIntros (? ?? ?) "[Hinvi [Hinvs [? [? ?]]]] Hl Hdom".
-  iMod (heap_in_inj_free with "[$] [$] [$]") as "[$ [$ ?]]"; [done..|].
-  rewrite !h_static_provs_heap_free. iFrame.
-  iApply (heapUR_free_uninit with "[$] [-]"). iFrame.
-  rewrite big_opS_set_map. erewrite <-heap_range_dom_h_block1; [|done..].
-  iApply big_sepM_dom. iApply (big_sepM_impl with "[$]").
-  iIntros "!>" (???) "[% [??]]". rewrite /offset_loc/=.
-  have -> : (li.2 + - ls.2 + k)%Z = k by lia. iFrame.
+  iIntros (? ?? ?) "[Hinvi [Hinvs [? [? ?]]]] Hl".
+  iMod (heap_in_inj_free with "[$] [$] [$] [$]") as "[$ [$ $]]"; [done..|].
+  rewrite !h_static_provs_heap_free. by iFrame.
 Qed.
 
 Lemma heap_inj_inv_free_list hi hs hs' lis lss lis' lss' xsi xss hi0 hi0' hs0 hs0':
@@ -537,20 +578,21 @@ Lemma heap_inj_inv_free_list hi hs hs' lis lss lis' lss' xsi xss hi0 hi0' hs0 hs
   heap_alloc_list xsi lis' hi0 hi0' →
   heap_alloc_list xss lss' hs0 hs0' →
   heap_inj_inv hi hs [] -∗
-  ([∗ list] li;ls∈lis';lss', loc_in_inj li ls) -∗
-  ([∗ list] li;n∈lis';lis.*2, li.1 ↪hi (dom (zero_block n))) ==∗
+  ([∗ list] li;ls∈lis';lss', loc_in_inj li ls) ==∗
   ∃ hi', ⌜heap_free_list lis hi hi'⌝ ∗ heap_inj_inv hi' hs' [].
 Proof.
-  iIntros (Hf Hl2 -> -> Hai Has) "Hinv Hls Hdom".
+  iIntros (Hf Hl2 -> -> Hai Has) "Hinv Hls".
   iInduction lss as [|[ls ?] lss] "IH" forall (hi hs hs' lis xsi xss hi0 hs0 Hf Hl2 Hai Has);
       simplify_eq/=; destruct lis as [|[li ?] lis], xsi, xss => //; destruct!/=.
   { iModIntro. iSplit!. }
   unfold heap_is_fresh in *; destruct!/=.
-  iDestruct "Hls" as "[Hl Hls]". iDestruct "Hdom" as "[Hd Hdom]".
-  iDestruct (heap_inj_inv_lookup_dom_i with "[$] [$]") as %Hdom.
-  iMod (heap_inj_inv_free with "[$] [$] [$]") as "[??]"; [set_solver|done..|].
-  iMod ("IH" with "[//] [//] [//] [//] [$] [$] [$]") as (??) "?". iModIntro. iFrame.
-  iSplit!. by apply heap_range_dom_h_block.
+  iDestruct "Hls" as "[Hl Hls]".
+  iAssert ⌜heap_range hi l0 z⌝%I as %?. {
+    iDestruct "Hinv" as "(?&?&?&?)".
+    iApply (heap_in_inj_range with "[$] [$] [$] [$]"); [done| set_solver].
+  }
+  iMod (heap_inj_inv_free with "[$] [$]") as "[??]"; [set_solver|done..|].
+  iMod ("IH" with "[//] [//] [//] [//] [$] [$]") as (??) "?". iModIntro. by iFrame.
 Qed.
 
 (* specialized to the same provenance and heap on both sides for now
@@ -562,11 +604,9 @@ Lemma heap_inj_inv_share hi hs p h:
   ([∗ map] v∈h, val_in_inj v v) ==∗
   heap_inj_inv hi hs [] ∗ loc_in_inj (p, 0%Z) (p, 0%Z).
 Proof.
-  iIntros "($&$&?&$&$) [? Hi] Hs #Hv". rewrite big_sepM_kmap_intro.
-  iMod (heap_in_inj_share (p, 0%Z) (p, 0%Z) with "[$] [$] [Hi Hv]") as "[$ $]"; [set_solver|done| |done].
-  iDestruct (big_sepM_sep_2 with "[$] [$]") as "?".
-  iApply (big_sepM_impl with "[$]"). iIntros "!>" (???) "[? $]".
-  by rewrite /offset_loc.
+  iIntros "($&$&?&$&$) Hi Hs #Hv".
+  iMod (heap_in_inj_share (p, 0%Z) (p, 0%Z) with "[$] [$] [$] []") as "[$ $]"; [set_solver|done|done| |done].
+  by iApply (big_sepM_sepM2_diag).
 Qed.
 
 Lemma heap_inj_inv_share_big hi hs m:
@@ -1070,10 +1110,10 @@ Proof.
   rewrite /subst_static !subst_l_subst_map ?length_fmap ?length_imap ?length_fmap -?subst_map_subst_map //.
   apply: (rec_heap_inj_sim_refl_static INV); last first.
   - iSatMonoBupd. iIntros "(? & Hvs & #HINV & r & $)".
-    iMod (heap_inj_inv_alloc_list with "[$]") as "[$ [Hl Hdom]]"; [done..|iDestruct "Hl" as "#Hl"].
+    iMod (heap_inj_inv_alloc_list with "[$]") as "[$ Hl]"; [done..|iDestruct "Hl" as "#Hl"].
     iModIntro.
     rewrite -!list_to_map_app. iFrame "HINV".
-    iCombine "Hl Hdom r" as "r". iSplitR "r"; [| iAccu].
+    iCombine "Hl r" as "r". iSplitR "r"; [| iAccu].
     iApply big_sepM2_list_to_map_2;
       rewrite ?fmap_app ?fst_zip ?snd_zip ?length_fmap ?length_imap ?length_fmap //; try lia.
     iApply (big_sepL2_app with "[Hvs]"); [done|].
@@ -1085,8 +1125,8 @@ Proof.
   - iSatClear. move => /= ?????????.
     tstep_s => hs' Hfrees.
     tstep_i.
-    iSatStartBupd. iIntros!. iDestruct select ([∗ list] li;n ∈_;_.*2, _)%I as "Hdom".
-    iMod (heap_inj_inv_free_list with "[$] [$] [Hdom]") as (??) "?"; [done|..]; last (iModIntro; iSatStop; split!; [done|]).
+    iSatStartBupd. iIntros!.
+    iMod (heap_inj_inv_free_list with "[$] [$]") as (??) "?"; [done|..]; last (iModIntro; iSatStop; split!; [done|]).
     all: rewrite ?snd_zip ?fst_zip ?length_fmap //; try lia.
     apply: Hret; [done|].
     iSatMono. iFrame.
