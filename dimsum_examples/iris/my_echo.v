@@ -523,8 +523,7 @@ Section sim_spec.
       spec_state (v + 1) ∗
       POST Tgt _ (spec_trans _ Z) ({{σ'' Π'',
         ⌜Π'' = Π⌝ ∗
-        ⌜σ''.1 = k tt⌝ ∗ (* NOTE - This is new *)
-        ⌜σ''.2 = (v + 1)%Z⌝ ∗ (* NOTE - This is new *)
+        ⌜σ'' = σ⌝ ∗
         TGT k tt @ Π {{ Φ }}
         }})
       }})}})}}) -∗
@@ -551,11 +550,11 @@ Section sim_spec.
     iApply (sim_gen_TVis with "[-]"). iIntros (v') "Hs'".
     iDestruct (mstate_var_agree with "Hs Hs'") as "<-".
     iIntros "!> /=".
-    iIntros (??) "[% [% _]]" => /=. simplify_eq.
+    iIntros (??) "[% [% HΠ']]" => /=. simplify_eq.
     iApply "HC". simpl.
     iSplit!. iFrame.
     (* Here I need strong assumptions *)
-    iIntros (??) "[-> [<- [<- HΦ]]]".
+    iIntros (??) "[% [% H]]". subst.
     iApply "HΠ". by iFrame.
   Qed.
 
@@ -576,7 +575,46 @@ Section sim_spec.
             POST (ERReturn v' h'') _ σr ({{ _ Πx,
               ⌜Πx = Π⌝ ∗ Q σs' }})}})}})}}) -∗
     |==> ∃ P, P 0 ∗ □ rec_fn_spec_hoare Tgt Π "getc" (getc_fn_spec_priv P).
-  Proof. Admitted.
+  Proof.
+    iIntros "#Hfns #Hf #Hl /=".
+
+    iMod (mstate_var_alloc Z) as (γ) "Hγ".
+    iMod (mstate_var_split γ 0 with "[$]") as "[Hγ Hγ']".
+    pose (HS := SpecGS γ).
+
+    (* TODO: What should this things be? *)
+    have Π' : option (io_type * rec_ev) → m_state (spec_trans (io_type * rec_ev) Z) → iProp Σ. admit.
+    set (P := (λ (v : Z), (∃ σs, spec_state v ∗ Q σs ∗ (TGT (Spec.forever getc_spec_priv) @ Π' {{ λ v', False }} -∗ σs ≈{spec_trans rec_event Z}≈>ₜ Π'))%I)).
+    iExists P.
+    iModIntro. iSplit.
+    - simpl. iExists (_, 0).
+      iSplitL "Hγ". 1: done.
+      (* (spec (io_type * rec_ev) Z void * Z)%type *)
+      admit.
+    - iIntros "!> % % [% [-> [[% [Hs [HQ Hσs]]] HΦ]]]".
+      iApply (sim_tgt_rec_Call_external with "[$]").
+      iIntros (???) "#?Htoa Haa !>".
+      iIntros (? σr) "[% [% HΠ]]" => /=.
+      iApply "Hl" => /=. subst. iSplit!. iFrame. iSplit!.
+      iIntros (? Π'') "[-> HΠ'']".
+      assert (HProblem : Π'' = Π') by admit. subst.
+      iApply "Hσs". rewrite unfold_forever.
+      iApply sim_getc_spec_heap_priv.
+      iIntros (??) "[% [% [% [% Hsomething]]]]" => /=.
+      iApply "HΠ''" => /=. subst. iSplit!.
+      iIntros (??) "[% [% H2]]". simplify_eq.
+      iApply "Hsomething". iSplit!. iFrame.
+      iIntros (??) "[% [Hs Hwhat]]" => /=.
+      iApply "H2" => /=. subst. iSplit!.
+      iIntros (??) "[% HIncoming]". subst.
+      iApply sim_tgt_rec_Waiting_raw.
+      iSplit. { iIntros. iModIntro. iApply "HIncoming". iSplit!. iIntros (??) "[% [% ?]]". simplify_eq. }
+      iIntros (???) "!>". iApply "HIncoming" => /=. iSplit!. iIntros (??) "[% [% [% HQ]]]". simplify_eq.
+      iApply "HΠ". iSplit!. iFrame.
+      iApply "HΦ". iSplit!. iFrame.
+      iIntros "Hsomething".
+  Admitted.
+
 
 End sim_spec.
 
