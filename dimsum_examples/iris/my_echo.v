@@ -655,18 +655,51 @@ Section echo_getc.
     TAssume (vs = []);;
     Spec.forever echo_getc_spec_body.
 
+  (* Something is clearly goind wrong here *)
+  Lemma sim_echo `{!specGS} Π P n :
+    "echo" ↪ Some echo_rec -∗
+    □ rec_fn_spec_hoare Tgt Π "getc" (getc_fn_spec_priv P) -∗
+    rec_fn_spec_hoare Tgt Π "echo" ({{ es POST_m, ⌜es = []⌝ ∗
+      bi_loop ({{ LOOP v,
+        P v ∗
+        rec_fn_spec_hoare Tgt Π "putc" ({{ es POST,
+          ⌜es = [Val (ValNum v)]⌝ ∗
+        POST ({{ _,
+          LOOP (v + 1) ∗ P (v + 1)
+        }})}})}}) n }}).
+  Proof.
+    iIntros "#? #Hf". iApply rec_fn_spec_hoare_ctx.
+    (* NOTE What's up with the ordinal later stuff - recursion *)
+    iIntros "#?".
+    set BODY := (X in bi_loop X).
+    iApply ord_loeb. (*; [done|]*)
+    { iAssumption. }
+    iIntros "!> #IH".
+    iIntros (es Φ). iDestruct 1 as (->) "HΦ".
+    iApply sim_tgt_rec_Call_internal. 2: { done. } { done. }
+    iModIntro => /=.
+    iApply sim_tgt_rec_AllocA; [by econs|] => /=. iIntros (?) "?".
+    destruct ls as [|] => //=. iModIntro.
+    iDestruct (bi_loop_unfold with "HΦ") as "HΦ".
+    iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
+    iApply "Hf" => /=.
+    rewrite /getc_fn_spec_priv. rewrite {2}/BODY => /=.
+    iDestruct "HΦ" as "[HP HΦ]".
+    iFrame. iSplit!. iIntros (?) "[% H]".
+    iApply sim_tgt_rec_LetE => /=. iModIntro.
+    iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
+    iApply "HΦ" => /=. simplify_eq. iSplit!.
+    iIntros (?) "[HLOOP HP]".
+    iApply sim_tgt_rec_LetE => /=. iModIntro.
+    iApply "IH" => /=. iSplit!.
+  Admitted.
+
   (* TODO: This is probably fine for one call, but once I loop, how do I keep track of P *)
   Lemma sim_echo `{!specGS} Π P n :
     "echo" ↪ Some echo_rec -∗
     P n -∗
     □ rec_fn_spec_hoare Tgt Π "getc" (getc_fn_spec_priv P) -∗
     rec_fn_spec_hoare Tgt Π "echo" ({{ es POST_m, ⌜es = []⌝ ∗
-      bi_loop ({{ LOOP v,
-        rec_fn_spec_hoare Tgt Π "putc" ({{ es POST,
-          ⌜es = [Val (ValNum v)]⌝ ∗
-        POST ({{ _,
-          LOOP (v + 1) ∗ P (v + 1)
-        }})}})}})}})}}) n
       rec_fn_spec_hoare Tgt Π "putc" ({{ es POST_p,
           ⌜es = [Val (ValNum n)]⌝ ∗ P (n + 1)
           (* POST_p (λ _, POST_m (λ _, P (n + 1))) *)
@@ -689,7 +722,6 @@ Section echo_getc.
   Lemma sim_echo_full Π γσ_s (σ : m_state (spec_trans _ Z)) P :
     "echo" ↪ Some echo_rec -∗
     "putc" ↪ None -∗
-    (* NOTE: Same here *)
     □ rec_fn_spec_hoare Tgt Π "getc" (getc_fn_spec_priv P) -∗
     γσ_s ⤳ σ -∗
     ⌜σ.1 ≡ Spec.forever echo_getc_spec_body⌝ -∗

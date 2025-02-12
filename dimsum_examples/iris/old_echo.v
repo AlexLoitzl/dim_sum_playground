@@ -538,7 +538,7 @@ Section getc.
     destruct ls as [|? []] => //=. 2: iDestruct!. iModIntro.
     rewrite offset_loc_0. iDestruct "Hl" as "[[Hl _] _]".
     iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
-    iApply "HΦ". iSplit!. iFrame. iIntros (?) "[% [Hl HΦ]]".
+    iApply "HΦ" => /=. iSplit!. iFrame. iIntros (?) "[% [Hl HΦ]]".
     iApply sim_tgt_rec_LetE. iIntros "!>" => /=.
     iApply (sim_tgt_rec_Load with "Hl"). iIntros "Hl !>" => /=. iSplit!.
     iFrame. by iApply "HΦ".
@@ -559,7 +559,7 @@ read (l, c) {
   if (c <= 0) {
     return 0;
   } else {
-    l <- pos;
+    l <- *pos;
     pos <- *pos + 1;
     ret = read(l + 1, c + (-1));
     return ret + 1;
@@ -600,7 +600,7 @@ Section read_mem.
         ⌜vret = ValNum (length vs)⌝ ∗
         (* The global pointer has been increased by length of the list *)
         lpos ↦ (pos + length vs) ∗
-        (* We own the array [pos + 0, pos +1, ..., pos + (vs.length - 1)] *)
+        (* We own the array [*pos + 0, *pos +1, ..., *pos + (vs.length - 1)] *)
         ([∗ map] l↦v∈array l (ValNum <$> seqZ pos (length vs)), l ↦ v)
       }})}}).
   Proof.
@@ -697,10 +697,10 @@ Section combined.
     (* "read" points to the function we defined (internal) *)
     "read" ↪ Some read_mem_rec -∗
     "getc" ↪ Some getc_rec -∗
-    rec_fn_spec_hoare Tgt Π "getc" ({{ es POST, ∃ (pos : Z),
+    rec_fn_spec_hoare Tgt Π "getc" ({{ es POST, ∃ (buf : Z),
       ⌜es = []⌝ ∗
-      lpos ↦ pos ∗
-      POST ({{ vr, ⌜vr = ValNum pos⌝ ∗ lpos ↦ (pos + 1)}})}}).
+      lpos ↦ buf ∗
+      POST ({{ vr, ⌜vr = ValNum buf⌝ ∗ lpos ↦ (pos + 1)}})}}).
   Proof.
    iIntros "%Hlpos #Hread #Hgetc %args %Φ Hpre".
    iApply sim_getc => /=; [done|].
