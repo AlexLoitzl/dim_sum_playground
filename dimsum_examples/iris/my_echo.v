@@ -820,7 +820,7 @@ Admitted.
     iMod (mstate_var_alloc (option rec_event)) as (γκ) "Hγκ".
 
     iMod (mstate_var_alloc Z) as (γs_s) "Hγs_t".
-    iMod (mstate_var_split γs_s v with "[$]") as "[Hγs_s Hγs_s']".
+    iMod (mstate_var_split γs_s 0 with "[$]") as "[Hγs_s Hγs_s']".
     pose (HSrcSpec := SpecGS γs_s).
 
     (* iMod (mstate_var_alloc Z) as (γs_t) "?". *)
@@ -828,16 +828,16 @@ Admitted.
     (* pose (HTgtSpec := SpecGS γs_t). *)
 
     iApply (sim_tgt_constP_intro γσ_t γσ_s γκ with "Hγσ_t Hγσ_s Hγκ [-]"). iIntros "Hγσ_s".
-    (* (* NOTE: I am fixing here the state of the spec in the source *) *)
+    (* NOTE: I am fixing here the state of the spec in the source *)
     iApply (sim_tgt_link_None with "[-]"). iIntros "!>" (??????).
-    (* (* NOTE: Case splitting on the linking case, which can only be a call because of the empty list  *) *)
-    (* (* TODO: What is the empty list here, is it previous events? *) *)
+    (* NOTE: Case splitting on the linking case, which can only be a call because of the empty list  *)
+    (* TODO: What is the empty list here, is it previous events? *)
     destruct!/=. case_match; destruct!/=.
 
-    (* (* NOTE: Changing to source module *) *)
+    (* NOTE: Changing to source module *)
     iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
     iIntros "Hγσ_s Hγσ_t Hγκ".
-    (* (* NOTE: Now, going into module local reasoning - Giving up one half of the state *) *)
+    (* NOTE: Now, going into module local reasoning - Giving up one half of the state *)
     iApply (sim_gen_expr_intro (Λ := spec_mod_lang (H := HSrcSpec) _ _ ) _ tt with "[Hγs_s] [-]"); [simpl; done..|].
     iEval (unfold echo_getc_spec). rewrite /TReceive bind_bind.
     iApply (sim_src_TExist (H := HSrcSpec) (_, _, _)).
@@ -845,7 +845,7 @@ Admitted.
     iApply (sim_gen_TVis (H := HSrcSpec)). iIntros (v') "Hγs_s". rewrite /spec_state /spec_state_name.
     (* TODO: switch_id here *)
     (* FIXME, discarding something here *)
-    iIntros (??) "[-> [-> ?]]".
+    iIntros (??) "[-> [-> _]]".
     iApply (sim_src_constP_next with "[Hγσ_t] [Hγκ] [Hγσ_s] [%] [-]"); [done..|].
     (* NOTE: I unify here *)
     iDestruct (mstate_var_agree with "Hγs_s Hγs_s'") as "->".
@@ -861,8 +861,9 @@ Admitted.
     iApply sim_gen_expr_None => /=. iIntros (? [] ?) "Hγs_s".
     (* NOTE: Got it back again - and it's linked to the state *)
     iIntros (??) "[-> [-> _]]".
-
-    iDestruct (mstate_var_agree with "Hγs_s Hγs_s'") as "<-".
+    (* NOTE: The source module here is in a good spot for induction. In target the recursion is on the echo, but
+       this is an internal call? So where do I start the recursion? *)
+    iDestruct (mstate_var_agree with "Hγs_s Hγs_s'") as "->".
 
     (* NOTE: Changing into target *)
     rewrite bool_decide_true; [|done].
@@ -885,26 +886,66 @@ Admitted.
     set (Π := link_tgt_leftP _ _ _ _).
 
     iApply (sim_gen_expr_bind _ [ReturnExtCtx _] with "[-]") => /=.
-    (* (* NOTE: Here I am using my state *) *)
-    iApply (sim_echo_full with "[] [] [Hγs_t Hγs_t'] Hγσ_s"). 1-2: by iApply (rec_fn_intro with "[$]"). 2: done.
-    (* { (* NOTE: And immediately give it up *) *)
-    (*   iApply (sim_getc_heap_priv with "[] [] [Hγs_t]"). *)
-    (*   1: done. 1: by iApply (rec_fn_intro with "[$]"). 1: done. *)
-    (*   iIntros (??) => /=. iDestruct 1 as (??->) "HC". iIntros => /=. *)
-    (*   iIntros (??????). destruct!/=. rewrite bool_decide_false // bool_decide_true //. *)
-    (*   iApply (sim_tgt_link_right_recv with "[-]") => /=. iApply "HC". iSplit!. *)
-    (*   iIntros (??). iDestruct 1 as (? ->) "HC" => /=. *)
-    (*   iIntros (?). simplify_eq. *)
-    (*   iApply (sim_tgt_link_right with "[-]"). iApply "HC". iSplit!. *)
-    (*   iIntros (??) => /=. iDestruct 1 as (?? ->) "[Hγs_t [-> HC]]" => /=. *)
-    (*   iIntros (??????). destruct!/=. *)
-    (*   iApply (sim_tgt_link_left_recv with "[-]"). iApply "HC". iSplit!. *)
-    (*   iIntros (??). iDestruct 1 as (? ->) "HC" => /=. *)
-    (*   iIntros (?). simplify_eq. *)
-    (*   iApply (sim_tgt_link_left with "[-]"). iApply "HC". *)
 
-    (*   iDestruct (mstate_var_agree with "Hγs_t Hγs_t'") as "->". *)
-    (*   iSplit!. *)
+    have Πs : option (io_type * rec_ev) → m_state (spec_trans (io_type * rec_ev) Z) → iProp Σ.
+    (* exact (@sim_tgt_constP Σ rec_event dimsumGS0 m_t (spec_trans rec_event Z) γσ_t γσ_s γκ).  *)
+    admit.
+    iAssert (□ switch_link' Tgt Π (spec_trans (io_event rec_ev) Z) Πs ({{ σr POST,
+            ∃ (vs : list val) (h' : heap_state) (σs : spec rec_event Z void * Z), True ∗
+              POST (ERCall "getc" vs h') σs ({{ _ Πs,
+                switch_link Tgt Πs ({{ _ POST0,
+                  ∃ (h'' : heap_state) (v' : val),
+                    POST0 (ERReturn v' h'') rec_mod_lang σr ({{ _ Πr', ⌜Πr' = Π⌝ ∗ True}})}})}})}}))%I as "H2".
+    { iIntros "!> % %" => /=. iDestruct 1 as (???) "[_ [% HC]]". subst.
+      iIntros (??????). destruct!/=. rewrite bool_decide_false //. rewrite bool_decide_true //.
+      iApply (sim_tgt_link_right_recv with "[-]").
+      iApply "HC". iSplit. admit.
+      iSplit. simpl. admit.
+      iIntros (??) "[% [-> HC]] %" => /=. simplify_eq.
+      iApply (sim_tgt_link_right with "[-]"). iApply "HC". iSplit!.
+      iIntros (??) => /=. iDestruct 1 as (?? ->) "HC".
+      iIntros (??????). destruct!/=.
+      iApply (sim_tgt_link_left_recv with "[-]").
+      iApply "HC". iSplit!.
+      iIntros (??) => /=. iDestruct 1 as (?->) "HC". iIntros. simplify_eq.
+      iApply (sim_tgt_link_left with "[-]"). iApply "HC".
+      iSplit!. admit. }
+
+    iAssert ("getc" ↪ None)%I as "H1". { by iApply (rec_fn_intro with "[$]"). }
+    iPoseProof (sim_getc_heap_priv (λ _, True)%I _ _ _ with "Hfns H1") as "H".
+
+    iAssert ("getc" ↪ None)%I as "H".   -∗
+    Q (Spec.forever getc_spec_priv, 0) -∗ (* NOTE: Q needs to hold for the initial state of the module? - Am I okay with giving up Q? *)
+    □ switch_link' Tgt Πr (spec_trans _ Z) Πs ({{ σr POST,
+      ∃ vs h' σs,
+      Q σs ∗
+      POST (ERCall "getc" vs h') σs ({{ _ Πs,
+        switch_link Tgt Πs ({{ σs' POST,
+          ∃ h'' v',
+            POST (ERReturn v' h'') _ σr ({{ _ Πr',
+              ⌜Πr' = Πr⌝ ∗ Q σs' }})}})}})}}) -∗
+    |==> ∃ P, P 0 ∗ □ rec_fn_spec_hoare Tgt Πr "getc" (getc_fn_spec_priv P).
+
+    (* (* NOTE: Here I am using my state *) *)
+    iApply (sim_echo_full with "[] [] [] [Hγσ_s //] [//] [Hγs_s //]"). 1-2: by iApply (rec_fn_intro with "[$]").
+    { (* NOTE: And immediately give it up *)
+      iApply (sim_getc_heap_priv with "[] [] [Hγs_t]").
+      1: done. 1: by iApply (rec_fn_intro with "[$]"). 1: done.
+      iIntros (??) => /=. iDestruct 1 as (??->) "HC". iIntros => /=.
+      iIntros (??????). destruct!/=. rewrite bool_decide_false // bool_decide_true //.
+      iApply (sim_tgt_link_right_recv with "[-]") => /=. iApply "HC". iSplit!.
+      iIntros (??). iDestruct 1 as (? ->) "HC" => /=.
+      iIntros (?). simplify_eq.
+      iApply (sim_tgt_link_right with "[-]"). iApply "HC". iSplit!.
+      iIntros (??) => /=. iDestruct 1 as (?? ->) "[Hγs_t [-> HC]]" => /=.
+      iIntros (??????). destruct!/=.
+      iApply (sim_tgt_link_left_recv with "[-]"). iApply "HC". iSplit!.
+      iIntros (??). iDestruct 1 as (? ->) "HC" => /=.
+      iIntros (?). simplify_eq.
+      iApply (sim_tgt_link_left with "[-]"). iApply "HC".
+
+      iDestruct (mstate_var_agree with "Hγs_t Hγs_t'") as "->".
+      iSplit!.
     (* } *)
     (* iSplit!. *)
     (* (* TODO: This is just copied over... *) *)
