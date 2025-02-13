@@ -656,12 +656,12 @@ Section echo_getc.
     Spec.forever echo_getc_spec_body.
 
   (* Something is clearly goind wrong here *)
-  Lemma sim_echo `{!specGS} Π P n :
+  Lemma sim_echo_loop `{!specGS} Π P:
     "echo" ↪ Some echo_rec -∗
     □ rec_fn_spec_hoare Tgt Π "getc" (getc_fn_spec_priv P) -∗
     rec_fn_spec_hoare Tgt Π "echo" ({{ es POST_m, ⌜es = []⌝ ∗
+      ∃ n, P n ∗
       bi_loop ({{ LOOP v,
-        P v ∗
         rec_fn_spec_hoare Tgt Π "putc" ({{ es POST,
           ⌜es = [Val (ValNum v)]⌝ ∗
         POST ({{ _,
@@ -675,7 +675,7 @@ Section echo_getc.
     iApply ord_loeb. (*; [done|]*)
     { iAssumption. }
     iIntros "!> #IH".
-    iIntros (es Φ). iDestruct 1 as (->) "HΦ".
+    iIntros (es Φ). iDestruct 1 as (->) "[% [HP HΦ]]".
     iApply sim_tgt_rec_Call_internal. 2: { done. } { done. }
     iModIntro => /=.
     iApply sim_tgt_rec_AllocA; [by econs|] => /=. iIntros (?) "?".
@@ -683,16 +683,15 @@ Section echo_getc.
     iDestruct (bi_loop_unfold with "HΦ") as "HΦ".
     iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
     iApply "Hf" => /=.
-    rewrite /getc_fn_spec_priv. rewrite {2}/BODY => /=.
-    iDestruct "HΦ" as "[HP HΦ]".
+    rewrite /getc_fn_spec_priv. iExists n.
     iFrame. iSplit!. iIntros (?) "[% H]".
     iApply sim_tgt_rec_LetE => /=. iModIntro.
     iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
     iApply "HΦ" => /=. simplify_eq. iSplit!.
     iIntros (?) "[HLOOP HP]".
     iApply sim_tgt_rec_LetE => /=. iModIntro.
-    iApply "IH" => /=. iSplit!.
-  Admitted.
+    iApply "IH" => /=. iSplit!. iFrame.
+  Qed.
 
   (* TODO: This is probably fine for one call, but once I loop, how do I keep track of P *)
   Lemma sim_echo `{!specGS} Π P n :
