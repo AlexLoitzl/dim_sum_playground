@@ -30,24 +30,24 @@ Global Arguments mstate_interp {_ _} _ _.
 Definition sim_gen_mapsto_state `{!dimsumGS Σ} {EV} (ts : tgt_src) (m : mod_trans EV)
   (H_s : (m_state m) → (option EV → m_state m → iProp Σ) → iProp Σ) : iProp Σ :=
   ∀ σ Π, H_s σ Π -∗ σ ≈{ts, m}≈> Π.
-Notation "PΠ '⥥{' ts , m '}'" := (sim_gen_mapsto_state ts m PΠ)
+Notation "'⥥{' ts , m '}' PΠ" := (sim_gen_mapsto_state ts m PΠ)
   (at level 20, only parsing) : bi_scope.
 
-Notation "PΠ '⥥{' ts '}'" := (sim_gen_mapsto_state ts _ PΠ)
-  (at level 20, format "PΠ '⥥{' ts '}'") : bi_scope.
-Notation "PΠ '⥥{' m '}ₜ'" := (sim_gen_mapsto_state Tgt m PΠ)
+Notation "'⥥{' ts '}' PΠ" := (sim_gen_mapsto_state ts _ PΠ)
+  (at level 20, format "'⥥{' ts '}' PΠ") : bi_scope.
+Notation "'⥥{' m '}ₜ' PΠ" := (sim_gen_mapsto_state Tgt m PΠ)
   (at level 20, only parsing) : bi_scope.
-Notation "PΠ '⥥ₜ'" := (sim_gen_mapsto_state Tgt _ PΠ)
-  (at level 20, format "PΠ '⥥ₜ'") : bi_scope.
+Notation "'⥥ₜ' PΠ" := (sim_gen_mapsto_state Tgt _ PΠ)
+  (at level 20, format "'⥥ₜ' PΠ") : bi_scope.
 
-Notation "PΠ '⥥{' m '}ₛ'" := (sim_gen_mapsto_state Src m PΠ)
+Notation "'⥥{' m '}ₛ' PΠ" := (sim_gen_mapsto_state Src m PΠ)
   (at level 20, only parsing) : bi_scope.
-Notation "PΠ '⥥ₛ'" := (sim_gen_mapsto_state Src _  PΠ)
-  (at level 20, format "PΠ '⥥ₛ'") : bi_scope.
+Notation "'⥥ₛ' PΠ" := (sim_gen_mapsto_state Src _  PΠ)
+  (at level 20, format "'⥥ₛ' PΠ") : bi_scope.
 
 Definition switch `{!dimsumGS Σ} {S EV} (Π : option EV → S → iProp Σ)
   (K : option EV → S → (tgt_src → ∀ EV2, ∀ m : mod_trans EV2, _ → iProp Σ) → iProp Σ) : iProp Σ :=
-  (∀ κ σ, K κ σ (λ ts' EV2 m' PΠ', PΠ' ⥥{ts', m'}) -∗  Π κ σ).
+  (∀ κ σ, K κ σ (λ ts' EV2 m' PΠ', ⥥{ts', m'}PΠ') -∗  Π κ σ).
   (* (∀ κ σ, K κ σ (λ ts' EV2 m' PΠ', ∀ σ' Π', PΠ' σ' Π' -∗ σ' ≈{ ts', m' }≈> Π') -∗  Π κ σ). *)
 
 (* Lemma switch_mono `{!dimsumGS Σ} {S EV} (Π : option EV → S → iProp Σ) K1 K2 : *)
