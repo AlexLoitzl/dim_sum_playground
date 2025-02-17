@@ -148,6 +148,58 @@ Definition TCallRet {S} (f : string) (vs : list val) (h : heap_state) :
   else
     TUb.
 
+Section TCallRet.
+
+Context `{!dimsumGS Σ} `{!specGS} {S : Type}.
+(* Canonical Structure spec_mod_lang. *)
+
+(* NOTE - In src position we only need to ensure `Outgoing Call` and any incoming event *)
+(* This cannot be quite true, in case it's not undefined, I'll have to refine it ? *)
+
+(* The statement holds, assuming the following restriction on Π.
+   ...
+ *)
+
+Compute m_state (spec_trans (io_type * rec_ev) S).
+(* Provable spec, but actually not what I'd want. I am now requiring a Return rather than case splitting on it *)
+(* TODO - Actually prove it *)
+Lemma sim_src_TCallRet f vs h (k: _ → spec rec_event S void) Π Φ :
+  switch Π ({{κ σ POST,
+    ∃ f' vs' h1,
+      ⌜f' = f⌝ ∗ ⌜vs' = vs⌝ ∗ ⌜h1 = h⌝ ∗
+      ⌜κ = Some (Outgoing, ERCall f vs h)⌝ ∗
+      POST Src _ (spec_trans rec_event S) ({{σ' Π',
+        ⌜σ = σ'⌝ ∗ ∃ e,
+        switch Π' ({{κ σ POST,
+          ⌜κ = Some (Incoming, e)⌝ ∗
+          (* TODO: Obligation? *)
+          POST Src _ (spec_trans rec_event S) ({{ σ'' Π'',
+            ∃ v h',
+            ⌜e = ERReturn v h'⌝ ∗
+            ⌜σ = σ''⌝ ∗
+            ⌜Π = Π''⌝ ∗
+            SRC (k (v, h')) @ Π {{ Φ }}
+            }})
+        }})
+        }})
+    }}) -∗
+  SRC (Spec.bind (TCallRet f vs h) k) @ Π {{ Φ }}.
+Proof. Admitted.
+  (* iIntros "HC" => /=. rewrite /TCallRet bind_bind. *)
+  (* iApply sim_gen_TVis. iIntros (s) "Hs". iIntros "% % /=". iIntros "[% [% HΠ]]". subst. *)
+  (* iApply "HC" => /=. iSplit!. *)
+  (* iIntros (??) "[% HC]" => /=. subst. *)
+  (* iApply (sim_gen_expr_intro _ tt with "[Hs] [-]"); simpl; [done..|]. *)
+  (* rewrite bind_bind. iApply (sim_src_TExist _). *)
+  (* rewrite bind_bind. iApply sim_gen_TVis. iIntros (s') "Hs". iIntros (??) "[% [% HΠ']]" => /=. *)
+  (* subst. iApply "HC" => /=. iSplit!. *)
+  (* iIntros (??) "[% [% [% H']]]". destruct!/=. *)
+  (* iApply "HΠ". iSplit!. iSplitL "Hs". 1: done. *)
+  (* by rewrite bind_ret_l. *)
+  (* Admitted. *)
+
+End TCallRet.
+
 Definition echo_spec_body : spec rec_event unit unit :=
   h ← TExist _;
   '(c, h') ← TCallRet "getc" [] h;
@@ -169,6 +221,37 @@ Proof.
   apply: tsim_implies_trefines => n0 /=.
   (* TODO: proof with tstep_i / go_s *)
 Abort.
+
+
+  (* Lemma sim_tgt_rec_Waiting_raw fns K Π (b : bool) h : *)
+  (*   ((∀ f fn vs h', ⌜fns !! f = Some fn⌝ -∗ *)
+  (*        ▷ₒ Π (Some (Incoming, ERCall f vs h')) *)
+  (*            (Rec (expr_fill K (ReturnExt b (Call (Val (ValFn f)) (Val <$> vs)))) h' fns)) ∧ *)
+  (*     ∀ v h', ⌜b⌝ -∗ *)
+  (*        ▷ₒ Π (Some (Incoming, ERReturn v h')) *)
+  (*            (Rec (expr_fill K (Val v)) h' fns)) -∗ *)
+  (*   Rec (expr_fill K (Waiting b)) h fns ≈{rec_trans}≈>ₜ Π. *)
+  (* Proof. *)
+  (*   iIntros "HΠ". iApply (sim_tgt_step_end with "[-]"). iIntros (???). simplify_eq/=. *)
+  (*   exploit prim_step_inv_head; [done|..]. *)
+  (*   { apply sub_redexes_are_values_item; case; naive_solver. } *)
+  (*   { done. } *)
+  (*   move => [? [Hstep ?]]. inv Hstep. *)
+  (*   - iDestruct "HΠ" as "[HΠ _]". iDestruct ("HΠ" with "[//]") as "HΠ". *)
+  (*     iModIntro. iSplit!. do 2 iModIntro. done. *)
+  (*   - iDestruct "HΠ" as "[_ HΠ]". iDestruct ("HΠ" with "[//]") as "HΠ". *)
+  (*     iModIntro. iSplit!. do 2 iModIntro. done. *)
+  (* Qed. *)
+
+(* Lemma switch_mono `{!dimsumGS Σ} {S EV} (Π : option EV → S → iProp Σ) (K1 K2 : _) : *)
+(*   switch Π K1 -∗ *)
+(*   (∀ κ σ (P1 P2 : _), K2 κ σ P1 -∗ (∀ ts m Q1 Q2, P1 ts m Q1 -∗ (∀ σ Π, Q2 σ Π -∗ Q1 σ Π) -∗ P2 ts m Q2) -∗ K1 κ σ P2) -∗ *)
+(*   switch Π K2. *)
+(* Proof. *)
+(*   iIntros "Hs Hmono" (??) "HK2". iApply "Hs". *)
+(*   iApply ("Hmono" with "HK2"). *)
+(*   iIntros (????) "HQ Hmono". iIntros (??) "?". iApply "HQ". by iApply "Hmono". *)
+(* Qed. *)
 
 
 Section echo.
@@ -208,7 +291,31 @@ Section echo.
     rewrite ->unfold_forever. rewrite {2}/echo_spec_body.
     rewrite bind_bind. iApply (sim_src_TExist with "[-]").
     rewrite bind_bind.
+
+
     (* TODO: don't unfold TCallRet *)
+    iApply sim_src_TCallRet.
+    iIntros (??) "(% & % & % & % & % & % & % & HC)"=> /=. simplify_eq.
+    iApply "Hs". iSplit!.
+    iIntros (??) "[% Hs]" => /=. simplify_eq.
+    iApply sim_gen_stop.
+    iApply "Hs". iSplit!.
+    iIntros (??) "[% [% ?]]" => /=. simplify_eq.
+    iApply (sim_tgt_rec_Waiting_raw with "[-]"). iSplit.
+    { iIntros (?????) "!>". iApply "Hswitch". iFrame. iSplit!. iIntros (??) "[-> Hs]".
+      iApply "HC". iSplit!.
+
+
+      iIntros (??) => /=. iIntros "?".  iApply "Hs".
+      simpl. iSplit!.
+    }
+    iApply (sim)
+    iApply "Hσ". iSplit!.
+
+    (* iApply "HC" => /=. iSplit!. iIntros (??) "HC" => /=. *)
+    (* iApply "Hs" => /=. iIntros "?". *)
+    (* iIntros "% [% ?]".  (??) "?". *)
+
     rewrite /TCallRet bind_bind.
     iApply sim_gen_TVis. iIntros ([]) "Hγ". iIntros (??) "[-> [-> _]]".
     iApply "Hs". iSplit!. iIntros (??) "[-> Hs]".
@@ -325,7 +432,7 @@ Section echo.
     iApply (sim_gen_expr_bind _ [ReturnExtCtx _] with "[-]") => /=.
     iApply (sim_echo_spec with "[] [] [] Hγσ_s [//]").
     1-3: by iApply (rec_fn_intro with "[$]").
-    - iIntros "!>" (??). iDestruct 1 as (?) "[Hγσ_s HC]" => /=.
+    - iIntros "!>" (??) => /=. iDestruct 1 as (?) "[Hγσ_s HC]" => /=.
       iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
       iIntros "Hγσ_s Hγσ_t Hγκ".
       iApply "HC". iSplit!. iIntros (??). iDestruct 1 as (->) "HC".
