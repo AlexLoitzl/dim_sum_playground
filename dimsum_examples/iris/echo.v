@@ -160,6 +160,7 @@ Section TCallRet.
    ...
  *)
 
+  (* TODO : Are these two Lemmas incomparable??? *)
   Lemma sim_src_TCallRet4 f vs h (k: _ → spec rec_event S void) Π Φ :
     switch Π ({{κ σ POST,
       ∃ f' vs' h1,
@@ -171,6 +172,7 @@ Section TCallRet.
             ⌜κ = Some (Incoming, e)⌝ ∗
             (* TODO: Obligation? *)
             POST Src _ (spec_trans rec_event S) ({{ σ'' Π'',
+              (* TODO - Here I don't care which Π, but I throw out Φ *)
               ⌜σ = σ''⌝ ∗
               (∀ v h', ⌜e = ERReturn v h'⌝ -∗
                        ⌜σ''.1 ≡ k (v, h')⌝ -∗
@@ -206,8 +208,8 @@ Section TCallRet.
           ⌜σ = σ'⌝ ∗  ∃ e,
           switch Π' ({{κ σ POST,
             ⌜κ = Some (Incoming, e)⌝ ∗
-            (* TODO: Obligation? *)
             POST Src _ (spec_trans rec_event S) ({{ σ'' Π'',
+              (* TODO: Here I require same Π but I keep Φ around... *)
               ⌜σ = σ''⌝ ∗
               ⌜Π = Π''⌝ ∗
               (∀ v h', ⌜e = ERReturn v h'⌝ -∗ SRC (k (v, h')) @ Π {{ Φ }})
@@ -230,6 +232,119 @@ Section TCallRet.
     destruct e. iApply sim_src_TUb.
     rewrite bind_ret_l. by iApply "HC".
   Qed.
+
+  Lemma switch_mono `{!dimsumGS Σ} {S' EV} (Π : option EV → S' → iProp Σ)
+    (K1 K2 : option EV → S' → (tgt_src → ∀ EV2, ∀ m : mod_trans EV2, _ → iProp Σ) → iProp Σ) :
+    switch Π K1 -∗
+    (∀ κ σ P1 P2, K2 κ σ P1 -∗
+                  (∀ ts (m : mod_trans EV) (Q1 Q2 : (m_state m → (option EV → m_state m → iProp Σ) → iProp Σ)),
+                    P1 ts EV m Q1 -∗ (∀ σ Π, Q2 σ Π -∗ Q1 σ Π) -∗ P2 ts EV m Q2) -∗ K1 κ σ P2) -∗
+    switch Π K2.
+  Proof.
+    iIntros "Hs Hmono" (??) "HK2". iApply "Hs".
+    iApply ("Hmono" with "HK2").
+    iIntros (????) "HQ Hmono". iIntros (??) "?". iApply "HQ". by iApply "Hmono".
+  Qed.
+
+
+
+  Lemma sim_src_TCallRet3' f vs h (k: _ → spec rec_event S void) Π Φ :
+    switch Π ({{κ σ POST,
+      ∃ f' vs' h1,
+        ⌜f' = f⌝ ∗ ⌜vs' = vs⌝ ∗ ⌜h1 = h⌝ ∗
+        ⌜κ = Some (Outgoing, ERCall f vs h)⌝ ∗
+        POST Src _ (spec_trans rec_event S) ({{σ' Π',
+          ⌜σ = σ'⌝ ∗  ∃ e,
+          switch Π' ({{κ σ POST,
+            ⌜κ = Some (Incoming, e)⌝ ∗
+            (* TODO: Obligation? *)
+            POST Src _ (spec_trans rec_event S) ({{ σ'' Π'',
+              ⌜σ = σ''⌝ ∗
+              ⌜Π = Π''⌝ ∗
+              (∀ v h', ⌜e = ERReturn v h'⌝ -∗ SRC (k (v, h')) @ Π {{ Φ }})
+              }})
+          }})
+          }})
+      }}) -∗
+    SRC (Spec.bind (TCallRet f vs h) k) @ Π {{ Φ }}.
+  Proof.
+    iIntros "H". iApply sim_src_TCallRet4.
+    iApply (switch_mono with "H") => /=.
+    iIntros (????) "[% [% [% [% [% [% [% H1]]]]]]]".
+    iIntros "H2". iSplit!. destruct!/=.
+    (* set Q1 := (X in P1 _ _ _ X). *)
+    (* set Q2 := (X in P2 _ _ _ X). *)
+    iApply ("H2" $! Src (spec_trans rec_event S) with "H1").
+    iIntros (??) "[% [% H]]" => /=. iSplit!.
+    iApply (switch_mono with "H") => /=.
+    iIntros (????) "[% H1]".
+    iIntros "H2". iSplit!.
+    iApply ("H2" with "H1").
+    iIntros (??) "[% [% H]]" => /=. simplify_eq.
+    iSplit!.
+    iIntros.
+    Admitted.
+
+  Lemma sim_src_TCallRet4' f vs h (k: _ → spec rec_event S void) Π Φ :
+    switch Π ({{κ σ POST,
+      ∃ f' vs' h1,
+        ⌜f' = f⌝ ∗ ⌜vs' = vs⌝ ∗ ⌜h1 = h⌝ ∗
+        ⌜κ = Some (Outgoing, ERCall f vs h)⌝ ∗
+        POST Src _ (spec_trans rec_event S) ({{σ' Π',
+          ⌜σ = σ'⌝ ∗  ∃ e,
+          switch Π' ({{κ σ POST,
+            ⌜κ = Some (Incoming, e)⌝ ∗
+            (* TODO: Obligation? *)
+            POST Src _ (spec_trans rec_event S) ({{ σ'' Π'',
+              ⌜σ = σ''⌝ ∗
+              (∀ v h', ⌜e = ERReturn v h'⌝ -∗
+                       ⌜σ''.1 ≡ k (v, h')⌝ -∗
+                       spec_state σ''.2 -∗
+                       σ'' ≈{(spec_trans rec_event S)}≈>ₛ Π'')
+              }})
+          }})
+          }})
+      }}) -∗
+    SRC (Spec.bind (TCallRet f vs h) k) @ Π {{ Φ }}.
+  Proof.
+    iIntros "H". iApply sim_src_TCallRet3.
+    iApply (switch_mono with "H") => /=.
+    iIntros (????) "[% [% [% [% [% [% [% H1]]]]]]]".
+    iIntros "H2". iSplit!. destruct!/=.
+    (* set Q1 := (X in P1 _ _ _ X). *)
+    (* set Q2 := (X in P2 _ _ _ X). *)
+    iApply ("H2" $! Src (spec_trans rec_event S) with "H1").
+    iIntros (??) "[% [% H]]" => /=. iSplit!.
+    iApply (switch_mono with "H") => /=.
+    iIntros (????) "[% H1]".
+    iIntros "H2". iSplit!.
+    iApply ("H2" with "H1").
+    iIntros (??) "[% H]" => /=. simplify_eq.
+  Admitted.
+
+  Parameter (ret: val) (h : heap_state).
+  Compute mexpr (spec_mod_lang (io_type * rec_ev) S).
+  (* spec (io_type * rec_ev) S void *)
+  Check TRet (ret, h).
+
+  Lemma sim_src_TCallRet5 f vs h (k: _ → spec rec_event S void) Π (Φ : mexpr (spec_mod_lang (io_type * rec_ev) S) → iProp Σ) :
+    switch Π ({{κ σ POST,
+      ∃ f' vs' h1,
+        ⌜f' = f⌝ ∗ ⌜vs' = vs⌝ ∗ ⌜h1 = h⌝ ∗
+        ⌜κ = Some (Outgoing, ERCall f vs h)⌝ ∗
+        POST Src _ (spec_trans rec_event S) ({{σ' Π',
+          ⌜σ = σ'⌝ ∗  ∃ e,
+          switch Π' ({{κ σ POST,
+            ⌜κ = Some (Incoming, e)⌝ ∗
+            (* TODO: Obligation? *)
+            POST Src _ (spec_trans rec_event S) ({{ σ'' Π'',
+              ⌜σ = σ''⌝ ∗
+              (∀ v h', ⌜e = ERReturn v h'⌝ -∗ Φ (Spec.bind (TRet (v, h')) k))
+              }})
+          }})
+          }})
+      }}) -∗
+    SRC (Spec.bind (TCallRet f vs h) k) @ Π {{ Φ }}.
 
 End TCallRet.
 
