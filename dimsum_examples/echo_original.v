@@ -77,38 +77,27 @@ Section link.
             (spec_mod combined_spec v).
   Proof.
     apply: tsim_implies_trefines => n0 /=.
-    (* apply tsim_remember_all. *)
-    (* intros ?? IH ? => /=. simpl. *)
     tstep_i => *. case_match; destruct!/=.
     go_s. eexists (_, _, _). go.
     go_s. split!. go.
     go_s => ?. go. go_s => ?. intros ?->. simplify_eq. rewrite bool_decide_true; [|done].
     tstep_i. split! => ???? Hf ?. unfold echo_prog in Hf. simplify_map_eq.
 
-    unshelve eapply tsim_remember. { simpl. exact (λ _ '(_, _, (Rec e _ f), (t1, v1)) '(t2, v2),
-      (* TODO: How does Michael think about this, I guess typically I would phrase an induction hypothesis *)
-    (*     using an arbitrary kontext here *)
+    (* TODO : Can be tsim_remember_call be used here? *)
+    unshelve eapply tsim_remember. { simpl. exact (λ _ '(link_state, cs, (Rec e _ f), (t1, v1)) '(t2, v2),
       exists K v,
       t1 ≡ getc_spec ∧
       e = expr_fill K ((Call (Val (ValFn "echo"))) (Val <$> [])) ∧
       f = echo_prog ∧
       t2 ≡ Spec.forever combined_spec_body ∧
       v1 ≡ v ∧
-      v2 ≡ v). }
+      v2 ≡ v ∧
+      link_state = MLFRun (Some SPLeft) ∧
+      cs = [None]). }
     { eexists [ReturnExtCtx false]. split!. } { done. }
-    move => n _ Hloop a b c.
-    destruct a as [[[aa ab] [ac ac2]] a2].
-    destruct b as [? ?].
-    destruct!/=.
+    move => n _ Hloop [[[? ?] [? ?]] [? ?]] [? ?] ?.
 
-    Compute m_state (rec_link_trans {["echo"]} {["getc"]} rec_trans (spec_trans rec_event Z)).
-    move => n _ Hloop [????]. destruct!/=.
-
-    intros ?? IH ??? => /=.
-    revert v.
-    apply tsim_remember_all.
-    intros ?? IH ? => /=.
-
+    destruct!/=. rewrite H0.
     tstep_i. split! => ? Hf. unfold echo_prog in Hf. simplify_map_eq.
     split!. tstep_i => *. destruct!/=. split!.
     tstep_i. rewrite {1}/echo_prog. split!=> *. case_match; destruct!/=.
@@ -117,29 +106,19 @@ Section link.
     go_i => ?. destruct!/=. go.
     tstep_i. split!. go.
     tstep_i. split!. go.
-    go_i. go_i. go_i => *. intros ? Hs.  destruct!/=.
+    go_i. go_i. go_i => *. go. destruct!/=.
     go_i. split! => *. destruct!/=.
     go_i. go_i. split! => *. destruct!/=. rewrite bool_decide_false; [|done].
     go_s. go_s. go_s. go_s. eexists. go. go_s. split!. go.
     go_i => e *. destruct!/=. destruct e; destruct!/=.
     { go_s. split!. go. go_s. split!. go. go_s. exact I. }
     go_s. split!. go. go_s. split!. go. go_s => ?. go.
-    tstep_s. intros ?->  => /=.
+    tstep_s. go.
     tstep_i. split!. intros. tstep_i. simplify_eq.
-    rewrite -unfold_forever => /=. rewrite -/getc_spec in Hs.
-
-    eapply IH.
-    set HIDE := (X in FreeA _ X).
-    eapply tstep_i_generic.
-    apply IH.
-
-
-    go_s. simplify_eq.
-    go_i. split!. intros. go_i. simplify_eq.
-
-    apply IH.
-    done.
-    tstep
+    eapply Hloop; [done|].
+    eexists ([FreeACtx []] ++ K).
+    split!.
+    by rewrite unfold_forever.
   Qed.
 
 End link.
