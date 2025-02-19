@@ -181,7 +181,7 @@ Section TCallRet.
     SRC (Spec.bind (TCallRet f vs h) k) @ Π {{ Φ }}.
   Proof.
     iIntros "HC" => /=. rewrite /TCallRet bind_bind.
-    iApply sim_gen_TVis. iIntros (s) "Hs". iIntros "% % /=". iIntros "[% [% _]]". subst.
+    iApply sim_gen_TVis. iIntros (s) "Hs". rewrite /switch_id. iIntros "% % /=". iIntros "[% [% ?]]". subst.
     iApply "HC" => /=. iSplit!.
     iIntros (??) "[% [% HC]]" => /=. subst.
     iApply (sim_gen_expr_intro _ tt with "[Hs] [-]"); simpl; [done..|].
@@ -373,14 +373,9 @@ Section echo.
     iApply sim_gen_stop.
     iApply "Hs". iSplit!.
     iIntros (??) "[% [% ?]]" => /=. simplify_eq.
-    iApply (sim_tgt_rec_Waiting_raw with "[-]"). iSplit.
-    { iIntros (?????) "!>". iApply "Hswitch". iFrame. iSplit!. iIntros (??) "[-> Hs]".
-      iApply "HC". iSplit!. iIntros (??) => /=. iIntros "[% Hm]". iApply "Hs".
-      simpl. iSplit!. iIntros (? Πroblem) "[% Hs]". iApply "Hm". subst. iSplit!.
-      iIntros. destruct!/=.
-    }
 
-    iIntros (??) "_!>". iApply "Hswitch". iFrame. iSplit!. iIntros (??) "[<- Hs]".
+    iApply (sim_tgt_rec_Waiting_all_raw with "[-]").
+    iIntros (?) "!>". iApply "Hswitch" => /=. iFrame. iSplit!. iIntros (??) "[<- Hs]".
     iApply "HC". iSplit!. iIntros (??) => /=. iIntros "[% Hm]". iApply "Hs".
     simpl. iSplit!. iIntros (? Πroblem) "[% Hs]" => /=. subst. iApply "Hm" => /=.
     iSplit!.

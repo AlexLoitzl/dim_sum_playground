@@ -66,6 +66,24 @@ Section lifting.
       iModIntro. iSplit!. do 2 iModIntro. done.
   Qed.
 
+  Lemma sim_tgt_rec_Waiting_all_raw fns K Π (b : bool) h :
+    (∀ e, ▷ₒ Π (Some (Incoming, e)) (Rec (expr_fill K
+    (match e with
+    | ERCall f vs h' => (ReturnExt b (Call (Val (ValFn f)) (Val <$> vs)))
+    | ERReturn v h' => (Val v)
+    end))
+    (match e with
+    | ERCall f vs h' => h'
+    | ERReturn v h' => h'
+    end)
+    fns)) -∗
+    Rec (expr_fill K (Waiting b)) h fns ≈{rec_trans}≈>ₜ Π.
+  Proof.
+   iIntros "H". iApply sim_tgt_rec_Waiting_raw. iSplit.
+   - iIntros (?????). iApply "H".
+   - iIntros (???). iApply "H".
+  Qed.
+
   Lemma sim_tgt_rec_ReturnExt v Π Φ (b : bool) :
     (∀ K h fns,
       rec_fn_auth fns -∗
