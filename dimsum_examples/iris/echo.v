@@ -160,7 +160,7 @@ Section TCallRet.
    ...
  *)
 
-  (* TODO : Are these two Lemmas incomparable??? *)
+  (* TODO : Are these two Lemmas incomparable??? - Yes! *)
   Lemma sim_src_TCallRet4 f vs h (k: _ → spec rec_event S void) Π Φ :
     switch Π ({{κ σ POST,
       ∃ f' vs' h1,
@@ -205,10 +205,9 @@ Section TCallRet.
           switch Π' ({{κ σ POST,
             ⌜κ = Some (Incoming, e)⌝ ∗
             POST Src _ (spec_trans rec_event S) ({{ σ'' Π'',
-              (* TODO: Here I require same Π but I keep Φ around... *)
               ⌜σ = σ''⌝ ∗
               ⌜Π = Π''⌝ ∗
-              (∀ v h', ⌜e = ERReturn v h'⌝ -∗ SRC (k (v, h')) @ Π {{ Φ }})}})}})}})}}) -∗
+              (∀ v h', ⌜e = ERReturn v h'⌝ -∗ Φ (k (v, h'))) }})}})}})}}) -∗
     SRC (Spec.bind (TCallRet f vs h) k) @ Π {{ Φ }}.
   Proof.
     iIntros "HC" => /=. rewrite /TCallRet bind_bind.
@@ -222,7 +221,9 @@ Section TCallRet.
     iIntros (??) "[% [% HC]]". destruct!/=.
     iApply "HΠ". iSplit!. iSplitL "Hs". 1: done.
     destruct e. iApply sim_src_TUb.
-    rewrite bind_ret_l. by iApply "HC".
+    rewrite bind_ret_l.
+    iApply sim_gen_expr_stop.
+    by iApply "HC".
   Qed.
 
   Lemma switch_mono `{!dimsumGS Σ} {S' EV} (Π : option EV → S' → iProp Σ)
