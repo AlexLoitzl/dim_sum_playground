@@ -596,17 +596,6 @@ Section sim_spec.
     ∃ v, ⌜es = []⌝ ∗ P v ∗
     POST (λ v', (⌜v' = ValNum v⌝) ∗ P (v + 1))%I.
 
-Definition switch_link' `{!dimsumGS Σ} {S EV} (ts : tgt_src) (Π : option (io_event EV) → S → iProp Σ)
-  (m : mod_trans (io_event EV)) (Π' : option (io_event EV) → m_state m → iProp Σ) (K : _) : iProp Σ :=
-  switch Π ({{ κ σ0 POST,
-    K σ0 ({{ e σ2 K2, ⌜κ = Some (Outgoing, e)⌝ ∗
-  POST ts _ m ({{ σi Πi,
-    ⌜σi = σ2⌝ ∗ ⌜Πi = Π'⌝ ∗
-  switch Πi ({{ κ' σ POST,
-    ∃ e', ⌜κ' = Some (Incoming, e')⌝ ∗
-  POST ts _ m ({{ σr Πr,
-    ⌜σr = σ⌝ ∗ ⌜e' = e⌝ ∗ K2 σ Πr}})}})}})}})}})%I.
-
 (* TODO : Maybe think about notation - more general for switch *)
 (* (WP (Spec.forever getc_spec_priv) @ Π' {{ e', sim_post Tgt () Π' e' }} -∗ σs ≈{spec_trans rec_event Z}≈>ₜ Π') *)
 
@@ -615,7 +604,7 @@ Definition switch_link' `{!dimsumGS Σ} {S EV} (ts : tgt_src) (Π : option (io_e
     rec_fn_auth fns -∗
     "getc" ↪ None -∗
     Q (Spec.forever getc_spec_priv, 0) -∗ (* NOTE: Q needs to hold for the initial state of the module? - Am I okay with giving up Q? *)
-    □ switch_link' Tgt Πr (spec_trans _ Z) Πs ({{ σr POST,
+    □ switch_link_fixed Tgt Πr (spec_trans _ Z) Πs ({{ σr POST,
       ∃ vs h' σs,
       Q σs ∗
       POST (ERCall "getc" vs h') σs ({{ _ Πs,
@@ -1017,7 +1006,7 @@ Admitted.
     have Πs : option (io_type * rec_ev) → m_state (spec_trans (io_type * rec_ev) Z) → iProp Σ.
     (* exact (@sim_tgt_constP Σ rec_event dimsumGS0 m_t (spec_trans rec_event Z) γσ_t γσ_s γκ).  *)
     admit.
-    iAssert (□ switch_link' Tgt Π (spec_trans (io_event rec_ev) Z) Πs ({{ σr POST,
+    iAssert (□ switch_link_fixed Tgt Π (spec_trans (io_event rec_ev) Z) Πs ({{ σr POST,
             ∃ (vs : list val) (h' : heap_state) (σs : spec rec_event Z void * Z), True ∗
               POST (ERCall "getc" vs h') σs ({{ _ Πs,
                 switch_link Tgt Πs ({{ _ POST0,
@@ -1043,7 +1032,7 @@ Admitted.
 
     iAssert ("getc" ↪ None)%I as "H".   -∗
     Q (Spec.forever getc_spec_priv, 0) -∗ (* NOTE: Q needs to hold for the initial state of the module? - Am I okay with giving up Q? *)
-    □ switch_link' Tgt Πr (spec_trans _ Z) Πs ({{ σr POST,
+    □ switch_link_fixed Tgt Πr (spec_trans _ Z) Πs ({{ σr POST,
       ∃ vs h' σs,
       Q σs ∗
       POST (ERCall "getc" vs h') σs ({{ _ Πs,

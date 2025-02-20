@@ -50,15 +50,16 @@ Definition switch `{!dimsumGS Σ} {S EV} (Π : option EV → S → iProp Σ)
   (∀ κ σ, K κ σ (λ ts' EV2 m' PΠ', ⥥{ts', m'}PΠ') -∗  Π κ σ).
   (* (∀ κ σ, K κ σ (λ ts' EV2 m' PΠ', ∀ σ' Π', PΠ' σ' Π' -∗ σ' ≈{ ts', m' }≈> Π') -∗  Π κ σ). *)
 
-(* Lemma switch_mono `{!dimsumGS Σ} {S EV} (Π : option EV → S → iProp Σ) K1 K2 : *)
-(*   switch Π K1 -∗ *)
-(*   (∀ κ σ P1 P2, K2 κ σ P1 -∗ (∀ ts m Q1 Q2, P1 ts m Q1 -∗ (∀ σ Π, Q2 σ Π -∗ Q1 σ Π) -∗ P2 ts m Q2) -∗ K1 κ σ P2) -∗ *)
-(*   switch Π K2. *)
-(* Proof. *)
-(*   iIntros "Hs Hmono" (??) "HK2". iApply "Hs". *)
-(*   iApply ("Hmono" with "HK2"). *)
-(*   iIntros (????) "HQ Hmono". iIntros (??) "?". iApply "HQ". by iApply "Hmono". *)
-(* Qed. *)
+Lemma switch_mono `{!dimsumGS Σ} {S' EV} (Π : option EV → S' → iProp Σ) K1 K2 :
+  switch Π K1 -∗
+  (∀ κ σ P1 P2, K2 κ σ P1 -∗
+                (∀ ts m Q1 Q2, P1 ts EV m Q1 -∗ (∀ σ Π, Q2 σ Π -∗ Q1 σ Π) -∗ P2 ts EV m Q2) -∗ K1 κ σ P2) -∗
+  switch Π K2.
+Proof.
+  iIntros "Hs Hmono" (??) "HK2". iApply "Hs".
+  iApply ("Hmono" with "HK2").
+  iIntros (????) "HQ Hmono". iIntros (??) "?". iApply "HQ". by iApply "Hmono".
+Qed.
 
 Definition switch_id `{!dimsumGS Σ} {EV} (ts : tgt_src) (m : mod_trans EV)
   (Π : option EV → m.(m_state) → iProp Σ)
@@ -104,6 +105,19 @@ Definition switch_external `{!dimsumGS Σ} {S EV} (Π : option EV → S → iPro
   POST Src _ _ ({{ σ_s2' Π',
     ⌜σ_s2' = σ_s2⌝ ∗ K2 σ_s2 Π'}})}})}})}})}})%I.
 
+(* Variant of switch_external with which we can fix the module we switch to *)
+Definition switch_external_fixed `{!dimsumGS Σ} {S EV} (Π : option EV → S → iProp Σ)
+  (m : mod_trans EV) (Π' : option EV → m_state m → iProp Σ)
+  (K : _) : iProp Σ :=
+  switch Π ({{ κ σ POST,
+    K κ σ ({{ σ2 K2,
+  POST Src _ m ({{ σ_s Π_s,
+    ⌜σ_s = σ2⌝ ∗ ⌜Π_s = Π'⌝ ∗
+  switch Π_s ({{ κ' σ_s2 POST,
+    ⌜κ' = κ⌝ ∗
+  POST Src _ _ ({{ σ_s2' Π',
+    ⌜σ_s2' = σ_s2⌝ ∗ K2 σ_s2 Π'}})}})}})}})}})%I.
+
 (* Switching to a linked module *)
 Definition switch_link `{!dimsumGS Σ} {S EV} (ts : tgt_src) (Π : option (io_event EV) → S → iProp Σ)
   (K : _) : iProp Σ :=
@@ -116,6 +130,16 @@ Definition switch_link `{!dimsumGS Σ} {S EV} (ts : tgt_src) (Π : option (io_ev
   POST ts _ m2 ({{ σr Πr,
     ⌜σr = σ⌝ ∗ ⌜e' = e⌝ ∗ K2 σ Πr}})}})}})}})}})%I.
 
+Definition switch_link_fixed `{!dimsumGS Σ} {S EV} (ts : tgt_src) (Π : option (io_event EV) → S → iProp Σ)
+  (m : mod_trans (io_event EV)) (Π' : option (io_event EV) → m_state m → iProp Σ) (K : _) : iProp Σ :=
+  switch Π ({{ κ σ0 POST,
+    K σ0 ({{ e σ2 K2, ⌜κ = Some (Outgoing, e)⌝ ∗
+  POST ts _ m ({{ σi Πi,
+    ⌜σi = σ2⌝ ∗ ⌜Πi = Π'⌝ ∗
+  switch Πi ({{ κ' σ POST,
+    ∃ e', ⌜κ' = Some (Incoming, e')⌝ ∗
+  POST ts _ m ({{ σr Πr,
+    ⌜σr = σ⌝ ∗ ⌜e' = e⌝ ∗ K2 σ Πr}})}})}})}})}})%I.
 
 (** * [sim_gen_expr] *)
 Section sim_gen_expr.
