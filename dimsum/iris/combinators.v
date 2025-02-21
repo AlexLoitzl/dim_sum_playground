@@ -674,6 +674,49 @@ Section link.
     iApply ("Hsim" with "[$] [$] [$]").
   Qed.
 
+  Definition tgt_link_left_constP R {m1 m2 : mod_trans (io_event EV)}
+    (Π : option (io_event EV) → link_case EV * S * m_state m1 * m_state m2 → iProp Σ)
+    (γ_s γ_σ2 γ_oe : gname) : option (io_event EV) → m_state m1 → iProp Σ :=
+    λ κ σ1',
+      (∀ s σ2 oe,
+         γ_s ⤳ s -∗ γ_σ2 ⤳ σ2 -∗ γ_oe ⤳ oe -∗
+         match oe with
+         | Some e => tgt_link_recv_leftP R Π s σ2 e κ σ1'
+         | None => tgt_link_run_leftP R Π s σ2 κ σ1'
+         end)%I.
+
+  Lemma sim_tgt_link_left_const_recv γ_s γ_σ2 γ_oe R m1 m2 s σ1 σ2 e Π :
+    γ_s ⤳@{S} - -∗
+    γ_σ2 ⤳@{m_state m2} - -∗
+    γ_oe ⤳@{option EV}- -∗
+    (γ_s ⤳ s -∗ γ_σ2 ⤳ σ2 -∗ γ_oe ⤳ Some e -∗ σ1 ≈{m1}≈>ₜ tgt_link_left_constP R Π γ_s γ_σ2 γ_oe) -∗
+    (MLFRecv SPLeft e, s, σ1, σ2) ≈{link_trans R m1 m2}≈>ₜ Π.
+  Proof.
+    iIntros "Hγ_s Hγ_σ2 Hγ_oe Hsim".
+    iMod (mstate_var_split γ_s with "Hγ_s") as "[??]".
+    iMod (mstate_var_split γ_σ2 with "Hγ_σ2") as "[??]".
+    iMod (mstate_var_split γ_oe with "Hγ_oe") as "[??]".
+    iApply sim_tgt_link_recv_left. iSpecialize ("Hsim" with "[$] [$] [$]").
+    iApply (sim_gen_wand with "Hsim"). iIntros (??) "Hsim".
+    iApply ("Hsim" with "[$] [$] [$]").
+  Qed.
+
+  Lemma sim_tgt_link_left_const_run γ_s γ_σ2 γ_oe R m1 m2 s σ1 σ2 Π :
+    γ_s ⤳@{S} - -∗
+    γ_σ2 ⤳@{m_state m2} - -∗
+    γ_oe ⤳@{option EV}- -∗
+    (γ_s ⤳ s -∗ γ_σ2 ⤳ σ2 -∗ γ_oe ⤳ (@None EV) -∗ σ1 ≈{m1}≈>ₜ tgt_link_left_constP R Π γ_s γ_σ2 γ_oe) -∗
+    (MLFRun (Some SPLeft), s, σ1, σ2) ≈{link_trans R m1 m2}≈>ₜ Π.
+  Proof.
+    iIntros "Hγ_s Hγ_σ2 Hγ_oe Hsim".
+    iMod (mstate_var_split γ_s with "Hγ_s") as "[??]".
+    iMod (mstate_var_split γ_σ2 with "Hγ_σ2") as "[??]".
+    iMod (mstate_var_split γ_oe with "Hγ_oe") as "[??]".
+    iApply sim_tgt_link_run_left. iSpecialize ("Hsim" with "[$] [$] [$]").
+    iApply (sim_gen_wand with "Hsim"). iIntros (??) "Hsim".
+    iApply ("Hsim" with "[$] [$] [$]").
+  Qed.
+
   Definition tgt_link_run_rightP R {m1 m2 : mod_trans (io_event EV)}
     (Π : option (io_event EV) → link_case EV * S * m_state m1 * m_state m2 → iProp Σ)
     (s : S) (σ1 : m_state m1)
