@@ -444,7 +444,7 @@ Section memmove.
     iIntros (??????). destruct!/=.
     iApply (sim_tgt_link_left_recv with "[-]"). iApply "Hσ'".
     iApply (sim_tgt_rec_Waiting with "[$]").
-    iSplit. { iIntros. iModIntro. iIntros. simplify_eq. }
+    iSplit. { iIntros. iModIntro. iIntros (?). simplify_eq. }
     iIntros (????) "Hσ' !>". iIntros (?). simplify_eq/=.
     iApply (sim_tgt_link_left with "[-]"). iApply ("Hσ'" with "[$] [$]").
     iApply (sim_gen_expr_wand1 with "[HΦ]").
@@ -563,7 +563,7 @@ Section memmove.
     iApply (sim_tgt_link_left_recv with "[-]").
     iApply "Htgt".
     iApply (sim_tgt_rec_Waiting with "[$]").
-    iSplit; [iIntros; iModIntro; by iIntros|].
+    iSplit; [by iIntros (??????) "? !> %"|].
     iIntros (????) "Htgt !>". iIntros (?). simplify_eq.
     iApply (sim_tgt_link_left with "[-]").
     iApply ("Htgt" with "[$] [$]").
@@ -589,7 +589,7 @@ Section memmove.
     iApply (sim_tgt_link_left_recv with "[-]").
     iApply "Htgt".
     iApply (sim_tgt_rec_Waiting with "[$]").
-    iSplit; [iIntros; iModIntro; by iIntros|].
+    iSplit; [by iIntros (??????) "? !> %"|].
     iIntros (????) "Htgt !>". iIntros (?). simplify_eq.
     iApply (sim_tgt_link_left with "[-]").
     iApply ("Htgt" with "[$] [$]").
