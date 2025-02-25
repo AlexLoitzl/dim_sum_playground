@@ -60,10 +60,11 @@ Definition switch `{!dimsumGS Σ} {S EV} (Π : option EV → S → iProp Σ)
 (*   (at level 70, K at level 200, format *)
 (* "κ  σ  '<-switch'  Π '//'   pre  '∗' '//' POST K") : bi_scope. *)
 
+(* https://coq.inria.fr/doc/V8.18.0/refman/user-extensions/syntax-extensions.html#notations-with-expressions-used-both-as-binder-and-term *)
 Notation "κ σ '<-switch' Π pre1 '∗' pre2 '∗' σ' Π' <-POST ts EV m post"  :=
   (switch Π ({{κ σ POST, pre1 ∗ pre2 ∗ POST ts EV m ({{σ' Π', post}})}}))%I
-  (at level 70, post at level 200, format
-"κ  σ  '<-switch'  Π '//'   pre1  '∗'  pre2  '∗'  '//' σ'  Π' <-POST  ts  EV  m '//'   post") : bi_scope.
+  (at level 70, format
+"κ  σ  '<-switch'  Π '//'   pre1  '∗'  pre2  '∗'  '//' σ'  Π'  <-POST  ts  EV  m '//'   post") : bi_scope.
 
 Lemma switch_mono `{!dimsumGS Σ} {S' EV} (Π : option EV → S' → iProp Σ) K1 K2 :
   switch Π K1 -∗
