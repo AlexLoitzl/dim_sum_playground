@@ -393,25 +393,26 @@ Section memmove.
     ⌜σ.1 ≡ main_spec_body⌝ -∗
     rec_fn_spec_hoare Tgt Π "main" (λ es POST,
       ⌜es = []⌝ ∗
-      □ switch_external Π (λ κ σ POST,
+      □ switch_external Π ({{κ σ POST,
           ∃ vs h σ_s, ⌜κ = Some (Outgoing, ERCall "print" vs h)⌝ ∗ γσ_s ⤳ σ_s ∗
-        POST (spec_trans _ unit) σ_s (λ _ Π',
+        POST (spec_trans _ unit) σ_s ({{_ Π',
         (* TODO: Some nice abstraction for the following? *)
           ∃ e,
-        switch Π' (λ κ'' σ_s3 POST,
+        switch Π' ({{κ'' σ_s3 POST,
           ⌜κ'' = Some (Incoming, e)⌝ ∗
-        POST Src _ _ (λ σ_s3' Π_s'',
+        POST Src _ _  ({{σ_s3' Π_s'',
           ⌜σ_s3' = σ_s3⌝ ∗
-        switch Π_s'' (λ κ'' σ'' POST,
+        switch Π_s'' ({{κ'' σ'' POST,
           ∃ v h', ⌜e = ERReturn v h'⌝ ∗ ⌜κ'' = None⌝ ∗
-        POST Tgt _ _ (λ σ' Π',
+        POST Tgt _ _ ({{σ' Π',
           ⌜σ' = σ⌝ ∗ γσ_s ⤳ σ'' ∗
-        switch Π' (λ κ σ POST,
+        switch Π' ({{κ σ POST,
           ∃ e', ⌜κ = Some (Incoming, e')⌝ ∗
-        POST Tgt _ _ (λ σ' Π',
-          ⌜σ' = σ⌝ ∗ ⌜e = e'⌝ ∗ ⌜Π = Π'⌝)))))))) ∗
+        POST Tgt _ _ ({{ σ' Π',
+          ⌜σ' = σ⌝ ∗ ⌜e = e'⌝ ∗ ⌜Π = Π'⌝}})}})}})}})}})}})}})}}) ∗
       POST (λ vr, ∃ σ_s, γσ_s ⤳ σ_s ∗ (∀ Π, σ_s ≈{ spec_trans rec_event () }≈>ₛ Π) ∗ ⌜vr = 0⌝)).
   Proof.
+    rewrite /switch_external. simpl.
     set (X := (switch_external _) _).
     iIntros "#?#?#?#?#? Hσs". iIntros (??). iDestruct 1 as (?) "[#Hs Hend]".
     iMod (mstate_var_alloc unit) as (γ) "?".
