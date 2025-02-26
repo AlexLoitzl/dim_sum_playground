@@ -75,7 +75,7 @@ Section sim_getc.
   (*   TGT Spec.bind getc_spec_priv k @ Π {{ Φ }}. *)
   (* Proof. Admitted. *)
 
-  Lemma sim_getc `{!specGS} Π :
+  Lemma sim_getc Π :
     "getc" ↪ None -∗
     rec_fn_spec_hoare Tgt Π "getc" ({{es POST, ⌜es = []⌝ ∗ POST ({{ v, ⌜v = 0⌝}}) }}).
   Proof. Admitted.
@@ -100,9 +100,10 @@ Section echo_getc.
     '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
     TAssume (f = "echo");;
     TAssume (vs = []);;
-    Spec.forever echo_getc_spec_body.
+    echo_getc_spec_body;;
+    TUb.
 
-
+  (* NOTE: I am creating here my own ghost variables for the spec state of the source module *)
   Lemma sim_echo_full Π_t γs (σ_s : m_state (spec_trans _ Z)) :
     "echo" ↪ Some echo_rec -∗
     "getc" ↪ None -∗
@@ -134,17 +135,20 @@ Section echo_getc.
           ⌜κ4 = None⌝ ∗
         POST5 Tgt _ _ ({{σ_t4 Π_t2,
           ⌜Π_t2 = Π_t⌝ ∗ ⌜σ_t4 = σ_t3⌝
-      }})}})}})}})}})}})}})}})}})}})
+      }})}})}})}})}})}})}})}})}})}}) ∗
+      POST_e (λ v, ⌜v = 0⌝)
     }}).
   Proof.
-    iIntros "#?#?#? Hγs %%%% [-> #Hs]" => /=.
+    iIntros "#?#?#? Hγs %%%% [-> [#Hs Hend]]" => /=.
     set (X := switch _ _).
 
     iApply (sim_tgt_rec_Call_internal with "[$]"). done. iModIntro.
     iApply (sim_tgt_rec_AllocA); [done|].
-    iIntros "% _ !>" => /=.
+    iIntros "% Hoof !>" => /=.
     iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
-    iApply (sim_getc with "[$]"). iSplit!.
+
+    iApply (sim_getc with "[$]").
+    iSplit!.
     iIntros (? ->).
 
     iApply sim_tgt_rec_LetE. iModIntro => /=.
@@ -189,7 +193,12 @@ Section echo_getc.
     iApply "Hs'" => /=. iSplit!.
     iIntros (??) "[% %]". subst.
     iApply "HΠ" => /=. iSplit!. iFrame.
-  Admitted.
+    iApply sim_tgt_rec_LetE. iModIntro => /=.
+    iApply sim_gen_expr_stop. iSplit!.
+    iSplitL "Hoof".
+    { destruct ls; [by iApply big_sepL2_nil |done]. }
+    by iApply "Hend".
+  Qed.
 
   Let m_t := rec_link_trans {["echo"]} {["getc"]} rec_trans (spec_trans rec_event Z).
 
