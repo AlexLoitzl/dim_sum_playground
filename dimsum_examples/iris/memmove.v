@@ -412,7 +412,7 @@ Section memmove.
           ⌜σ' = σ⌝ ∗ ⌜e = e'⌝ ∗ ⌜Π = Π'⌝}})}})}})}})}})}})}})}}) ∗
       POST (λ vr, ∃ σ_s, γσ_s ⤳ σ_s ∗ (∀ Π, σ_s ≈{ spec_trans rec_event () }≈>ₛ Π) ∗ ⌜vr = 0⌝)).
   Proof.
-    rewrite /switch_external. simpl.
+    (* rewrite /switch_external. simpl. *)
     set (X := (switch_external _) _).
     iIntros "#?#?#?#?#? Hσs". iIntros (??). iDestruct 1 as (?) "[#Hs Hend]".
     iMod (mstate_var_alloc unit) as (γ) "?".
