@@ -162,51 +162,52 @@ Qed.
       ⌜σ_l' = σ_l⌝ ∗
     switch Π_l' ({{κ σ_l'' POST,
       ∃ e, ⌜κ = Some (Incoming, e)⌝ ∗
-    POST Tgt _ _ ({{σ_l''' Π_t',
+    POST Tgt _ _ ({{σ_l''' Π_l',
       ⌜σ_l'' = σ_l'''⌝ ∗ ⌜e = ERReturn v' h'⌝ ∗ ⌜Π_l' = Π_l⌝
       }})
     }})}})}})}})}})}})}}) -∗
     rec_fn_spec_hoare Tgt Π_l "getc" (getc_fn_spec v).
-  Proof. Admitted.
-  (*   iIntros "#? ? Hs". iIntros (es Φ) "[-> HΦ]". *)
-  (*   iApply (sim_tgt_rec_Call_external with "[$]"). iIntros (???) "#??? !>". *)
-  (*   iIntros (??) "[% [% HΠ]]". subst. iApply "Hs". iSplit!. iIntros (??) "[-> Hs]". *)
+  Proof.
+    iIntros "#? ? Hs". iIntros (es Φ) "[-> HΦ]".
+    iApply (sim_tgt_rec_Call_external with "[$]"). iIntros (???) "#??? !>".
+    iIntros (??) "[% [% HΠ]]". subst. iApply "Hs". iSplit!. iIntros (??) "[-> Hs]".
 
-  (*   iMod (mstate_var_alloc Z) as (γ) "?". *)
-  (*   iMod (mstate_var_split γ v with "[$]") as "[Hγ Hγ']". *)
-  (*   pose (Hspec := SpecGS γ). *)
+    iMod (mstate_var_alloc Z) as (γ) "?".
+    iMod (mstate_var_split γ v with "[$]") as "[Hγ Hγ']".
+    pose (Hspec := SpecGS γ).
 
-  (*   iApply (sim_gen_expr_intro _ tt with "[Hγ]"); simpl; [done..|]. *)
-  (*   unfold getc_spec. *)
-  (*   rewrite /TReceive bind_bind. *)
-  (*   iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>". *)
-  (*   rewrite bind_bind. setoid_rewrite bind_ret_l. *)
-  (*   iApply (sim_gen_TVis with "[-]"). *)
-  (*   iIntros (v') "Hγ !>". *)
-  (*   iIntros (??) "[% [% _]]". *)
-  (*   subst. *)
-  (*   iApply "Hs" => /=. iSplit!. iIntros (??) => /=. *)
-  (*   iDestruct 1 as (???) "Hs". subst. *)
+    iApply (sim_gen_expr_intro _ tt with "[Hγ]"); simpl; [done..|].
+    unfold getc_spec.
+    rewrite /TReceive bind_bind.
+    iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>".
+    rewrite bind_bind. setoid_rewrite bind_ret_l.
+    iApply (sim_gen_TVis with "[-]").
+    iIntros (v') "Hγ !>".
+    iIntros (??) "[% [% _]]".
+    subst.
+    iApply "Hs" => /=. iSplit!. iIntros (??) => /=.
+    iDestruct 1 as (??) "Hs". simplify_eq.
 
-  (*   iApply sim_tgt_rec_Waiting_all_raw. iIntros (?) "!>". *)
-  (*   iApply "Hs" => /=. iSplit!. *)
-  (*   iIntros (??) "[% [% [% Hs]]]" => /=. simplify_eq. *)
+    iApply (sim_gen_expr_intro _ tt with "[Hγ]"); simpl; [done..|].
+    iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
+    iApply (sim_gen_TGet with "[-]").
+    iSplit. 1: done.
+    iIntros "!>".
+    iApply (sim_gen_TPut with "[Hγ']"). 1: done.
+    iIntros "Hγ". iIntros "!>".
+    iApply (sim_gen_TVis with "[-]"). iIntros (v'') "Hγ'".
+    iDestruct (mstate_var_agree with "Hγ Hγ'") as "<-".
+    iIntros "!> /=".
+    iIntros (??) "[% [% _]]" => /=. simplify_eq.
+    iApply "Hs" => /=. iSplit!. iIntros (??) "[% Hs]". subst.
 
-  (*   iApply (sim_gen_expr_intro _ tt with "[Hγ]"); simpl; [done..|]. *)
-  (*   iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>". *)
-  (*   iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>". *)
-  (*   iApply (sim_gen_TGet with "[-]"). *)
-  (*   iSplit. 1: done. *)
-  (*   iIntros "!>". *)
-  (*   iApply (sim_gen_TPut with "[Hγ']"). 1: done. *)
-  (*   iIntros "Hγ". iIntros "!>". *)
-  (*   iApply (sim_gen_TVis with "[-]"). iIntros (v'') "Hγ'". *)
-  (*   iDestruct (mstate_var_agree with "Hγ Hγ'") as "<-". *)
-  (*   iIntros "!> /=". *)
-  (*   iIntros (??) "[% [% _]]" => /=. simplify_eq. *)
-  (*   iApply "Hs" => /=. iSplit!. iIntros (??) "[% %]". subst. *)
-  (*   iApply "HΠ" => /=. iSplit!. iFrame. by iApply "HΦ". *)
-  (* Qed. *)
+    iApply sim_tgt_rec_Waiting_all_raw. iIntros (?) "!>".
+    iApply "Hs" => /=. iSplit!.
+    iIntros (??) "[% [% %]]" => /=. subst.
+
+    iApply "HΠ" => /=. iSplit!. iFrame. by iApply "HΦ".
+  Qed.
 
 End sim_getc.
 
