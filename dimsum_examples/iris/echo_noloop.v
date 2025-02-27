@@ -261,6 +261,7 @@ Section echo_getc.
     "getc" ↪ None -∗
     "putc" ↪ None -∗
     γs ⤳ σ_s -∗
+    rec_fn_spec_hoare Tgt Π_t "getc" (getc_fn_spec 0) -∗
     ⌜σ_s.1 ≡ echo_getc_spec_body⌝ -∗
     ⌜σ_s.2 = 0⌝ -∗
     rec_fn_spec_hoare Tgt Π_t "echo" ({{ es POST_e,
@@ -291,19 +292,10 @@ Section echo_getc.
       POST_e (λ v, ⌜v = 0⌝)
     }}).
   Proof.
-    iIntros "#?#?#? Hγs %%%% [-> [Hs Hend]]" => /=.
+    iIntros "#?#?#? Hγs ?%%%% [-> [Hs Hend]]" => /=.
 
-    iApply (sim_tgt_rec_Call_internal with "[$]"); [done |]. iModIntro.
-    iApply (sim_tgt_rec_AllocA); [done|].
-    iIntros "% Hoof !>" => /=.
-    iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
-
-    iApply (sim_getc with "[$]").
-    iSplit!.
-    iIntros (? ->).
-
-    iApply sim_tgt_rec_LetE. iModIntro => /=.
-    iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
+    iApply (sim_echo with "[//] [$]"). iSplit!.
+    iIntros (??). iIntros "[-> HΦ']".
 
     iApply (sim_tgt_rec_Call_external with "[$]").
     iIntros (???) "#? ? ? !> %% [% [% HΠ]]" => /=. subst.
@@ -343,11 +335,7 @@ Section echo_getc.
     iApply sim_tgt_rec_Waiting_all_raw. iIntros (?) "!>".
     iApply "Hs". iSplit!. iIntros (??) "[% [% %]]" => /=. subst.
     iApply "HΠ" => /=. iSplit!. iFrame.
-    iApply sim_tgt_rec_LetE. iModIntro => /=.
-    iApply sim_gen_expr_stop. iSplit!.
-    iSplitL "Hoof".
-    { destruct ls; [by iApply big_sepL2_nil |done]. }
-    by iApply "Hend".
+    by iApply "HΦ'".
   Qed.
 
   (* NOTE: I am creating here my own ghost variables for the spec state of the source module *)
@@ -517,11 +505,6 @@ Section echo_getc.
 
     (* Target's spec module (Right linking case - getc) *)
     iMod (mstate_var_alloc (m_state (spec_trans rec_event Z))) as (γt_r) "Hγt_r".
-
-    (* Target's right spec state*)
-    iMod (mstate_var_alloc Z) as (γt_r_s) "Hγt_r_s".
-    iMod (mstate_var_split γt_r_s 0 with "[$]") as "[Hγt_r_s Hγt_r_s']".
-    pose (HTgtSpec := SpecGS γt_r_s).
 
     (* TODO: "queue" for linking?  *)
     iMod (mstate_var_alloc (list seq_product_case)) as (γt_q) "Hγt_q".
