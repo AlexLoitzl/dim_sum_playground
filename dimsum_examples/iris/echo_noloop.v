@@ -142,6 +142,9 @@ Section sim_getc.
     iSplit!.
 Qed.
 
+  Definition getc_fn_spec v (es : list expr) (POST : (val → iProp Σ) → iProp Σ) : iProp Σ :=
+    ⌜es = []⌝ ∗ POST (λ ret, ⌜ret = v⌝)%I.
+
   Lemma sim_getc fns Π v:
     rec_fn_auth fns -∗
     "getc" ↪ None -∗
@@ -164,7 +167,7 @@ Qed.
       ⌜σt' = σt⌝ ∗ ⌜Πt' = Π⌝
       }})
     }})}})}})}})}})}})}}) -∗
-    rec_fn_spec_hoare Tgt Π "getc" ({{es POST, ⌜es = []⌝ ∗ POST ({{ ret, ⌜ret = v⌝}}) }}).
+    rec_fn_spec_hoare Tgt Π "getc" (getc_fn_spec v).
   Proof.
     iIntros "#? ? Hs". iIntros (es Φ) "[-> HΦ]".
     iApply (sim_tgt_rec_Call_external with "[$]"). iIntros (???) "#??? !>".
@@ -228,6 +231,30 @@ Section echo_getc.
     TAssume (f = "echo");;
     TAssume (vs = []);;
     echo_getc_spec_body.
+
+  Lemma sim_echo Π :
+    "echo" ↪ Some echo_rec -∗
+    rec_fn_spec_hoare Tgt Π "getc" (getc_fn_spec 0) -∗
+    rec_fn_spec_hoare Tgt Π "echo" (λ es POST, ⌜es = []⌝ ∗
+      rec_fn_spec_hoare Tgt Π "putc" (λ es POST1, ⌜es = [Val 0]⌝ ∗ POST1 (λ _, POST (λ v, ⌜v = 0⌝)))).
+  Proof.
+    iIntros "#? Hf".
+    iIntros (es Φ) => /=. iDestruct 1 as (->) "HΦ".
+    iApply sim_tgt_rec_Call_internal. 2: { done. } { done. }
+    iModIntro => /=.
+    iApply sim_tgt_rec_AllocA; [by econs|] => /=. iIntros (?) "Hoof !>".
+    iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
+    iApply "Hf". rewrite /getc_fn_spec. iSplit!. iIntros (?->).
+    iApply sim_tgt_rec_LetE. iIntros "!>" => /=.
+    iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
+    iApply "HΦ" => /=. iSplit!.
+    iIntros "% HΦ".
+    iApply sim_tgt_rec_LetE. iIntros "!>" => /=.
+    iApply sim_gen_expr_stop. iSplit!.
+    iSplitL "Hoof".
+    { destruct ls; [by iApply big_sepL2_nil |done]. }
+    by iApply "HΦ".
+  Qed.
 
   Lemma sim_echo_full Π_t γs (σ_s : m_state (spec_trans _ Z)) :
     "echo" ↪ Some echo_rec -∗
