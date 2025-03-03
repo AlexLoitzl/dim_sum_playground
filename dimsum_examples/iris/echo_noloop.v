@@ -38,7 +38,7 @@ Definition TCallRet {S} (f : string) (vs : list val) (h : heap_state) :
 Section sim_getc.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
 
-  Definition getc_spec: spec rec_event Z void :=
+  Definition getc_spec : spec rec_event Z void :=
     Spec.forever(
     (* Incoming call of getc *)
     '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
@@ -50,6 +50,16 @@ Section sim_getc.
     (* Return old position *)
     TVis (Outgoing, ERReturn (ValNum v) h)).
 
+  Definition getc_spec_body : spec rec_event Z unit :=
+    '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
+    TAssume (f = "getc");;
+    TAssume (vs = []);;
+    (* There is a current position of the buffer *)
+    v ← TGet;
+    TPut (v + 1);;
+    (* Return old position *)
+    TVis (Outgoing, ERReturn (ValNum v) h).
+
   Lemma mstate_var_agree {S : TypeState} `{!mstateG Σ} γ (σ1 σ2 : S) :
     γ ⤳ σ1 -∗ γ ⤳ σ2 -∗ ⌜σ1 = σ2⌝.
   Proof.
@@ -57,17 +67,17 @@ Section sim_getc.
     inv H0. by dimsum.core.axioms.simplify_K.
   Qed.
 
-  (* TODO: I am not using this Lemma anywhere *)
+  (* TODO: I am not using this Lemma anywhere : Kinda useless... Here I need some induction probs *)
   Lemma sim_getc_spec `{!specGS} Π Φ :
     switch Π ({{ κ σ1 POST,
       ∃ f es h, ⌜κ = Some (Incoming, ERCall f es h)⌝ ∗
     POST Tgt _ _ ({{ σ' Π',
       ∃ v, ⌜f = "getc"⌝ ∗ ⌜es = []⌝ ∗ spec_state v ∗ ⌜σ' = σ1⌝ ∗
-      ⌜Π' = Π⌝ ∗ (* I think this need not be true? - Check what it looks like - what's the difference between this and just requiring Π for the next switch *)
-    switch Π ({{ κ σ POST,
+    switch Π' ({{ κ σ POST,
       ⌜κ = Some (Outgoing, ERReturn (ValNum v) h)⌝ ∗ spec_state (v + 1)
-    (* POST Tgt _ _ ({{ σ' Π', *)
-    (*   ⌜σ' = σ⌝ ∗ ⌜Π' = Π⌝ ∗ spec_state (v + 1) }})*)
+    (*   ∗ *)
+    (* POST Tgt _ _ ({{ σ' Π'', *)
+    (*   ⌜Π'' = Π'⌝ ∗ ⌜σ' = σ⌝ }}) *)
     }})}})}}) -∗
     TGT getc_spec @ Π {{ Φ }}.
   Proof.
@@ -80,7 +90,7 @@ Section sim_getc.
     iIntros (??) "[% [% HΠ]]".
     subst.
     iApply "Hs" => /=. iSplit!. iIntros (??) => /=.
-    iDestruct 1 as (???) "[Hs [% [% HC]]]". subst.
+    iDestruct 1 as (???) "[Hs [% HC]]". subst.
     iApply (sim_gen_expr_intro _ tt with "[Hs']"); simpl; [done..|]. rewrite bind_bind.
     iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>". rewrite bind_bind.
     iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>". rewrite bind_bind.
@@ -93,8 +103,7 @@ Section sim_getc.
     iDestruct (mstate_var_agree with "Hs Hs'") as "<-".
     iIntros "!> /=".
     iIntros (??) "[% [% HΠ']]" => /=. simplify_eq.
-    iApply "HC". simpl.
-    iSplit!.
+    iApply "HC". iSplit!.
 Qed.
 
   Definition getc_fn_spec (P : Z → iProp Σ) (es : list expr) (POST : (val → iProp Σ) → iProp Σ) : iProp Σ :=
@@ -132,6 +141,7 @@ Qed.
     pose (Hspec := SpecGS γ).
 
     iApply (sim_gen_expr_intro _ tt with "[Hγ]"); simpl; [done..|].
+
     rewrite {2}/getc_spec.
     rewrite unfold_forever bind_bind /TReceive bind_bind -/getc_spec.
     iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>".
