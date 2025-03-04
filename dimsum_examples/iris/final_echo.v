@@ -292,7 +292,8 @@ Section echo_getc.
     TAssume (f = "echo");;
     TAssume (vs = []);;
     echo_getc_spec_body;;
-    TVis (Outgoing, ERReturn (ValNum 0) h);;
+    h' ← TExist _;
+    TVis (Outgoing, ERReturn (ValNum 0) h');;
     TUb.
 
   Definition echo_left_linkP γ_oe γ_q γ_r : Z → iProp Σ :=
@@ -646,25 +647,23 @@ Section echo_getc.
       
       iMod (mstate_var_split γs_s σs.2 with "[$]") as "[Hγs_s Hγs_s']".
       iApply (sim_gen_expr_intro _ tt with "[Hγs_s]"); simpl; [done..|].
+      iApply (sim_src_TExist with "[-]").
       iApply (sim_gen_TVis with "[-]").
       iIntros (?) "Hγs_s %% [% [% ?]] /=".
 
       iApply (sim_src_constP_elim with "[Hγt] [Hγκ] [-]"); [done..|].
-      iIntros "Hγt Hγκ". iSplit!. admit.
+      iIntros "Hγt Hγκ". iSplit!.
 
       iApply (sim_tgt_constP_intro γt γs γκ with "[Hγt] [Hγs] [Hγκ] [-]"); [done..|].
       iIntros "Hγs".
 
       iApply (sim_tgt_link_None with "[-]"). iIntros "!>" (??????).
-      (* NOTE: Case splitting on the linking case, which can only be a call because of the empty list  *)
-      (* TODO: What is the empty list here, is it previous events? *)
       destruct!/=. case_match; destruct!/=.
 
-      (* NOTE: Changing to source module *)
       iApply (sim_tgt_constP_elim γt γs γκ with "[Hγs] [-]"); [done..|].
       iIntros "Hγs Hγt Hγκ".
       iApply (sim_gen_expr_intro _ tt with "[Hγs_s]"); simpl; [done..|].
       iApply sim_src_TUb_end.
-    Admitted.
+    Qed.
 
 End echo_getc.
