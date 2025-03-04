@@ -296,7 +296,7 @@ Section echo_getc.
     TUb.
 
   Definition echo_left_linkP γ_oe γ_q γ_r : Z → iProp Σ :=
-    (λ v, ∃ (q : list seq_product_case), γ_oe ⤳ @None rec_ev ∗ γ_q ⤳ q ∗ γ_r ⤳ (getc_spec, v))%I.
+    (λ v, γ_oe ⤳ @None rec_ev ∗ γ_q ⤳ [None : seq_product_case] ∗ γ_r ⤳ (getc_spec, v))%I.
 
   Lemma sim_echo Π (P : Z → iProp Σ) :
     "echo" ↪ Some echo_rec -∗
@@ -304,7 +304,7 @@ Section echo_getc.
     rec_fn_spec_hoare Tgt Π "echo" (λ es POST, ∃ v, ⌜es = []⌝ ∗ P v ∗
       rec_fn_spec_hoare Tgt Π "putc" (λ es POST1, P (v + 1) ∗ ⌜es = [Val v]⌝ ∗ POST1 (λ _, P (v + 1) ∗
         rec_fn_spec_hoare Tgt Π "putc" (λ es POST2, P (v + 2) ∗ ⌜es = [Val (v + 1)%Z]⌝ ∗ POST2 (λ _, P (v + 2) ∗
-        POST (λ ret, P (v + 2) ∗ ⌜ret = 0⌝)))))).
+          POST (λ ret, P (v + 2) ∗ ⌜ret = 0⌝)))))).
   Proof.
     iIntros "#? #Hgetc".
     iIntros (es Φ) => /=. iDestruct 1 as (v ->) "[HP HΦ]".
@@ -337,14 +337,13 @@ Section echo_getc.
     iApply "HΦ"; iSplit!.
   Qed.
 
-  Lemma sim_echo_full Π_t γs (σ_s : m_state (spec_trans _ Z)) γ_oe γ_q γ_r
-    (q : list seq_product_case) k :
+  Lemma sim_echo_full Π_t γs (σ_s : m_state (spec_trans _ Z)) γ_oe γ_q γ_r k :
     "echo" ↪ Some echo_rec -∗
     "getc" ↪ None -∗
     "putc" ↪ None -∗
     γs ⤳ σ_s -∗
     γ_oe ⤳ @None rec_ev -∗
-    γ_q ⤳ q -∗
+    γ_q ⤳ [(None : seq_product_case)] -∗
     γ_r ⤳ (getc_spec, 0) -∗
     □ rec_fn_spec_hoare Tgt Π_t "getc" (getc_fn_spec (echo_left_linkP γ_oe γ_q γ_r)) -∗
     ⌜σ_s.1 ≡ Spec.bind echo_getc_spec_body (fun _ => k)⌝ -∗
@@ -376,7 +375,7 @@ Section echo_getc.
         POST4 Tgt rec_event rec_trans ({{ σ_t3 Π_t',
           ⌜σ_t3 = σ_t2⌝ ∗ ⌜e = e'⌝ ∗ ⌜Π_t = Π_t'⌝ ∗ γ_oe ⤳ @None rec_ev ∗ γ_q ⤳ q' ∗ γ_r ⤳ r
       }})}})}})}})}})}})}})}})}})}}) ∗
-      POST_e (λ v, ∃ (σs r: m_state (spec_trans rec_event Z)), ⌜v = 0⌝ ∗ γs ⤳ σs ∗ ⌜σs.1 ≡ k⌝ ∗ γ_oe ⤳ @None rec_ev ∗ γ_q ⤳ q ∗ γ_r ⤳ r)
+      POST_e (λ v, ∃ (σs r: m_state (spec_trans rec_event Z)), ⌜v = 0⌝ ∗ γs ⤳ σs ∗ ⌜σs.1 ≡ k⌝ ∗ γ_oe ⤳ @None rec_ev ∗ γ_q ⤳ [(None : seq_product_case)] ∗ γ_r ⤳ r)
     }}).
   Proof.
     iIntros "#?#?#? Hγs Hγ_oe Hγ_q Hγ_r #Hgetc %Hσ_s1 %Hσ_s2 %% [-> [#Hs Hend]]" => /=.
@@ -384,7 +383,7 @@ Section echo_getc.
     iApply (sim_echo with "[//] [$]").
     iSplit!. iFrame.
     (* putc 1 *)
-    iIntros (??) "[[% [Hγ_oe [Hγ_q Hγ_r]]] [-> HΦ']]".
+    iIntros (??) "[[Hγ_oe [Hγ_q Hγ_r]] [-> HΦ']]".
 
     iApply (sim_tgt_rec_Call_external with "[$]").
     iIntros (???) "#? ? ? !> %% [% [% HΠ]]" => /=. subst.
@@ -428,7 +427,7 @@ Section echo_getc.
 
     (* Here putc2 *)
 
-    iIntros (??) "[[% [Hγ_oe [Hγ_q Hγ_r]]] [-> HΦ']]".
+    iIntros (??) "[[Hγ_oe [Hγ_q Hγ_r]] [-> HΦ']]".
 
     iApply (sim_tgt_rec_Call_external with "[$]").
     iIntros (???) "#? ? ? !> %% [% [% HΠ]]" => /=. subst.
@@ -466,8 +465,8 @@ Section echo_getc.
     iApply sim_tgt_rec_Waiting_all_raw. iIntros (?) "!>".
     iApply "Hs'". iSplit!. iIntros (??) "[% [% [% ?]]]" => /=. subst.
     iApply "HΠ" => /=. iSplit!. iFrame. iApply "HΦ'".
-    iFrame. iIntros "% [[% [? [? ?]]] %]".
-    iApply "Hend". iSplit!. by iFrame. 
+    iFrame. iIntros "% [[? [? ?]] %]".
+    iApply "Hend". iSplit!. by iFrame.
   Qed.
 
   Let m_t := rec_link_trans {["echo"]} {["getc"]} rec_trans (spec_trans rec_event Z).
@@ -567,7 +566,7 @@ Section echo_getc.
       iModIntro. iApply (sim_getc with "[//]"). by iApply (rec_fn_intro with "[$]").
       iIntros (??).
       (* iDestruct 1 as (?? ->) "[[% [Hγt_oe [Hγt_q Hγt_r]]] HC]" => /=. *)
-      iDestruct 1 as (?? ->) "[[% [Hγt_oe [Hγt_q Hγt_r]]] HC]" => /=.
+      iDestruct 1 as (?? ->) "[[Hγt_oe [Hγt_q Hγt_r]] HC]" => /=.
 
       iIntros "%%% Hγt_q' Hγt_r' Hγt_oe'".
 
@@ -632,7 +631,7 @@ Section echo_getc.
       iIntros "???".
 
       iApply "HC". iSplit!. iFrame.
-    - iIntros (?) "[% [% [% [% [? [% [Hγt_oe [Hγt_q Hγt_r]]]]]]]]".
+    - iIntros (?) "[% [% [% [Hγs [% [Hγt_oe [Hγt_q Hγt_r]]]]]]]".
       iApply sim_tgt_rec_ReturnExt. iIntros (???) "#? ? ? !> %% [% [% ?]] /=".
       subst.
       iIntros (???) "???".
@@ -640,9 +639,32 @@ Section echo_getc.
       iDestruct (mstate_var_merge with "Hγt_r [$]") as "[<- Hγt_r]".
       iDestruct (mstate_var_merge with "Hγt_oe [$]") as "[<- Hγt_oe]".
       iDestruct (mstate_var_merge with "Hγt_q [$]") as "[<- Hγt_q]".
-      iIntros (??????). destruct!/=. destruct!/=. rewrite bool_decide_false //.
+      iIntros (??????). destruct!/=.
 
-      admit.
+      iApply (sim_tgt_constP_elim γt γs γκ with "[Hγs] [-]"); [done..|].
+      iIntros "Hγs Hγt Hγκ".
+      
+      iMod (mstate_var_split γs_s σs.2 with "[$]") as "[Hγs_s Hγs_s']".
+      iApply (sim_gen_expr_intro _ tt with "[Hγs_s]"); simpl; [done..|].
+      iApply (sim_gen_TVis with "[-]").
+      iIntros (?) "Hγs_s %% [% [% ?]] /=".
+
+      iApply (sim_src_constP_elim with "[Hγt] [Hγκ] [-]"); [done..|].
+      iIntros "Hγt Hγκ". iSplit!. admit.
+
+      iApply (sim_tgt_constP_intro γt γs γκ with "[Hγt] [Hγs] [Hγκ] [-]"); [done..|].
+      iIntros "Hγs".
+
+      iApply (sim_tgt_link_None with "[-]"). iIntros "!>" (??????).
+      (* NOTE: Case splitting on the linking case, which can only be a call because of the empty list  *)
+      (* TODO: What is the empty list here, is it previous events? *)
+      destruct!/=. case_match; destruct!/=.
+
+      (* NOTE: Changing to source module *)
+      iApply (sim_tgt_constP_elim γt γs γκ with "[Hγs] [-]"); [done..|].
+      iIntros "Hγs Hγt Hγκ".
+      iApply (sim_gen_expr_intro _ tt with "[Hγs_s]"); simpl; [done..|].
+      iApply sim_src_TUb_end.
     Admitted.
 
 End echo_getc.
