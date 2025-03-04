@@ -5,7 +5,6 @@ Set Default Proof Using "Type".
 
 Local Open Scope Z_scope.
 
-(* TODO: upstream? *)
 Arguments subst_static _ !_ /.
 
 Definition echo_rec : fndef := {|
@@ -69,40 +68,6 @@ Section TCallRet.
     by iApply "HC".
   Qed.
 
-  (* NOTE : This version does not require equality on Π but instead throws out Φ
-     Ideally this should not be necessary as the user should keep the Πs the same *)
-  Lemma sim_src_TCallRet' f vs h (k: _ → spec rec_event S void) Π Φ :
-    switch Π ({{κ σ POST,
-      ∃ f' vs' h1,
-        ⌜f' = f⌝ ∗ ⌜vs' = vs⌝ ∗ ⌜h1 = h⌝ ∗
-        ⌜κ = Some (Outgoing, ERCall f vs h)⌝ ∗
-        POST Src _ (spec_trans rec_event S) ({{σ' Π',
-          ⌜σ = σ'⌝ ∗  ∃ e,
-          switch Π' ({{κ σ POST,
-            ⌜κ = Some (Incoming, e)⌝ ∗
-            POST Src _ (spec_trans rec_event S) ({{ σ'' Π'',
-              ⌜σ = σ''⌝ ∗
-              (∀ v h', ⌜e = ERReturn v h'⌝ -∗
-                       ⌜σ''.1 ≡ k (v, h')⌝ -∗
-                       spec_state σ''.2 -∗
-                       σ'' ≈{(spec_trans rec_event S)}≈>ₛ Π'')}})}})}})}}) -∗
-    SRC (Spec.bind (TCallRet f vs h) k) @ Π {{ Φ }}.
-  Proof.
-    iIntros "HC" => /=. rewrite /TCallRet bind_bind.
-    iApply sim_gen_TVis. iIntros (s) "Hs". rewrite /switch_id. iIntros "% % /=". iIntros "[% [% ?]]". subst.
-    iApply "HC" => /=. iSplit!.
-    iIntros (??) "[% [% HC]]" => /=. subst.
-    iApply (sim_gen_expr_intro _ tt with "[Hs] [-]"); simpl; [done..|].
-    rewrite bind_bind. iApply (sim_src_TExist _).
-    rewrite bind_bind. iApply sim_gen_TVis. iIntros (s') "Hs". iIntros (??) "[% [% _]]" => /=.
-    subst. iApply "HC" => /=. iSplit!.
-    iIntros (??) "[% HC]". subst.
-    destruct e.
-    { iApply (sim_gen_expr_intro _ tt with "[Hs] [-]"); simpl; [done..|]. iApply sim_src_TUb. }
-    iApply ("HC" $! ret h0 with "[//] [] [$]").
-    by rewrite bind_ret_l.
-  Qed.
-
 End TCallRet.
 
 (* ********************************************************************************************** *)
@@ -113,24 +78,19 @@ Section sim_getc.
 
   Definition getc_spec : spec rec_event Z void :=
     Spec.forever(
-    (* Incoming call of getc *)
     '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
     TAssume (f = "getc");;
     TAssume (vs = []);;
-    (* There is a current position of the buffer *)
     v ← TGet;
     TPut (v + 1);;
-    (* Return old position *)
     TVis (Outgoing, ERReturn (ValNum v) h)).
 
   Definition getc_spec_body : spec rec_event Z unit :=
     '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
     TAssume (f = "getc");;
     TAssume (vs = []);;
-    (* There is a current position of the buffer *)
     v ← TGet;
     TPut (v + 1);;
-    (* Return old position *)
     TVis (Outgoing, ERReturn (ValNum v) h).
 
   Lemma mstate_var_agree {S : TypeState} `{!mstateG Σ} γ (σ1 σ2 : S) :
@@ -387,7 +347,6 @@ Section echo_getc.
     iApply "Hgetc". iFrame. iSplit!. iIntros (?) "[-> ?]".
     iApply sim_tgt_rec_LetE. iIntros "!>" => /=.
     iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
-
     (* putc 2 *)
     iApply "HΦ" => /=. replace (v + 2) with (v + 1 + 1) by lia. iFrame. iSplit!.
     iIntros "% [? HΦ]".
@@ -434,11 +393,11 @@ Section echo_getc.
       POST_e (λ v, ∃ (σs r: m_state (spec_trans rec_event Z)), ⌜v = 0⌝ ∗ γs ⤳ σs ∗ ⌜σs.1 ≡ k⌝ ∗ γ_oe ⤳ @None rec_ev ∗ γ_q ⤳ [(None : seq_product_case)] ∗ γ_r ⤳ r)
     }}).
   Proof. 
-    (* rewrite /switch_external. simpl. *)
     iIntros "#?#?#? Hγs Hγ_oe Hγ_q Hγ_r #Hgetc %Hσ_s1 %Hσ_s2 %% [-> [#Hs Hend]]" => /=.
 
     iApply (sim_echo with "[//] [$]").
     iSplit!. iFrame.
+
     (* putc 1 *)
     iIntros (??) "[[Hγ_oe [Hγ_q Hγ_r]] [-> HΦ']]".
 
@@ -455,9 +414,6 @@ Section echo_getc.
     iApply (sim_gen_TGet (H := HSrcSpec) with "[-]"). iSplit. 1: done. rewrite bind_bind.
     iApply (sim_gen_TPut (H := HSrcSpec) with "[$]"). iIntros "Hγs_s". rewrite bind_bind.
     iApply (sim_src_TExist (H := HSrcSpec)). rewrite bind_bind.
-
-
-    (* (* Here TCallRet *) (* TODO: What do the things I am throwing out allow me to do? *) *)
 
     iApply sim_src_TCallRet.
     iIntros (??) "[% [% [% [% [% [% [% Hσ]]]]]]]" => /=. simplify_eq.
@@ -476,8 +432,7 @@ Section echo_getc.
     iApply "HΠ" => /=. iSplit!. iFrame. iApply "HΦ'".
     iFrame.
 
-    (* Here putc2 *)
-
+    (* putc2 *)
     iIntros (??) "[[Hγ_oe [Hγ_q Hγ_r]] [-> HΦ']]".
 
     iApply (sim_tgt_rec_Call_external with "[$]").
@@ -493,8 +448,6 @@ Section echo_getc.
     iApply (sim_gen_TPut (H := HSrcSpec) with "[$]"). iIntros "Hγs_s". rewrite bind_bind.
     iApply (sim_src_TExist (H := HSrcSpec)). rewrite bind_bind.
 
-    (* Here TCallRet *) (* TODO: What do the things I am throwing out allow me to do? *)
-
     iApply sim_src_TCallRet.
     iIntros (??) "[% [% [% [% [% [% [% Hσ]]]]]]]" => /=. simplify_eq.
     iApply "Hs'". iSplit!. by rewrite Hσ_s2.
@@ -509,7 +462,8 @@ Section echo_getc.
     iIntros (??)"[% [? [% Hs']]]". subst.
     iApply sim_tgt_rec_Waiting_all_raw. iIntros (?) "!>".
     iApply "Hs'". iSplit!. iIntros (??) "[% [% [% ?]]]" => /=. subst.
-    iApply "HΠ" => /=. iSplit!. iFrame. iApply "HΦ'".
+    iApply "HΠ" => /=. iSplit!. iFrame.
+    iApply "HΦ'".
     iFrame. iIntros "% [[? [? ?]] %]".
     iApply "Hend". iSplit!. by iFrame.
   Qed.
@@ -518,7 +472,6 @@ Section echo_getc.
 
   Lemma echo_getc_sim :
     rec_state_interp (rec_init echo_prog) None -∗
-    (* TODO: Not exactly sure what the list is *)
     (MLFRun None, [], rec_init echo_prog, (getc_spec, 0)) ⪯{m_t,
       spec_trans rec_event Z} (echo_getc_spec, 0).
   Proof.
@@ -536,16 +489,11 @@ Section echo_getc.
     pose (HSrcSpec := SpecGS γs_s).
 
     iApply (sim_tgt_constP_intro γt γs γκ with "Hγt Hγs Hγκ [-]"). iIntros "Hγs".
-    (* NOTE: I am fixing here the state of the spec in the source *)
     iApply (sim_tgt_link_None with "[-]"). iIntros "!>" (??????).
-    (* NOTE: Case splitting on the linking case, which can only be a call because of the empty list  *)
-    (* TODO: What is the empty list here, is it previous events? *)
     destruct!/=. case_match; destruct!/=.
 
-    (* NOTE: Changing to source module *)
     iApply (sim_tgt_constP_elim γt γs γκ with "[Hγs] [-]"); [done..|].
     iIntros "Hγs Hγt Hγκ".
-    (* NOTE: Now, going into module local reasoning - Giving up one half of the state *)
     iApply (sim_gen_expr_intro (Λ := spec_mod_lang (H := HSrcSpec) _ _ ) _ tt with "[Hγs_s] [-]"); [simpl; done..|].
     iEval (unfold echo_getc_spec). rewrite /TReceive bind_bind.
     iApply (sim_src_TExist (H := HSrcSpec) (_, _, _)).
@@ -553,7 +501,6 @@ Section echo_getc.
     iApply (sim_gen_TVis (H := HSrcSpec)). iIntros "% Hγs_s %% [-> [-> _ ]]".
 
     iApply (sim_src_constP_next with "[Hγt] [Hγκ] [Hγs] [%] [-]"); [done..|].
-    (* NOTE: I unify here *)
     iDestruct (mstate_var_agree with "Hγs_s Hγs_s'") as "->".
 
     iIntros "Hγs". iApply sim_gen_stop.
@@ -565,13 +512,7 @@ Section echo_getc.
     iApply (sim_src_TAssume (H := HSrcSpec)). iIntros (?). simplify_eq.
     iApply sim_gen_expr_None => /=. iIntros (? [] ?) "Hγs_s".
 
-    (* iDestruct (mstate_var_merge with "Hγs_s Hγs_s'") as "[<- Hγs_s]". *)
-
     iIntros (??) "[-> [-> _]]".
-    (* NOTE: The source module here is in a good spot for induction. In target the recursion is on the echo, but
-       this is an internal call? So where do I start the recursion? *)
-
-    (* NOTE: Changing into target *)
     rewrite bool_decide_true; [|done].
     iApply (sim_src_constP_next with "[Hγt] [Hγκ] [Hγs] [%] [-]"); [done..|].
     iIntros "Hγs".
@@ -583,10 +524,9 @@ Section echo_getc.
     (* Target's spec module (Right linking case - getc) *)
     iMod (mstate_var_alloc (m_state (spec_trans rec_event Z))) as (γt_r) "Hγt_r".
 
-    (* TODO: "queue" for linking?  *)
     iMod (mstate_var_alloc (list seq_product_case)) as (γt_q) "Hγt_q".
 
-    (* (* Linking event to pass around *) *)
+    (* Linking event to pass around *)
     iMod (mstate_var_alloc (option rec_ev)) as (γt_oe) "Hγt_oe".
 
     iApply (sim_tgt_link_left_const_run γt_q γt_r γt_oe with "[$] [$] [$] [-]").
@@ -610,7 +550,6 @@ Section echo_getc.
     {
       iModIntro. iApply (sim_getc with "[//]"). by iApply (rec_fn_intro with "[$]").
       iIntros (??) => /=.
-      (* iDestruct 1 as (?? ->) "[[% [Hγt_oe [Hγt_q Hγt_r]]] HC]" => /=. *)
       iDestruct 1 as (??) "[[Hγt_oe [Hγt_q Hγt_r]] [-> HC]]" => /=.
 
       iIntros "%%% Hγt_q' Hγt_r' Hγt_oe'".
