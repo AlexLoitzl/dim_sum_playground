@@ -40,25 +40,22 @@ Section TCallRet.
   Lemma sim_src_TCallRet f vs h (k: _ → spec rec_event S void) Π Φ :
     switch Π ({{κ σ POST,
       ∃ f' vs' h1,
-        ⌜f' = f⌝ ∗ ⌜vs' = vs⌝ ∗ ⌜h1 = h⌝ ∗
-        ⌜κ = Some (Outgoing, ERCall f vs h)⌝ ∗
-        POST Src _ (spec_trans rec_event S) ({{σ' Π',
-          ⌜σ = σ'⌝ ∗  ∃ e,
-          switch Π' ({{κ σ POST,
-            ⌜κ = Some (Incoming, e)⌝ ∗
-            POST Src _ (spec_trans rec_event S) ({{ σ'' Π'',
-              ⌜σ = σ''⌝ ∗
-              ⌜Π = Π''⌝ ∗
-              (∀ v h', ⌜e = ERReturn v h'⌝ -∗ Φ (k (v, h'))) }})}})}})}}) -∗
+      ⌜f' = f⌝ ∗ ⌜vs' = vs⌝ ∗ ⌜h1 = h⌝ ∗ ⌜κ = Some (Outgoing, ERCall f vs h)⌝ ∗
+    POST Src _ (spec_trans rec_event S) ({{σ' Π',
+      ⌜σ = σ'⌝ ∗  ∃ e,
+    switch Π' ({{κ σ POST,
+      ⌜κ = Some (Incoming, e)⌝ ∗
+    POST Src _ (spec_trans rec_event S) ({{ σ'' Π'',
+      ⌜σ = σ''⌝ ∗ ⌜Π = Π''⌝ ∗ (∀ v h', ⌜e = ERReturn v h'⌝ -∗ Φ (k (v, h'))) }})}})}})}}) -∗
     SRC (Spec.bind (TCallRet f vs h) k) @ Π {{ Φ }}.
   Proof.
     iIntros "HC" => /=. rewrite /TCallRet bind_bind.
     iApply sim_gen_TVis. iIntros (s) "Hs". iIntros "% % /=". iIntros "[% [% HΠ]]". subst.
     iApply "HC" => /=. iSplit!.
     iIntros (??) "[% [% HC]]" => /=. subst.
-    iApply (sim_gen_expr_intro _ tt with "[Hs] [-]"); simpl; [done..|].
-    rewrite bind_bind. iApply (sim_src_TExist _).
-    rewrite bind_bind. iApply sim_gen_TVis. iIntros (s') "Hs". iIntros (??) "[% [% HΠ']]" => /=.
+    iApply (sim_gen_expr_intro _ tt with "[Hs] [-]"); simpl; [done..|]. rewrite bind_bind.
+    iApply (sim_src_TExist _). rewrite bind_bind.
+    iApply sim_gen_TVis. iIntros (s') "Hs". iIntros (??) "[% [% HΠ']]" => /=.
     subst. iApply "HC" => /=. iSplit!.
     iIntros (??) "[% [% HC]]". destruct!/=.
     iApply "HΠ". iSplit!. iSplitL "Hs". 1: done.
@@ -106,16 +103,13 @@ Section sim_getc.
       ∃ f es h, ⌜κ = Some (Incoming, ERCall f es h)⌝ ∗
     POST Tgt _ _ ({{ σ' Π',
       ∃ v, ⌜f = "getc"⌝ ∗ ⌜es = []⌝ ∗ spec_state v ∗ ⌜σ' = σ1⌝ ∗
-    switch Π' ({{ κ σ POST,
-      ⌜κ = Some (Outgoing, ERReturn (ValNum v) h)⌝ ∗ spec_state (v + 1)
-    (*   ∗ *)
-    (* POST Tgt _ _ ({{ σ' Π'', *)
-    (*   ⌜Π'' = Π'⌝ ∗ ⌜σ' = σ⌝ }}) *)
-    }})}})}}) -∗
+    switch Π' (λ κ (σ : m_state (spec_trans rec_event Z)) POST,
+      ⌜κ = Some (Outgoing, ERReturn (ValNum v) h)⌝ ∗ spec_state (v + 1) ∗ ⌜σ = (getc_spec, (v + 1)%Z)⌝
+    )}})}}) -∗
     TGT getc_spec @ Π {{ Φ }}.
   Proof.
     iIntros "Hs".
-    rewrite /getc_spec unfold_forever /TReceive bind_bind -/getc_spec bind_bind.
+    rewrite {2}/getc_spec unfold_forever /TReceive bind_bind -/getc_spec bind_bind.
     iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>".
     rewrite bind_bind. setoid_rewrite bind_ret_l.
     iApply (sim_gen_TVis with "[-]").
@@ -165,30 +159,14 @@ Qed.
 
     iApply (sim_gen_expr_intro _ tt with "[Hγ]"); simpl; [done..|].
 
-    rewrite {2}/getc_spec.
-    rewrite unfold_forever bind_bind /TReceive bind_bind -/getc_spec.
-    iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>".
-    rewrite bind_bind. setoid_rewrite bind_ret_l.
-    iApply (sim_gen_TVis with "[-]").
-    iIntros (v') "Hγ !>".
-    iIntros (??) "[% [% _]]".
-    subst.
-    iApply "Hs" => /=. iSplit!. iIntros (??) => /=.
-    iDestruct 1 as (??) "Hs". simplify_eq.
-
-    iApply (sim_gen_expr_intro _ tt with "[Hγ]"); simpl; [done..|]. rewrite bind_bind.
-    iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>". rewrite bind_bind.
-    iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>". rewrite bind_bind.
-    iApply (sim_gen_TGet with "[-]").
-    iSplit. 1: done.
-    iIntros "!>". rewrite bind_bind.
-    iApply (sim_gen_TPut with "[Hγ']"). 1: done.
-    iIntros "Hγ". iIntros "!>".
-    iApply (sim_gen_TVis with "[-]"). iIntros (v'') "Hγ'".
-    iDestruct (mstate_var_agree with "Hγ Hγ'") as "<-".
-    iIntros "!> /=".
-    iIntros (??) "[% [% _]]" => /=. simplify_eq.
-    iApply "Hs" => /=. iSplit!. iIntros (??) "[% Hs]". subst.
+    iApply sim_getc_spec.
+    iIntros (??) "[% [% [% [% Hσ]]]]" => /=.
+    iApply "Hs" => /=. iSplit!.
+    iIntros (??) "[% [% HΠ0]]" => /=. simplify_eq.
+    iApply "Hσ". iFrame. iSplit!.
+    iIntros (??) "[% [? %]]" => /=. simplify_eq.
+    iApply "HΠ0" => /=. iSplit!.
+    iIntros (??) "[% Hs]" => /=. subst.
 
     iApply sim_tgt_rec_Waiting_all_raw. iIntros (?) "!>".
     iApply "Hs" => /=. iSplit!.
@@ -416,6 +394,7 @@ Section echo_getc.
     iApply (sim_src_TExist (H := HSrcSpec)). rewrite bind_bind.
 
     iApply sim_src_TCallRet.
+
     iIntros (??) "[% [% [% [% [% [% [% Hσ]]]]]]]" => /=. simplify_eq.
     iApply "Hs'". iSplit!. by rewrite Hσ_s2.
     iIntros (??) "[% [% [% Hs']]]" => /=. subst.
