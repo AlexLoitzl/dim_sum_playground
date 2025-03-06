@@ -211,9 +211,9 @@ Section echo_getc.
   Lemma sim_echo_body Π_t Π_s (P : Z → (spec rec_event Z void) → iProp Σ) (Q : Z → iProp Σ) :
     "putc" ↪ None -∗
     switch_external_fixed Π_t (spec_trans _ Z) Π_s ({{κ0 σ_t POST0,
-      ∃ vs h v k (vq : Z), P v (Spec.bind echo_getc_spec_body (fun _ => k)) ∗ Q vq ∗
+      ∃ vs h v k (vq : Z) p, P v p ∗ Q vq ∗ ⌜p ≡ Spec.bind echo_getc_spec_body (fun _ => k)⌝ ∗
       ⌜κ0 = Some (Outgoing, ERCall "putc" vs h)⌝ ∗
-    POST0 (Spec.bind echo_getc_spec_body (fun _ => k), v) ({{σ_s1' Π_s',
+    POST0 (p, v) ({{σ_s1' Π_s',
       ∃ e : rec_ev, ⌜Π_s' = Π_s⌝ ∗
     switch Π_s' ({{ κ3 σ_s2 POST2,
       ⌜κ3 = Some (Incoming, e)⌝ ∗
@@ -234,7 +234,7 @@ Section echo_getc.
 
     iApply (sim_tgt_rec_Call_external with "[$]").
     iIntros (???) "#? ? ? !> %% [-> [-> HΠ]]" => /=.
-    iApply "Hs" => /=. iFrame. iSplit!.
+    iApply "Hs" => /=. iFrame. iSplit!. 1: done.
     iIntros (? Πs) "[-> [-> Hs']]" => /=.
 
     iMod (mstate_var_alloc Z) as (γs_s) "?".
@@ -444,7 +444,8 @@ Section echo_getc.
       iIntros "!> %% [% [% [% [HQ [HP [-> HΦ]]]]]]".
       iApply (sim_echo_body _ _ (echo_left_external γs) (echo_left_linkP γt_oe γt_q γt_r) with "[] [] [-]"). 1 : by iApply (rec_fn_intro with "[$]").
       {
-        iIntros (??) "[% [% [% [% [% [[% [Hγs [% %]]] [[Hγt_oe [Hγt_q Hγt_r]] [% HC]]]]]]]]" => /=.
+        rewrite /switch_external_fixed => /=.
+        iIntros (??) "[% [% [% [% [% [% [[% [Hγs [% %]]] [[Hγt_oe [Hγt_q Hγt_r]] [% [% HC]]]]]]]]]]" => /=.
         subst. iIntros (???) "Hγt_q' Hγt_r' Hγt_oe'".
 
         iDestruct (mstate_var_merge with "Hγt_r Hγt_r'") as "[<- Hγt_r]".
@@ -456,7 +457,7 @@ Section echo_getc.
         iIntros "Hγs Hγt Hγκ".
         iApply "HC". iSplit!.
 
-        replace (echo_getc_spec_body;; k0)%spec with σ1.1 by admit. by destruct σ1.
+        replace p with σ1.1 by admit. by destruct σ1.
 
         iIntros (??). iDestruct 1 as (->) "HC".
         iApply (sim_src_constP_next with "[Hγt] [Hγκ] [Hγs] [%] [-]"); [done..|].
