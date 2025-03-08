@@ -750,7 +750,7 @@ Section prepost.
       s1 s2 s x1 x2 x
       `{!VisNoAng m.(m_trans)}
       :
-      (∃ Σ `{!satG Σ M1} `{!satG Σ M2} `{!satG Σ M}, ∀ γ1 γ2 γ,
+      (∃ Σ (_ : satG Σ M1) (_ : satG Σ M2) (_ : satG Σ M), ∀ γ1 γ2 γ,
         ∃ (INV : player → S1 → S2 → S → iProp Σ),
         (∀ e, pp_to_all (i e s) (λ r y, (⌈x ∗ y @ sat γ⌉ -∗
            ∃ x1' x2', ⌜satisfiable (x1' ∗ x1)⌝ ∗ ⌜satisfiable (x2' ∗ x2)⌝ ∗ (
