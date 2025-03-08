@@ -210,6 +210,13 @@ Class satG Σ (M : ucmra) := SatG {
 }.
 Local Existing Instance sat_inG.
 
+Definition satΣ M : gFunctors :=
+  #[ GFunctor (authR M) ].
+
+Global Instance subG_satΣ Σ M :
+  subG (satΣ M) Σ → satG Σ M.
+Proof. solve_inG. Qed.
+
 (* TODO: make a nice abstraction for this disjunction? Some proofs about it are repeated below. *)
 Definition sat_embed {Σ M} `{!satG Σ M} (γ : gname) :
   WeakEmbed (uPred M) (iProp Σ) := {|
@@ -220,7 +227,7 @@ Definition sat_embed {Σ M} `{!satG Σ M} (γ : gname) :
 
 Section sat.
   Context {Σ : gFunctors} {M : ucmra}.
-  Context `{!satG Σ M} {Hdiscrete : CmraDiscrete M} (γ : gname).
+  Context {G : satG Σ M} {Hdiscrete : CmraDiscrete M} (γ : gname).
   Local Notation "⌈ P ⌉" := (weak_embed (sat_embed γ) P) : bi_scope.
   Implicit Types (P : uPred M).
 
@@ -384,9 +391,9 @@ Section sat.
 
 
   Lemma sat_bupd P :
-    ⌈|==> P⌉ ==∗⌈sat_embed γ⌉ ⌈P⌉.
+    ⌈|==> P⌉ ==∗⌈sat⌉ ⌈P⌉.
   Proof using Hdiscrete.
-    rewrite /weak_embed_bupd/weak_embed/weak_embed_tok/=.
+    rewrite -weak_embed_bupd_elim /weak_embed/weak_embed_tok/=.
     iIntros "[%mf [%Hholds Hf]] [%ma Ha]".
     iAssert (|==> own γ (◯ mf))%I with "[Hf]" as ">Hf". {
       iDestruct "Hf" as "[%Hincl|$]"; [|done]. iMod (own_unit _ γ) as "Ho".

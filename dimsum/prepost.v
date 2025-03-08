@@ -1,6 +1,7 @@
 From dimsum.core Require Export proof_techniques satisfiable seq_product.
 From dimsum.core Require Import link.
 From dimsum.core Require Import axioms.
+From dimsum.core.iris Require Import weak_embed sat.
 
 Set Default Proof Using "Type".
 
@@ -77,6 +78,31 @@ Lemma pp_to_all_ex pp Q1 Q2:
   pp_to_ex pp Q2 →
   ∃ y r, Q1 r y ∧ Q2 r y.
 Proof. move => /pp_to_all_forall ? /pp_to_ex_exists. naive_solver. Qed.
+
+
+Fixpoint pp_to_ex_bi {PROP : bi} (W : BiWeakEmbed (uPredI M) PROP)
+  (pp : prepost) (Q : R → PROP) : PROP :=
+  match pp with
+  | pp_end r => Q r
+  | pp_prop P pp' => ⌜P⌝ ∗ pp_to_ex_bi W pp' Q
+  | pp_quant pp' => ∃ y, pp_to_ex_bi W (pp' y) Q
+  | pp_star P pp' => ⌈P @ W⌉ ∗ pp_to_ex_bi W pp' Q
+  end.
+
+Lemma pp_to_ex_bi_to_ex {PROP : bi} (W : BiWeakEmbed (uPredI M) PROP)
+  (pp : prepost) Q `{!BiAffine PROP}:
+  pp_to_ex_bi W pp Q -∗
+  ∃ r y, ⌜pp_to_ex pp (λ r' y', r = r' ∧ y = y')⌝ ∗ ⌈y @ W⌉ ∗ Q r.
+Proof.
+  iIntros "Hp". iInduction pp as [] "IH" => /=.
+  - iFrame. iSplit!.
+  - iDestruct "Hp" as (?) "Hp". iDestruct ("IH" with "Hp") as (???) "$". iSplit!.
+  - iDestruct "Hp" as (?) "Hp". iDestruct ("IH" with "Hp") as (???) "$". by iSplit!.
+  - iDestruct "Hp" as "[? Hp]". iDestruct ("IH" with "Hp") as (???) "[??]".
+    iExists _, _. iSplit!.
+    { apply: pp_to_ex_mono; [done|]. move => ?? /= [<- <-]. done. }
+    iFrame.
+Qed.
 
 End prepost.
 
@@ -608,7 +634,7 @@ Section prepost.
           apply: pp_to_ex_mono; [done|].
           move => [[??]?] ? /= ?. destruct!. split!; [done|].
           apply: Hloop; [done|]. split!. clear HN2L HN2R HL2R HL2N HR2L HR2N; naive_solver.
-    Qed.
+  Qed.
 
   Lemma mod_prepost_combine
         {EV1 EV2 EV S1 S2 S : Type}
@@ -705,7 +731,127 @@ Section prepost.
         tstep_s. eexists (Some _). split; [done|].
         apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
         apply: Hloop; [done|]. split!.
-    Qed.
+  Qed.
+
+
+  Lemma mod_prepost_combine_bi
+      {EV1 EV2 EV S1 S2 S : Type}
+      {M1 M2 M : ucmra} `{!Shrink M1} `{!Shrink M2} `{!Shrink M}
+      `{!CmraDiscrete M1} `{!CmraDiscrete M2} `{!CmraDiscrete M}
+      `{!∀ x : M1, CoreCancelable x} `{!∀ x : M2, CoreCancelable x}
+      `{!∀ x : M, CoreCancelable x}
+      (m : module EV)
+      (i1 : EV1 → S1 → prepost (EV2 * S1) M1)
+      (o1 : EV2 → S1 → prepost (EV1 * S1) M1)
+      (i2 : EV2 → S2 → prepost (EV * S2) M2)
+      (o2 : EV → S2 → prepost (EV2 * S2) M2)
+      (i : EV1 → S → prepost (EV * S) M)
+      (o : EV → S → prepost (EV1 * S) M)
+      s1 s2 s x1 x2 x
+      `{!VisNoAng m.(m_trans)}
+      :
+      (∃ Σ `{!satG Σ M1} `{!satG Σ M2} `{!satG Σ M}, ∀ γ1 γ2 γ,
+        ∃ (INV : player → S1 → S2 → S → iProp Σ),
+        (∀ e, pp_to_all (i e s) (λ r y, (⌈x ∗ y @ sat γ⌉ -∗
+           ∃ x1' x2', ⌜satisfiable (x1' ∗ x1)⌝ ∗ ⌜satisfiable (x2' ∗ x2)⌝ ∗ (
+             ⌈{sat (M:=M1) γ1}⌉ -∗ ⌈{sat (M:=M2) γ2}⌉ -∗ ⌈{sat (M:=M) γ}⌉ -∗ ⌈x1' @ sat γ1⌉ -∗ ⌈x2' @ sat γ2⌉ ==∗
+             INV Env s1 s2 s ∗ ⌈y @ sat γ⌉ ∗ ⌈{sat (M:=M1) γ1}⌉ ∗ ⌈{sat (M:=M2) γ2}⌉ ∗ ⌈{sat (M:=M) γ}⌉)))) ∧
+       (∀ s1 s2 s e,
+           pp_to_all (i e s) (λ r y,
+            ⌈{sat (M:=M1) γ1}⌉ -∗ ⌈{sat (M:=M2) γ2}⌉ -∗ ⌈{sat (M:=M) γ}⌉ -∗
+            ⌈y @ sat γ⌉ -∗
+            INV Env s1 s2 s ==∗
+            pp_to_ex_bi (sat γ1) (i1 e s1) (λ r1,
+            pp_to_ex_bi (sat γ2) (i2 r1.1 s2) (λ r2,
+            ⌜r.1 = r2.1⌝ ∗ INV Prog r1.2 r2.2 r.2 ∗
+            ⌈{sat (M:=M1) γ1}⌉ ∗ ⌈{sat (M:=M2) γ2}⌉ ∗ ⌈{sat (M:=M) γ}⌉
+)))) ∧
+       (∀ s1 s2 s e,
+           pp_to_all (o2 e s2) (λ r2 y2,
+             pp_to_all (o1 r2.1 s1) (λ r1 y1,
+            ⌈{sat (M:=M1) γ1}⌉ -∗ ⌈{sat (M:=M2) γ2}⌉ -∗ ⌈{sat (M:=M) γ}⌉ -∗
+            ⌈y1 @ sat γ1⌉ -∗
+            ⌈y2 @ sat γ2⌉ -∗
+            INV Prog s1 s2 s ==∗
+            pp_to_ex_bi (sat γ) (o e s) (λ r,
+            ⌜r.1 = r1.1⌝ ∗ INV Env r1.2 r2.2 r.2 ∗
+            ⌈{sat (M:=M1) γ1}⌉ ∗ ⌈{sat (M:=M2) γ2}⌉ ∗ ⌈{sat (M:=M) γ}⌉
+))))
+) →
+  trefines (prepost_mod i1 o1 (prepost_mod i2 o2 m s2 x2) s1 x1)
+           (prepost_mod i o m s x).
+  Proof.
+    move => [Σ [HG1 [HG2 [HG]]]].
+    have ? : @satisfiable (iResUR Σ) (∃ γ1 γ2 γ,
+      sat_closed γ1 true x1 ∗ sat_closed γ2 true x2 ∗ sat_closed γ true x). {
+      apply: satisfiable_bmono; [by apply (satisfiable_emp_valid True)|].
+      iIntros "_". iMod (sat_alloc_closed x1) as (?) "$".
+      iMod (sat_alloc_closed x2) as (?) "$".
+      by iMod (sat_alloc_closed x) as (?) "$".
+    }
+    iSatStart. iDestruct 1 as (γ1 γ2 γ) "(Hγ1 & Hγ2 & Hγ)". iSatStop Hsat.
+    move => /(_ γ1 γ2 γ) [INV [? [??]]].
+    unshelve apply: mod_prepost_combine. {
+      exact (λ pl s1 s2 s x1 x2 x,
+              satisfiable (INV pl s1 s2 s ∗
+                if pl is Env then
+                  ⌈x1 @ sat γ1⌉ ∗ ⌈{sat (M:=M1) γ1}⌉ ∗ ⌈x2 @ sat γ2⌉ ∗
+                    ⌈{sat (M:=M2) γ2}⌉ ∗ sat_closed γ false x
+                else
+                  sat_closed γ1 false x1 ∗ sat_closed γ2 false x2 ∗
+                    ⌈x @ sat γ⌉ ∗ ⌈{sat (M:=M) γ}⌉)).
+    } {
+      move => ?. apply: pp_to_all_mono; [done|]. move => ?? /= Hwand ? Hsat0.
+      iSatStartBupd Hsat.
+      iMod ("Hγ" with "[]") as "[? Hx]". { iPureIntro. by rewrite comm in Hsat0. }
+      iDestruct "Hx" as "[[? H1] ?]".
+      iDestruct (Hwand with "[$]") as (?? Hsat1 Hsat2) "Hwand".
+      iMod ("Hγ1" with "[]") as "[? [??]]"; [done|].
+      iMod ("Hγ2" with "[]") as "[? [??]]"; [done|].
+      iMod ("Hwand" with "[$] [$] [$] [$] [$]") as "[? [H2 [? [??]]]]".
+      iCombine "H2 H1" as "H".
+      iDestruct (sat_close with "H [$]") as (? ?) "?".
+      iModIntro. iSatStop. split!. 2: by rewrite comm.
+      iSatMono. iFrame.
+    }
+    - iSatClear. move => /= ??????? Hsat.
+      apply: pp_to_all_mono; [done|]. move => ?? /= Hwand ? Hsat0.
+      iSatStartBupd Hsat. iIntros "(? & Hx1 & ? & Hx2 & ? & Hγ)".
+      iMod ("Hγ" with "[]") as "[? Hx]". { iPureIntro. by rewrite comm in Hsat0. }
+      iDestruct "Hx" as "[??]".
+      iMod (Hwand with "[$] [$] [$] [$] [$]").
+      iDestruct (pp_to_ex_bi_to_ex with "[$]") as (???) "[Hy1 ?]".
+      iDestruct (pp_to_ex_bi_to_ex with "[$]") as (???) "[Hy2 [% [? [? [??]]]]]".
+      iModIntro. iSatStop Hsat.
+      apply: pp_to_ex_mono; [done|]. move => /= ?? [<- <-].
+      iSatStart Hsat.
+      iCombine "Hx1 Hy1" as "H1".
+      iDestruct (sat_close with "H1 [$]") as (? ?) "?".
+      iSatStop Hsat. split!. { by rewrite assoc. }
+      apply: pp_to_ex_mono; [done|]. move => /= ?? [<- <-].
+      iSatStart Hsat.
+      iCombine "Hx2 Hy2" as "H2".
+      iDestruct (sat_close with "H2 [$]") as (? ?) "?".
+      iSatStop Hsat. split!. { by rewrite assoc. }
+      iSatMono Hsat. iFrame.
+    - iSatClear. move => /= ??????? Hsat.
+      apply: pp_to_all_mono; [done|]. move => ?? /= ?? Hsat2.
+      apply: pp_to_all_mono; [done|]. move => ?? /= Hwand ? Hsat1.
+      iSatStartBupd Hsat. iIntros "(? & Hγ1 & Hγ2 & Hx & Hγ)".
+      iMod ("Hγ1" with "[]") as "[? H]". { iPureIntro. by rewrite assoc in Hsat1. }
+      iDestruct "H" as "[??]".
+      iMod ("Hγ2" with "[]") as "[? H]". { iPureIntro. by rewrite assoc in Hsat2. }
+      iDestruct "H" as "[??]".
+      iMod (Hwand with "[$] [$] [$] [$] [$] [$]").
+      iDestruct (pp_to_ex_bi_to_ex with "[$]") as (???) "[Hy [% [? [? [??]]]]]".
+      iModIntro. iSatStop Hsat.
+      apply: pp_to_ex_mono; [done|]. move => /= ?? [<- <-].
+      iSatStart Hsat.
+      iCombine "Hx Hy" as "H".
+      iDestruct (sat_close with "H [$]") as (? ?) "?".
+      iSatStop Hsat. split!. { by rewrite comm (comm _ y). }
+      iSatMono Hsat. iFrame.
+  Qed.
 
   Lemma mod_prepost_impl
         {EV1 EV2 Si Ss : Type}

@@ -1,6 +1,7 @@
 From iris.bi Require Import bi.
 From iris.algebra Require Import cmra updates.
 From iris.proofmode Require Import proofmode.
+From dimsum.core Require Import base.
 
 Set Default Proof Using "Type".
 
@@ -377,8 +378,35 @@ Qed.
 Global Instance frame_weak_embed_bupd p R P Q :
   Frame p R P Q → Frame p R (|==>⌈W⌉ P) (|==>⌈W⌉ Q) | 2.
 Proof. rewrite /Frame/weak_embed_bupd =><-. by iIntros "[$ ?]". Qed.
-End weak_embed_bupd_class_instances.
 
+Lemma weak_embed_bupd_intro P :
+  ⌈{W}⌉ -∗ (|==>⌈W⌉ ⌈{W}⌉ -∗ |==> P) ==∗ P.
+Proof.
+  rewrite /weak_embed_bupd. iIntros "? Hw".
+  iMod ("Hw" with "[$]") as "[? HP]".
+  by iApply "HP".
+Qed.
+
+Lemma weak_embed_bupd_elim P :
+  (⌈{W}⌉ -∗ |==> ⌈{W}⌉ ∗ P) ⊢ |==>⌈W⌉ P.
+Proof. done. Qed.
+
+Lemma big_sepM_impl_weak_bupd_frame {K A} `{Countable K} (Φ Φ' : K → A → PROP2) m P :
+  ([∗ map] k↦v∈m, Φ k v) -∗
+  □ (∀ k v, ⌜m !! k = Some v⌝ → P -∗ Φ k v ==∗⌈W⌉ P ∗ Φ' k v) -∗
+  P ==∗⌈W⌉
+  ([∗ map] k↦v∈m, Φ' k v) ∗ P.
+Proof.
+  rewrite -weak_embed_bupd_elim.
+  iIntros "Hm #Himpl HP Htok". rewrite comm -assoc.
+  iApply (big_sepM_impl_bupd_frame with "[$] []"). 2: iFrame.
+  iIntros "!>" (???) "[??] ?".
+  iApply (weak_embed_bupd_intro with "[$]").
+  iMod ("Himpl" with "[//] [$] [$]") as "[$ $]".
+  iModIntro. by iIntros "$".
+Qed.
+
+End weak_embed_bupd_class_instances.
 
 (** ** Instances *)
 (** *** weak_embed_id *)
@@ -434,3 +462,6 @@ Section weak_embed_embed.
     (* This should be provable *)
   Abort.
 End weak_embed_embed.
+
+(** This is needed, because otherwise it gets unfolded in weird ways.  *)
+Global Opaque weak_embed_bupd.

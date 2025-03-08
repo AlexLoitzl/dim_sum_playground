@@ -18,6 +18,9 @@ Definition loc : Set := (prov * Z).
 Global Instance prov_eq_dec : EqDecision prov.
 Proof. solve_decision. Qed.
 
+Global Instance prov_inhabited : Inhabited prov.
+Proof. repeat constructor. Qed.
+
 Global Program Instance prov_countable : Countable prov :=
   inj_countable
     (λ p : prov, match p with | ProvBlock z => inl z | ProvStatic f i => inr (f, i) end)
@@ -582,6 +585,11 @@ Lemma lookup_heap_Some_elem_of_h_provs l h v :
   l.1 ∈ h_provs h.
 Proof. move => ?. by apply lookup_heap_is_Some_elem_of_h_provs. Qed.
 
+Lemma not_elem_of_h_provs_lookup_heap l h :
+  l.1 ∉ h_provs h →
+  h_heap h !! l = None.
+Proof. move => ?. apply eq_None_not_Some. by move => /lookup_heap_is_Some_elem_of_h_provs. Qed.
+
 Global Typeclasses Opaque h_provs.
 
 (** *** various functions on heaps *)
@@ -600,6 +608,50 @@ Qed.
 Lemma h_block_lookup2 h l:
   h_heap h !! l = h_block h l.1 !! l.2.
 Proof. destruct l. by rewrite h_block_lookup. Qed.
+
+Lemma h_heap_difference_block h p :
+  (h_heap h ∖ kmap (pair p) (h_block h p)) = filter (λ l, l.1.1 ≠ p) (h_heap h).
+Proof.
+  apply map_eq => ?. apply option_eq => ?.
+  rewrite lookup_difference_Some lookup_kmap_None map_lookup_filter_Some/=.
+  split.
+  - move => [Hh Hlookup]. split!. move => ?. subst.
+    move: Hh. by rewrite h_block_lookup2 Hlookup // -surjective_pairing.
+  - move => [??]. naive_solver.
+Qed.
+
+
+Definition h_blocks (h : heap_state) : gmap prov (gmap Z val) :=
+  set_to_map (λ p, (p, h_block h p)) (h_provs h).
+
+Lemma h_blocks_lookup_Some h p b :
+  h_blocks h !! p = Some b ↔ p ∈ h_provs h ∧ b = h_block h p.
+Proof. rewrite /h_blocks lookup_set_to_map //. naive_solver. Qed.
+
+Lemma h_blocks_lookup_is_Some h p :
+  is_Some (h_blocks h !! p) ↔ p ∈ h_provs h.
+Proof. rewrite /is_Some. setoid_rewrite h_blocks_lookup_Some. naive_solver. Qed.
+
+Lemma h_blocks_lookup_None h p :
+  h_blocks h !! p = None ↔ p ∉ h_provs h.
+Proof. rewrite eq_None_not_Some /is_Some. setoid_rewrite h_blocks_lookup_Some. naive_solver. Qed.
+
+Lemma h_blocks_dom h :
+  dom (h_blocks h) = h_provs h.
+Proof. apply set_eq => ?. by rewrite elem_of_dom h_blocks_lookup_is_Some. Qed.
+
+Lemma heap_state_blocks_eq h1 h2:
+  h1 = h2 ↔ h_blocks h1 = h_blocks h2.
+Proof.
+  split; [naive_solver|].
+  move => /map_eq_iff. setoid_rewrite option_eq.
+  setoid_rewrite h_blocks_lookup_Some.
+  move => Heq. apply heap_state_eq. split; [|set_solver].
+  apply map_eq => i. apply option_eq => x.
+  (split => ?; exploit Heq) => [[Hi _] | [_ Hi]]; exploit Hi; split!.
+  1, 3: by apply: lookup_heap_Some_elem_of_h_provs.
+  all: rewrite !h_block_lookup2; move => [_ <-]; by rewrite -h_block_lookup2.
+Qed.
 
 
 Definition zero_block (n : Z) : gmap Z val :=
@@ -711,14 +763,26 @@ Lemma heap_alive_update h l l' v :
   heap_alive (heap_update h l' v) l.
 Proof. move => ?. rewrite /heap_alive/=. by apply lookup_alter_is_Some. Qed.
 
-Lemma h_block_heap_update hs l v:
-  h_block (heap_update hs l v) l.1 = alter (λ _, v) l.2 (h_block hs l.1).
+Lemma h_block_heap_update h l v p :
+  h_block (heap_update h l v) p =
+    if decide (p = l.1) then alter (λ _, v) l.2 (h_block h p) else h_block h p.
 Proof.
-  rewrite /h_block/=. apply map_eq => i.
-  rewrite !lookup_total_gmap_curry.
-  destruct (decide (i = l.2)); simplify_map_eq.
-  - rewrite lookup_total_gmap_curry -?surjective_pairing. by simplify_map_eq.
-  - rewrite !lookup_alter_ne ?lookup_total_gmap_curry //. destruct l. naive_solver.
+  apply map_eq => ?. apply option_eq => ?.
+  rewrite h_block_lookup /= !lookup_alter_Some.
+  case_decide; rewrite ?lookup_alter_Some h_block_lookup; destruct l; naive_solver.
+Qed.
+
+Lemma h_blocks_heap_update h l v :
+  h_blocks (heap_update h l v) = alter (λ b, alter (λ _, v) l.2 b) l.1 (h_blocks h).
+Proof.
+  apply map_eq => p. apply option_eq => ?.
+  rewrite h_blocks_lookup_Some/= lookup_alter_Some.
+  setoid_rewrite h_blocks_lookup_Some.
+  rewrite h_block_heap_update.
+  split => ?; destruct!/=.
+  - destruct (decide (p = l.1)); naive_solver.
+  - rewrite decide_True //.
+  - rewrite decide_False //.
 Qed.
 
 Program Definition heap_update_big (h : heap_state) (m : gmap loc val) : heap_state :=
@@ -748,6 +812,42 @@ Proof.
       * rewrite lookup_union_r //=. by simplify_map_eq.
     + rewrite lookup_union_l //. by simplify_map_eq.
 Qed.
+
+Program Definition heap_update_block (h : heap_state) (p : prov) (b : gmap Z val) : heap_state :=
+  Heap (kmap (pair p) b ∪ (filter (λ l, l.1.1 ≠ p) h.(h_heap)))
+    ({[p]} ∪ h.(h_provs)) _.
+Next Obligation.
+  move => ???? /lookup_union_is_Some[/lookup_kmap_is_Some|[? /map_lookup_filter_Some[??]]].
+  - set_solver.
+  - apply elem_of_union. right. by apply heap_wf.
+Qed.
+
+Lemma h_static_provs_update_block h p b :
+  p ∈ h_provs h →
+  h_static_provs (heap_update_block h p b) = h_static_provs h.
+Proof. rewrite /h_static_provs/=. set_solver. Qed.
+
+Lemma h_block_heap_update_block h p b p' :
+  h_block (heap_update_block h p b) p' =
+    if decide (p = p') then b else h_block h p'.
+Proof.
+  apply map_eq => ?. apply option_eq => ?.
+  rewrite h_block_lookup /= lookup_union_Some.
+  2: { apply map_disjoint_spec => ??? /lookup_kmap_Some[?[??]] /map_lookup_filter_Some.  naive_solver. }
+  rewrite lookup_kmap_Some map_lookup_filter_Some.
+  case_decide; rewrite ?h_block_lookup; naive_solver.
+Qed.
+
+Lemma h_blocks_heap_update_block h p b :
+  h_blocks (heap_update_block h p b) = <[p := b]> (h_blocks h).
+Proof.
+  apply map_eq => p'. apply option_eq => ?.
+  rewrite h_blocks_lookup_Some/= lookup_insert_Some.
+  setoid_rewrite h_blocks_lookup_Some.
+  rewrite h_block_heap_update_block.
+  case_decide; split => ?; set_solver.
+Qed.
+
 
 (* TODO: take loc instead of prov as argument to allow allocating at
 other places than 0 and make some sideconditions a bit easier to solve
@@ -825,6 +925,42 @@ Proof.
   rewrite lookup_union_r // lookup_kmap_None. naive_solver.
 Qed.
 
+Lemma h_blocks_heap_alloc h l n:
+  heap_is_fresh h l →
+  h_blocks (heap_alloc h l n) = <[l.1 := zero_block n]> (h_blocks h).
+Proof.
+  move => ?. apply map_eq => p. apply option_eq => ?.
+  rewrite lookup_insert_Some h_blocks_lookup_Some/= elem_of_union elem_of_singleton.
+  destruct (decide (p = l.1)); subst.
+  - rewrite h_block_heap_alloc //. set_solver.
+  - rewrite h_block_heap_alloc_ne // h_blocks_lookup_Some. set_solver.
+Qed.
+
+
+Program Definition heap_alloc_loc (h : heap_state) (l : loc) (v : val) (H : l.1 ∈ h_provs h) : heap_state :=
+  Heap (<[l:=v]> (h_heap h)) (h_provs h) _.
+Next Obligation. move => ????? /lookup_insert_is_Some'[<-//|]. apply heap_wf. Qed.
+
+Lemma h_block_heap_alloc_loc h p l v H:
+  h_block (heap_alloc_loc h l v H) p = if decide (p = l.1) then <[l.2 := v]> (h_block h p) else h_block h p.
+Proof.
+  apply map_eq => i. apply option_eq => ?. rewrite !lookup_total_gmap_curry /=.
+  rewrite lookup_insert_Some -h_block_lookup.
+  case_decide. 2: naive_solver.
+  rewrite lookup_insert_Some. destruct l. naive_solver.
+Qed.
+
+Lemma h_blocks_heap_alloc_loc h l v b H :
+  h_blocks h !! l.1 = Some b →
+  h_blocks (heap_alloc_loc h l v H) = <[l.1:=<[l.2 := v]>b]> (h_blocks h).
+Proof.
+  move => /h_blocks_lookup_Some [??]. subst. apply map_eq => p'. apply option_eq => ?.
+  rewrite h_blocks_lookup_Some/= lookup_insert_Some h_blocks_lookup_Some.
+  rewrite h_block_heap_alloc_loc.
+  case_decide; naive_solver.
+Qed.
+
+
 Program Definition heap_add_blocks (h : heap_state) (blocks : gset block_id) : heap_state :=
   Heap (h_heap h) (set_map ProvBlock blocks ∪ h_provs h) _.
 Next Obligation. move => ????. apply: union_subseteq_r. by eapply heap_wf. Qed.
@@ -871,20 +1007,75 @@ Proof.
   split => -[?]; rewrite lookup_alter_ne //; congruence.
 Qed.
 
-Lemma h_block_free h l:
-  h_block (heap_free h l) l.1 = ∅.
+Lemma h_block_free h l p:
+  h_block (heap_free h l) p = if decide (p = l.1) then ∅ else h_block h p.
 Proof.
-  apply map_eq => ?. rewrite !lookup_total_gmap_curry /=.
-  rewrite map_lookup_filter_None_2; naive_solver.
+  apply map_eq => ?.
+  rewrite !lookup_total_gmap_curry /=.
+  case_decide.
+  - rewrite map_lookup_filter_None_2; naive_solver.
+  - by rewrite map_lookup_filter_true // h_block_lookup.
 Qed.
 
-Lemma h_block_free_ne h p l:
-  l.1 ≠ p →
-  h_block (heap_free h l) p = h_block h p.
+Lemma h_blocks_free h l :
+  h_blocks (heap_free h l) = alter (λ _, ∅) l.1 (h_blocks h).
 Proof.
-  move => ?. apply map_eq => ?. rewrite !lookup_total_gmap_curry /=.
-  by rewrite map_lookup_filter_true.
+  apply map_eq => p. apply option_eq => ?.
+  rewrite h_blocks_lookup_Some/= lookup_alter_Some.
+  setoid_rewrite h_blocks_lookup_Some.
+  rewrite h_block_free.
+  case_decide; naive_solver.
 Qed.
+
+Program Definition heap_remove_loc (h : heap_state) (l : loc) : heap_state :=
+  Heap (delete l (h_heap h)) (h_provs h) _.
+Next Obligation. move => ??? /lookup_delete_is_Some[??]. by apply heap_wf. Qed.
+
+Lemma h_block_heap_remove_loc h p l:
+  h_block (heap_remove_loc h l) p = if decide (p = l.1) then delete l.2 (h_block h p) else h_block h p.
+Proof.
+  apply map_eq => i. apply option_eq => ?. rewrite !lookup_total_gmap_curry /=.
+  rewrite lookup_delete_Some -h_block_lookup.
+  case_decide. 2: naive_solver.
+  rewrite lookup_delete_Some. destruct l. naive_solver.
+Qed.
+
+Lemma h_blocks_heap_remove_loc h l b :
+  h_blocks h !! l.1 = Some b →
+  h_blocks (heap_remove_loc h l) = <[l.1:=delete l.2 b]> (h_blocks h).
+Proof.
+  move => /h_blocks_lookup_Some [??]. subst. apply map_eq => p'. apply option_eq => ?.
+  rewrite h_blocks_lookup_Some/= lookup_insert_Some h_blocks_lookup_Some.
+  rewrite h_block_heap_remove_loc.
+  case_decide; naive_solver.
+Qed.
+
+Program Definition heap_remove_prov (h : heap_state) (p : prov) : heap_state :=
+  Heap (filter (λ l, l.1.1 ≠ p) h.(h_heap)) (h.(h_provs) ∖ {[p]}) _.
+Next Obligation.
+  move => ???. rewrite map_lookup_filter => -[?/bind_Some[?[?/bind_Some[?[??]]]]].
+  apply elem_of_difference. split; [|set_solver].
+  by apply heap_wf.
+Qed.
+
+Lemma h_block_remove_prov h p p':
+  h_block (heap_remove_prov h p') p = if decide (p = p') then ∅ else h_block h p.
+Proof.
+  apply map_eq => ?. rewrite !lookup_total_gmap_curry /=.
+  case_decide.
+  - rewrite map_lookup_filter_None_2 //. naive_solver.
+  - rewrite map_lookup_filter_true //. by rewrite h_block_lookup.
+Qed.
+
+Lemma h_blocks_heap_remove_prov h p :
+  h_blocks (heap_remove_prov h p) = delete p (h_blocks h).
+Proof.
+  apply map_eq => p'. apply option_eq => ?.
+  rewrite h_blocks_lookup_Some/= lookup_delete_Some h_blocks_lookup_Some.
+  rewrite elem_of_difference not_elem_of_singleton h_block_remove_prov.
+  case_decide; naive_solver.
+Qed.
+
 
 Program Definition heap_merge (h1 h2 : heap_state) : heap_state :=
   Heap (h_heap h1 ∪ h_heap h2) (h_provs h1 ∪ h_provs h2) _.
@@ -904,6 +1095,30 @@ Global Instance heap_merge_right_id : RightId (=) ∅ heap_merge.
 Proof. move => ?. apply heap_state_eq => /=. by rewrite !right_id_L. Qed.
 Global Instance heap_merge_assoc : Assoc (=) heap_merge.
 Proof. move => ???. apply heap_state_eq => /=. split; [|set_solver]. by rewrite assoc_L. Qed.
+
+Lemma h_block_heap_merge h1 h2 p :
+  h_provs h1 ## h_provs h2 →
+  h_block (heap_merge h1 h2) p = if decide (p ∈ h_provs h1) then h_block h1 p else h_block h2 p.
+Proof.
+  move => Hdisj.
+  apply map_eq => ?. apply option_eq => ?.
+  rewrite h_block_lookup/=. rewrite lookup_union_Some.
+  2: { apply map_disjoint_spec => ??? /lookup_heap_Some_elem_of_h_provs? /lookup_heap_Some_elem_of_h_provs?. set_solver. }
+  rewrite -!h_block_lookup. case_decide; split => Hl; destruct!; try naive_solver.
+  all: move: Hl; rewrite h_block_lookup => /lookup_heap_Some_elem_of_h_provs; set_solver.
+Qed.
+
+Lemma h_blocks_heap_merge h1 h2 :
+  h_provs h1 ## h_provs h2 →
+  h_blocks (heap_merge h1 h2) = h_blocks h1 ∪ h_blocks h2.
+Proof.
+  move => Hdisj.
+  apply map_eq => ?. apply option_eq => ?.
+  rewrite h_blocks_lookup_Some/= h_block_heap_merge // elem_of_union.
+  rewrite lookup_union_Some.
+  2: { apply map_disjoint_dom_2. by rewrite !h_blocks_dom. }
+  rewrite !h_blocks_lookup_Some. case_decide; set_solver.
+Qed.
 
 Program Definition heap_restrict (h : heap_state) (P : prov → Prop) `{!∀ x, Decision (P x)} : heap_state :=
   Heap (filter (λ x, P x.1.1) h.(h_heap)) h.(h_provs) _.
@@ -948,23 +1163,42 @@ Proof.
   setoid_rewrite lookup_insert_Some. naive_solver.
 Qed.
 
-Lemma h_block_heap_merge_block p b h:
-  p ∉ h_provs h →
-  h_block (heap_merge (heap_from_blocks {[p := b]}) h) p = b.
+Lemma h_block_heap_from_blocks bs p :
+  h_block (heap_from_blocks bs) p = bs !!! p.
 Proof.
-  move => ?. rewrite /h_block /heap_alloc /=.
-  apply map_eq => i. rewrite !lookup_total_gmap_curry.
-  rewrite lookup_union_l ?lookup_gmap_uncurry ?lookup_singleton //.
-  apply eq_None_not_Some. move => /lookup_heap_is_Some_elem_of_h_provs. naive_solver.
+  apply map_eq => o. rewrite h_block_lookup => /=.
+  rewrite lookup_gmap_uncurry lookup_total_alt.
+  by destruct (bs !! p).
 Qed.
 
-Lemma h_block_heap_merge_block_ne p p2 b h:
-  p ≠ p2 →
-  h_block (heap_merge (heap_from_blocks {[p := b]}) h) p2 = h_block h p2.
+Lemma h_blocks_heap_from_blocks bs :
+  h_blocks (heap_from_blocks bs) = bs.
 Proof.
-  move => ?. rewrite /h_block /heap_alloc /=.
-  apply map_eq => i. rewrite !lookup_total_gmap_curry.
-  by rewrite lookup_union_r // lookup_gmap_uncurry lookup_singleton_ne.
+  apply map_eq => p. apply option_eq => ?.
+  rewrite h_blocks_lookup_Some/=. split.
+  - move => [/elem_of_dom[??] ->]. rewrite h_block_heap_from_blocks. by erewrite lookup_total_correct.
+  - move => ?. rewrite elem_of_dom h_block_heap_from_blocks. split; [done|].
+    by erewrite lookup_total_correct.
+Qed.
+
+Lemma h_block_heap_merge_block p p' b h:
+  p ∉ h_provs h →
+  h_block (heap_merge (heap_from_blocks {[p := b]}) h) p' = if decide (p = p') then b else h_block h p'.
+Proof.
+  move => ?.
+  rewrite h_block_heap_merge /=. 2: set_solver.
+  rewrite dom_singleton_L. repeat case_decide => //; subst. 2, 3: set_solver.
+  rewrite h_block_heap_from_blocks. rewrite lookup_total_singleton //.
+Qed.
+
+Lemma h_blocks_heap_merge_block p  b h:
+  p ∉ h_provs h →
+  h_blocks (heap_merge (heap_from_blocks {[p := b]}) h) = <[p:=b]> (h_blocks h).
+Proof.
+  move => ?. apply map_eq => p'. apply option_eq => ?.
+  rewrite h_blocks_lookup_Some/= h_block_heap_merge_block //.
+  rewrite dom_singleton_L lookup_insert_Some h_blocks_lookup_Some.
+  case_decide; set_solver.
 Qed.
 
 Fixpoint heap_fresh_list (xs : list Z) (bs : gset block_id) (h : heap_state) : list loc :=

@@ -36,6 +36,7 @@ dimsum_examples/rec.v
 dimsum_examples/heapUR.v
 dimsum_examples/rec_heap_bij.v
 dimsum_examples/rec_heap_inj.v
+dimsum_examples/rec_heap_inj_vertical.v
 dimsum_examples/rec_to_asm.v
 dimsum_examples/r2a_bij_vertical.v
 dimsum_examples/coroutine.v

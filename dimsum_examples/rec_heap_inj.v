@@ -22,6 +22,9 @@ Definition heap_injUR : ucmra :=
 Global Instance heap_injUR_shrink : Shrink heap_injUR.
 Proof. solve_shrink. Qed.
 
+Global Instance heap_injUR_discrete : CmraDiscrete heap_injUR.
+Proof. apply _. Qed.
+
 Program Definition own_heap_s : BiOwn (uPredI heap_injUR) heapUR := {|
   bi_own r := uPred_ownM (None, (ε, (r, ε)))
 |}.
@@ -57,12 +60,15 @@ Definition heap_injUR_shared_inj (r : (gmap_viewUR prov (agreeR locO))) : heap_i
 
 (** * ghost theory *)
 (** ** Ghost state definitions *)
-Definition heap_inj_shared_auth (ps : gmap prov loc) : uPred (heap_injUR) :=
+Definition heap_inj_shared_auth_raw (ps : gmap prov loc) : uPred (heap_injUR) :=
   uPred_ownM (heap_injUR_shared_inj $ gmap_view_auth (DfracOwn 1) (to_agree <$> ps)).
 Definition heap_inj_shared (ps : prov) (li : loc) : uPred (heap_injUR) :=
   uPred_ownM (heap_injUR_shared_inj $ gmap_view_frag ps DfracDiscarded (to_agree li)).
 Definition heap_inj_statics (provs : gset prov) :=
   uPred_ownM (heap_injUR_statics_inj (to_agree provs)).
+
+Definition heap_inj_shared_auth (ps : gmap prov loc) : uPred (heap_injUR) :=
+  heap_inj_shared_auth_raw ps ∗ [∗ map] ps↦li0∈ps, heap_inj_shared ps li0.
 
 Notation heap_inj_inv_s := (heapUR_inv own_heap_s).
 Notation heap_inj_inv_i := (heapUR_inv own_heap_i).
@@ -94,10 +100,10 @@ Proof.
   by fold_leibniz.
 Qed.
 
-Lemma heap_inj_shared_alloc ps li0 inj :
+Lemma heap_inj_shared_alloc_raw ps li0 inj :
   inj !! ps = None →
-  heap_inj_shared_auth inj ⊢ |==>
-  heap_inj_shared_auth (<[ps := li0]>inj) ∗ heap_inj_shared ps li0.
+  heap_inj_shared_auth_raw inj ⊢ |==>
+  heap_inj_shared_auth_raw (<[ps := li0]>inj) ∗ heap_inj_shared ps li0.
 Proof.
   move => ?. rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
   apply prod_update; [done|] => /=. apply prod_update; [|done] => /=.
@@ -105,8 +111,17 @@ Proof.
   by rewrite lookup_fmap fmap_None.
 Qed.
 
-Lemma heap_inj_shared_lookup ps li0 inj  :
-  heap_inj_shared_auth inj -∗
+Lemma heap_inj_shared_alloc ps li0 inj :
+  inj !! ps = None →
+  heap_inj_shared_auth inj ⊢ |==>
+  heap_inj_shared_auth (<[ps := li0]>inj) ∗ heap_inj_shared ps li0.
+Proof.
+  iIntros (?) "[??]". iMod (heap_inj_shared_alloc_raw with "[$]") as "[$ #$]"; [done|].
+  iModIntro. by iApply big_sepM_insert_2.
+Qed.
+
+Lemma heap_inj_shared_lookup_raw ps li0 inj  :
+  heap_inj_shared_auth_raw inj -∗
   heap_inj_shared ps li0 -∗
   ⌜inj !! ps = Some li0⌝.
 Proof.
@@ -118,6 +133,57 @@ Proof.
   move => /to_agree_included_L. naive_solver.
 Qed.
 
+Lemma heap_inj_shared_lookup ps li0 inj  :
+  heap_inj_shared_auth inj -∗
+  heap_inj_shared ps li0 -∗
+  ⌜inj !! ps = Some li0⌝.
+Proof. iIntros "[? _]". by iApply heap_inj_shared_lookup_raw. Qed.
+
+Lemma heap_inj_shared_lookup_big inj' inj  :
+  heap_inj_shared_auth inj -∗
+  ([∗map] ps↦li0∈inj', heap_inj_shared ps li0) -∗
+  ⌜inj' ⊆ inj⌝.
+Proof.
+  iIntros "Ha Hl". iInduction inj' as [|] "IH" using map_ind.
+  { iPureIntro. apply map_empty_subseteq. }
+  iDestruct (big_sepM_insert with "Hl") as "[??]"; [done|].
+  iDestruct ("IH" with "[$] [$]") as %?.
+  iDestruct (heap_inj_shared_lookup with "Ha [$]") as %?.
+  iPureIntro. by apply insert_subseteq_l.
+Qed.
+
+Lemma heap_inj_shared_alloc_big_raw inj inj' :
+  inj ⊆ inj' →
+  heap_inj_shared_auth inj ⊢ |==>
+  heap_inj_shared_auth inj'.
+Proof.
+  iIntros (Hsub) "?". rewrite -(map_difference_union inj inj') //.
+  have Hdisj : (inj ##ₘ inj' ∖ inj) by apply map_disjoint_difference_r'.
+  rewrite map_union_comm //.
+  iInduction (inj' ∖ inj) as [|] "IH" using map_ind forall (Hdisj).
+  { by rewrite left_id_L. }
+  move: Hdisj => /map_disjoint_insert_r[??].
+  iMod ("IH" with "[%] [$]") as "?"; [done|].
+  rewrite -insert_union_l.
+  iMod (heap_inj_shared_alloc with "[$]") as "[$ _]". 2: done.
+  by apply lookup_union_None.
+Qed.
+
+Lemma heap_inj_shared_alloc_big inj inj' :
+  inj ⊆ inj' →
+  heap_inj_shared_auth inj ⊢ |==>
+  heap_inj_shared_auth inj' ∗ [∗ map] ps↦li0∈inj', heap_inj_shared ps li0.
+Proof.
+  iIntros (Hsub) "?".
+  iMod (heap_inj_shared_alloc_big_raw with "[$]") as "[? ?]"; [done|].
+  iModIntro. iSplit!. iFrame.
+Qed.
+
+Lemma heap_inj_shared_auth_shared inj :
+  heap_inj_shared_auth inj ⊢ [∗ map] ps↦li0∈inj, heap_inj_shared ps li0.
+Proof. iIntros "[? $]". Qed.
+
+Global Typeclasses Opaque heap_inj_shared_auth.
 
 (** * val_in_inj *)
 Definition loc_in_inj (li ls : loc) : uPred heap_injUR :=
@@ -182,8 +248,7 @@ Definition heap_in_inj_inv (inj : gmap prov loc) (rem : list prov) :
       [∗ map] o↦vi;vs∈bi;bs, val_in_inj vi vs.
 
 Definition heap_in_inj (rem : list prov) : uPred heap_injUR :=
-  ∃ inj, heap_inj_shared_auth inj ∗ heap_in_inj_inv inj rem ∗
-   [∗ map] ps↦li0∈inj, heap_inj_shared ps li0.
+  ∃ inj, heap_inj_shared_auth inj ∗ heap_in_inj_inv inj rem.
 
 Lemma heap_in_inj_inv_borrow ps li0 rem inj :
   ps ∉ rem →
@@ -197,6 +262,21 @@ Proof.
   iSplit!. iApply "Hinj". 2: by iLeft; iPureIntro; set_solver.
   iIntros "!>" (????) "[%|$]". by iLeft; iPureIntro; set_solver.
 Qed.
+
+Lemma heap_in_inj_inv_split inj' inj :
+  inj' ⊆ inj →
+  heap_in_inj_inv inj [] ⊣⊢
+  heap_in_inj_inv inj' [] ∗ heap_in_inj_inv (inj ∖ inj') [].
+Proof.
+  move => ?. rewrite /heap_in_inj_inv -big_sepM_union ?map_difference_union//.
+  apply map_disjoint_difference_r'.
+Qed.
+
+Lemma heap_in_inj_inv_combine inj' inj :
+  heap_in_inj_inv inj [] -∗
+  heap_in_inj_inv inj' [] -∗
+  heap_in_inj_inv (inj ∪ inj') [].
+Proof. apply: big_sepM_union_2. Qed.
 
 Lemma heap_in_inj_inv_return i ps bi bs li0 rem inj :
   rem !! i = Some ps →
@@ -231,7 +311,7 @@ Proof. iIntros (??) "????". by iApply (heap_in_inj_inv_return 0 with "[$] [$] [$
 
 Lemma heap_in_inj_init :
   heap_inj_shared_auth ∅ -∗ heap_in_inj [].
-Proof. iIntros "$". by iSplit; iApply big_sepM_empty. Qed.
+Proof. iIntros "$". by iApply big_sepM_empty. Qed.
 
 Lemma heap_in_inj_borrow ps li0 rem :
   ps ∉ rem →
@@ -240,7 +320,7 @@ Lemma heap_in_inj_borrow ps li0 rem :
   ∃ bi bs, ⌜li0.2 = 0%Z⌝ ∗ heap_in_inj (ps :: rem) ∗
   li0.1 ↦∗hi bi ∗ ps ↦∗hs bs ∗ [∗ map] o↦vi;vs∈bi;bs, val_in_inj vi vs.
 Proof.
-  iIntros (?) "[%inj [? [Hinj ?]]] Hsh".
+  iIntros (?) "[%inj [? Hinj]] Hsh".
   iDestruct (heap_inj_shared_lookup with "[$] [$]") as %?.
   iDestruct (heap_in_inj_inv_borrow with "[$]") as (???) "[$ [$ $]]" => //.
   by iFrame.
@@ -256,7 +336,7 @@ Lemma heap_in_inj_return i ps bi bs li0 rem :
   ([∗ map] o↦vi;vs∈bi;bs, val_in_inj vi vs) -∗
   heap_in_inj (delete i rem).
 Proof.
-  iIntros (??) "[%inj [? [Hinj ?]]] Hsh Hi Hs Hvs".
+  iIntros (??) "[%inj [? Hinj]] Hsh Hi Hs Hvs".
   iDestruct (heap_inj_shared_lookup with "[$] [$]") as %?.
   iExists _. iFrame. by iApply (heap_in_inj_inv_return with "[$] [$] [$]").
 Qed.
@@ -326,10 +406,10 @@ Proof.
   iDestruct (heap_in_inj_borrow with "[$] [$]") as (bi bs Hli0) "[?[Hli[??]]]"; [done|].
   iDestruct (heapUR_lookup_block with "Hinvs [$]") as %<-.
   iDestruct (heapUR_lookup_block with "Hinvi [$]") as %<-.
-  iMod (heapUR_update_block with "[$] [$]") as "[$ ?]"; [eexists _; done|].
+  iMod (heapUR_update_in_block with "[$] [$]") as "[$ ?]"; [eexists _; done|].
   iDestruct (big_sepM2_lookup_r with "[$]") as (??) "#_".
   { move: Ha. by rewrite h_block_lookup2. }
-  iMod (heapUR_update_block with "[$] [Hli]") as "[$ ?]" => /=.
+  iMod (heapUR_update_in_block with "[$] [Hli]") as "[$ ?]" => /=.
   { eexists _. by rewrite h_block_lookup2 /= Hli0 Z.add_0_l. } { done. }
   iModIntro. rewrite Hli0 Z.add_0_l.
   iApply (heap_in_inj_return0 with "[$] [$] [$] [$]"); [done|].
@@ -347,14 +427,13 @@ Lemma heap_in_inj_share li ls rem bi bs :
   heap_in_inj rem ∗
   loc_in_inj li ls.
 Proof.
-  iIntros (? ? Hl0) "[%inj[?[??]]] ???".
+  iIntros (? ? Hl0) "[%inj[??]] ???".
   destruct (inj !! ls.1) eqn:?. {
     iDestruct (heap_in_inj_inv_borrow with "[$]") as (???) "[? [?[??]]]"; [done..|].
     iDestruct (heapUR_block_excl with "[$] [$]") as %[]. }
   iMod (heap_inj_shared_alloc with "[$]") as "[? #$]"; [done|]. iModIntro.
-  iSplit. 2: { iPureIntro. by rewrite Hl0 offset_loc_0. } iFrame. iSplit.
-  - iApply big_sepM_insert; [done|]. iFrame. iRight. by iFrame.
-  - iApply big_sepM_insert; [done|]. iFrame "#∗".
+  iSplit. 2: { iPureIntro. by rewrite Hl0 offset_loc_0. } iFrame.
+  iApply big_sepM_insert; [done|]. iFrame. iRight. by iFrame.
 Qed.
 
 Lemma heap_in_inj_free hi hs li ls rem:
@@ -460,7 +539,7 @@ Proof.
   iModIntro. rewrite !h_static_provs_heap_update. iFrame.
 Qed.
 
-Lemma heap_inj_inv_update_block_i hi hs li v rem b :
+Lemma heap_inj_inv_update_in_block_i hi hs li v rem b :
   heap_alive hi li →
   heap_inj_inv hi hs rem -∗
   li.1 ↦∗hi b ==∗
@@ -468,11 +547,11 @@ Lemma heap_inj_inv_update_block_i hi hs li v rem b :
   li.1 ↦∗hi (<[li.2 :=v]> b).
 Proof.
   iIntros (?) "(?&$&$&?&$) ?".
-  iMod (heapUR_update_block with "[$] [$]") as "[$ $]"; [done|].
+  iMod (heapUR_update_in_block with "[$] [$]") as "[$ $]"; [done|].
   by rewrite h_static_provs_heap_update.
 Qed.
 
-Lemma heap_inj_inv_update_block_s hi hs ls vs rem b :
+Lemma heap_inj_inv_update_in_block_s hi hs ls vs rem b :
   heap_alive hs ls →
   heap_inj_inv hi hs rem -∗
   ls.1 ↦∗hs b ==∗
@@ -480,7 +559,7 @@ Lemma heap_inj_inv_update_block_s hi hs ls vs rem b :
   ls.1 ↦∗hs (<[ls.2:=vs]> b).
 Proof.
   iIntros (?) "($&Hinvs&$&$&?) ?".
-  iMod (heapUR_update_block with "[$] [$]") as "[$ $]"; [done|].
+  iMod (heapUR_update_in_block with "[$] [$]") as "[$ $]"; [done|].
   by rewrite h_static_provs_heap_update.
 Qed.
 
@@ -589,7 +668,7 @@ Proof.
   iDestruct "Hls" as "[Hl Hls]".
   iAssert ⌜heap_range hi l0 z⌝%I as %?. {
     iDestruct "Hinv" as "(?&?&?&?)".
-    iApply (heap_in_inj_range with "[$] [$] [$] [$]"); [done| set_solver].
+    iApply (heap_in_inj_range with "[$] [$] [$] [$]"); [done..| set_solver].
   }
   iMod (heap_inj_inv_free with "[$] [$]") as "[??]"; [set_solver|done..|].
   iMod ("IH" with "[//] [//] [//] [//] [$] [$]") as (??) "?". iModIntro. by iFrame.
@@ -686,7 +765,7 @@ Proof.
   rewrite (pair_split (Some _)) uPred.ownM_op.
   rewrite (pair_split (gmap_view_auth _ _)) pair_op_2 uPred.ownM_op.
   rewrite (pair_split (heapUR_init)) !pair_op_2 uPred.ownM_op.
-  iIntros!. rewrite -!heapUR_init_own. by iFrame.
+  iIntros!. rewrite -!heapUR_init_own /heap_inj_shared_auth big_sepM_empty. by iFrame.
 Qed.
 
 Lemma heap_inj_inv_init bs :
@@ -1278,7 +1357,7 @@ Proof.
   apply: Hcall; [done|econs|econs|..].
   { iSatMonoBupd. iIntros!. iFrame.
     iMod (heap_inj_inv_alloc_s _ _ l with "[$]") as "[? ?]"; [done|].
-    iMod (heap_inj_inv_update_block_s with "[$] [$]") as "[$ ?]"; [done|].
+    iMod (heap_inj_inv_update_in_block_s with "[$] [$]") as "[$ ?]"; [done|].
     iModIntro. iAccu. }
   iSatClear.
   move => v1'' v2'' h1'' h2'' rf'' ? /=.
