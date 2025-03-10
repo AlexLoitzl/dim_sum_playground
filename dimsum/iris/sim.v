@@ -2,28 +2,77 @@ From iris.bi Require Import fixpoint_mono.
 From iris.proofmode Require Export proofmode.
 From iris.base_logic.lib Require Export fancy_updates.
 From iris.base_logic.lib Require Export ghost_var.
+From dimsum.core Require Import axioms.
 From dimsum.core Require Export module trefines.
 From dimsum.core.iris Require Export ord_later.
 Set Default Proof Using "Type".
 
+(** * curly_lambda *)
+(** These notations prevent the type of the argument being printed,
+which would blow up the context in many cases. See
+https://coq.zulipchat.com/#narrow/stream/237977-Coq-users/topic/Disable.20printing.20types.20of.20binders*)
+Definition curly_lambda1 {A B} (f : ∀ x : A, B x) : ∀ x : A, B x := f.
+Definition curly_lambda2 {A B} (f : ∀ x : A, B x) : ∀ x : A, B x := f.
+Definition curly_lambda3 {A B} (f : ∀ x : A, B x) : ∀ x : A, B x := f.
+Definition curly_lambda4 {A B} (f : ∀ x : A, B x) : ∀ x : A, B x := f.
+Arguments curly_lambda1 _ _ & _.
+Arguments curly_lambda2 _ _ & _.
+Arguments curly_lambda3 _ _ & _.
+Arguments curly_lambda4 _ _ & _.
+Arguments curly_lambda1 _ _ _ _ /.
+Arguments curly_lambda2 _ _ _ _ /.
+Arguments curly_lambda3 _ _ _ _ /.
+Arguments curly_lambda4 _ _ _ _ /.
+Strategy expand [curly_lambda1 curly_lambda2 curly_lambda3 curly_lambda4].
+
+(* TODO: Is it good to burn ({{ as a token or should we use something
+else? E.g ({λ x , v }) ? *)
+(** These notations are carefully designed such that they don't cause
+too much indentation. *)
+Notation "'({{' x , v } } )" := (curly_lambda1 (fun x => v))
+    (x name, at level 0, format "({{  x ,  '/' v  } } )") : stdpp_scope.
+Notation "'({{' x y , v } } )" := (curly_lambda2 (fun x y => v))
+    (x name, y name, at level 0, format "({{  x  y ,  '/' v } } )") : stdpp_scope.
+Notation "'({{' x y z , v } } )" := (curly_lambda3 (fun x y z => v))
+    (x name, y name, z name, at level 0,
+      format "({{  x  y  z ,  '/' v  } } )") : stdpp_scope.
+Notation "'({{' x y z a , v } } )" := (curly_lambda4 (fun x y z a => v))
+    (x name, y name, z name, a name, at level 0,
+      format "({{  x  y  z  a ,  '/' v  } } )") : stdpp_scope.
+(* The following notations cause too much of a right drift. *)
+(** By using level 200, we avoid parsing conflicts with the wp
+notation. It also means that the notation usually needs to be written
+as "({{ ... }})". *)
+(* Notation "'{{' x , v } }" := (curly_lambda1 (fun x => v)) *)
+(*     (x ident, at level 200, format "{{  x ,  '[' v ']' } }") : stdpp_scope. *)
+(* Notation "'{{' x y , v } }" := (curly_lambda2 (fun x y => v)) *)
+(*     (x ident, y ident, at level 200, format "{{  x  y ,  v } }") : stdpp_scope. *)
+(* Notation "'{{' x y z , v } }" := (curly_lambda3 (fun x y z => v)) *)
+(*     (x ident, y ident, z ident, at level 200, *)
+(*       format "{{  x  y  z ,  v } }") : stdpp_scope. *)
+
 (** * mstate_var *)
-Class mstateG (Σ : gFunctors) (S : Type) := MStateGS {
-  mstate_ghost_varG :: ghost_varG Σ S;
+Record mstate_var_type : TypeOrdinal := MstateVar {
+  mstate_var_ty : TypeState;
+  mstate_val_val : mstate_var_ty;
 }.
-Global Hint Mode mstateG - ! : typeclass_instances.
+Class mstateG (Σ : gFunctors) := MStateGS {
+  mstate_ghost_varG :: ghost_varG Σ mstate_var_type;
+}.
+Global Hint Mode mstateG - : typeclass_instances.
 
-Definition mstateΣ S : gFunctors :=
-  #[ ghost_varΣ S ].
+Definition mstateΣ : gFunctors :=
+  #[ ghost_varΣ mstate_var_type ].
 
-Global Instance subG_mstateΣ Σ S :
-  subG (mstateΣ S) Σ → mstateG Σ S.
+Global Instance subG_mstateΣ Σ :
+  subG mstateΣ Σ → mstateG Σ.
 Proof. solve_inG. Qed.
 
-Definition mstate_var {Σ S} `{!mstateG Σ S} (γ : gname) (s : S) :=
-  ghost_var γ (1/2) s.
+Definition mstate_var {Σ} {S : TypeState} `{!mstateG Σ} (γ : gname) (s : S) :=
+  ghost_var γ (1/2) (MstateVar _ s).
 
-Definition mstate_var_full {Σ S} `{!mstateG Σ S} (γ : gname) :=
-  (∃ s : S, ghost_var γ 1 s)%I.
+Definition mstate_var_full {Σ} {S : TypeState} `{!mstateG Σ} (γ : gname) :=
+  (∃ s : S, ghost_var γ 1 (MstateVar _ s))%I.
 
 Notation "γ '⤳' σ " := (mstate_var γ σ)
    (at level 20, format "γ  '⤳'  σ") : bi_scope.
@@ -33,7 +82,7 @@ Notation "γ '⤳@{' S '}' '-' " := (mstate_var_full (S:=S) γ)
    (at level 20, only parsing) : bi_scope.
 
 Section mstate_var.
-  Context {Σ S} `{!mstateG Σ S}.
+  Context {Σ} {S : TypeState} `{!mstateG Σ}.
   Implicit Types (σ : S).
 
   Lemma mstate_var_alloc `{!Inhabited S}:
@@ -43,8 +92,8 @@ Section mstate_var.
   Lemma mstate_var_merge γ σ1 σ2 :
     γ ⤳ σ1 -∗ γ ⤳ σ2 -∗ ⌜σ1 = σ2⌝ ∗ γ ⤳@{S} -.
   Proof.
-    iIntros "H1 H2". iDestruct (ghost_var_agree with "[$] [$]") as %->. iSplit; [done|].
-    iExists _. iFrame.
+    iIntros "H1 H2". iDestruct (ghost_var_agree with "[$] [$]") as %[=].
+    simplify_K. iSplit; [done|]. iExists _. iFrame.
   Qed.
 
   Lemma mstate_var_split γ σ :
@@ -52,6 +101,7 @@ Section mstate_var.
   Proof. iIntros "[% H]". by iMod (ghost_var_update with "H") as "[$ $]". Qed.
 
 End mstate_var.
+Global Arguments mstate_var_alloc {_} _ {_ _}.
 
 Global Typeclasses Opaque mstate_var mstate_var_full.
 
@@ -60,16 +110,18 @@ Global Typeclasses Opaque mstate_var mstate_var_full.
 Class dimsumPreG (Σ : gFunctors) := DimsumPreG {
   dimsum_pre_invG :: invGpreS Σ;
   dimsum_pre_ord_laterG :: ord_laterPreG Σ;
+  dimsum_pre_mstateG :: mstateG Σ;
 }.
 
 Class dimsumGS (Σ : gFunctors) := DimsumGS {
   dimsum_invGS :: invGS_gen HasNoLc Σ;
   dimsum_ord_laterGS :: ord_laterGS Σ;
+  dimsum_mstateG :: mstateG Σ;
 }.
 Global Opaque dimsum_invGS.
 
 Definition dimsumΣ : gFunctors :=
-  #[ ord_laterΣ; invΣ ].
+  #[ ord_laterΣ; invΣ; mstateΣ ].
 
 Global Instance subG_dimsumΣ Σ :
   subG (dimsumΣ) Σ → dimsumPreG Σ.
@@ -144,6 +196,30 @@ Section tgt_src.
   Proof.
     iIntros "? Hwand". iApply (ts_step_wand_strong with "[$]").
     iIntros (??) "?". by iApply "Hwand".
+  Qed.
+
+  Lemma ts_step_det ts m σ κ σ' Pσ Φ :
+    m.(m_step) σ κ Pσ →
+    (∀ σ'', Pσ σ'' → σ'' = σ') →
+    (∀ κ' Pσ', m.(m_step) σ κ' Pσ' → κ' = κ ∧ Pσ' σ') →
+    Φ κ σ' -∗
+    ts_step ts m σ Φ.
+  Proof.
+    iIntros (? Hs Ht) "HΦ". destruct ts => /=.
+    - iIntros (??[-> ?]%Ht) "!>". by iFrame.
+    - iSplit!; [done|]. by iIntros "!>" (? ->%Hs).
+  Qed.
+
+  Lemma ts_step_dem {m} P ts σ κ Pσ Φ :
+    m.(m_step) σ κ Pσ →
+    (∀ σ'', Pσ σ'' → P σ'') →
+    (∀ κ' Pσ', m.(m_step) σ κ' Pσ' → ∃ σ', κ' = κ ∧ P σ' ∧ Pσ' σ') →
+    (∀ σ', ⌜P σ'⌝ -∗ Φ κ σ') -∗
+    ts_step ts m σ Φ.
+  Proof.
+    iIntros (? Hs Ht) "HΦ". destruct ts => /=.
+    - iIntros (??[? [-> [??]]]%Ht) "!>". iSplit!; [done|]. by iApply "HΦ".
+    - iSplit!; [done|]. iIntros "!>" (? ?%Hs). by iApply "HΦ".
   Qed.
 End tgt_src.
 
@@ -318,6 +394,23 @@ Section sim_gen.
     (|={∅}=> σ ≈{ ts, m }≈> Π) -∗
     σ ≈{ ts, m }≈> Π.
   Proof. iIntros "Hsim". rewrite sim_gen_unfold. iMod "Hsim". iApply "Hsim". Qed.
+
+  Global Instance elim_modal_fupd_sim_gen p P σ Π :
+    ElimModal True p false (|={∅}=> P) P (σ ≈{ ts, m }≈> Π) (σ ≈{ ts, m }≈> Π).
+  Proof.
+    iIntros (?) "[HP HT]". rewrite bi.intuitionistically_if_elim.
+    iApply fupd_sim_gen. iMod "HP". by iApply "HT".
+  Qed.
+
+  Global Instance elim_modal_bupd_sim_gen p P σ Π :
+    ElimModal True p false (|==> P) P (σ ≈{ ts, m }≈> Π) (σ ≈{ ts, m }≈> Π).
+  Proof.
+    iIntros (?) "[HP HT]". rewrite bi.intuitionistically_if_elim.
+    iApply fupd_sim_gen. iMod "HP". by iApply "HT".
+  Qed.
+
+  Global Instance is_except_0_fupd_sim_gen σ Π : IsExcept0 (σ ≈{ ts, m }≈> Π).
+  Proof. rewrite /IsExcept0. iIntros "?". iApply fupd_sim_gen. by rewrite -except_0_fupd -fupd_intro. Qed.
 
   Lemma sim_gen_ctx σ Π :
     (ord_later_ctx -∗ σ ≈{ ts, m }≈> Π) -∗
@@ -538,7 +631,24 @@ Section sim.
   Lemma fupd_sim σ_t σ_s :
     (|={∅}=> σ_t ⪯{m_t, m_s} σ_s) -∗
     σ_t ⪯{m_t, m_s} σ_s.
-  Proof. iIntros "Hsim". rewrite sim_unfold. by iApply fupd_sim_gen. Qed.
+  Proof. iIntros "Hsim". rewrite sim_unfold. by iMod "Hsim". Qed.
+
+  Global Instance elim_modal_fupd_sim p P σ_t σ_s :
+    ElimModal True p false (|={∅}=> P) P (σ_t ⪯{m_t, m_s} σ_s) (σ_t ⪯{m_t, m_s} σ_s).
+  Proof.
+    iIntros (?) "[HP HT]". rewrite bi.intuitionistically_if_elim.
+    iApply fupd_sim. iMod "HP". by iApply "HT".
+  Qed.
+
+  Global Instance elim_modal_bupd_sim p P σ_t σ_s :
+    ElimModal True p false (|==> P) P (σ_t ⪯{m_t, m_s} σ_s) (σ_t ⪯{m_t, m_s} σ_s).
+  Proof.
+    iIntros (?) "[HP HT]". rewrite bi.intuitionistically_if_elim.
+    iApply fupd_sim. iMod "HP". by iApply "HT".
+  Qed.
+
+  Global Instance is_except_0_fupd_sim σ_t σ_s : IsExcept0 (σ_t ⪯{m_t, m_s} σ_s).
+  Proof. rewrite /IsExcept0. iIntros "?". iApply fupd_sim. by rewrite -except_0_fupd -fupd_intro. Qed.
 
   Lemma sim_ctx σ_t σ_s :
     (ord_later_ctx -∗ σ_t ⪯{m_t, m_s} σ_s) -∗
@@ -555,18 +665,15 @@ Section sim.
     σ_t ≈{m_t}≈>ₜ sim_tgtP σ_s -∗ σ_t ⪯{m_t, m_s} σ_s.
   Proof. iIntros "?". by rewrite sim_unfold. Qed.
 
-  Definition sim_src_constP `{!mstateG Σ (m_state m_t)} `{!mstateG Σ (option EV)}
-    (γσ_t γκ : gname) :
+  Definition sim_src_constP (γσ_t γκ : gname) :
     option EV → m_state m_s → iProp Σ :=
     λ κ' σ_s', (∀ κ σ_t', γκ ⤳ κ -∗ γσ_t ⤳ σ_t' -∗ ⌜κ = κ'⌝ ∗ σ_t' ⪯{m_t, m_s} σ_s')%I.
 
-  Definition sim_tgt_constP
-    `{!mstateG Σ (m_state m_s)} `{!mstateG Σ (m_state m_t)} `{!mstateG Σ (option EV)}
-    (γσ_t γσ_s γκ : gname) :
+  Definition sim_tgt_constP (γσ_t γσ_s γκ : gname) :
     option EV → m_state m_t → iProp Σ :=
     λ κ σ_t', (∀ σ_s, γσ_s ⤳ σ_s -∗ γκ ⤳ κ -∗ γσ_t ⤳ σ_t' -∗ σ_s ≈{m_s}≈>ₛ sim_src_constP γσ_t γκ)%I.
 
-  Lemma sim_tgt_constP_intro_weak γσ_t γσ_s γκ σ_t σ_s `{!mstateG Σ (m_state m_s)} `{!mstateG Σ (m_state m_t)} `{!mstateG Σ (option EV)} :
+  Lemma sim_tgt_constP_intro_weak γσ_t γσ_s γκ σ_t σ_s :
     γσ_t ⤳@{m_state m_t} - -∗
     γσ_s ⤳ σ_s -∗
     γκ ⤳@{option EV} - -∗
@@ -584,7 +691,7 @@ Section sim.
     iApply ("Ht" with "[$] [$]").
   Qed.
 
-  Lemma sim_tgt_constP_intro γσ_t γσ_s γκ σ_t σ_s `{!mstateG Σ (m_state m_s)} `{!mstateG Σ (m_state m_t)} `{!mstateG Σ (option EV)} :
+  Lemma sim_tgt_constP_intro γσ_t γσ_s γκ σ_t σ_s :
     γσ_t ⤳@{m_state m_t} - -∗
     γσ_s ⤳@{m_state m_s} - -∗
     γκ ⤳@{option EV} - -∗
@@ -597,8 +704,7 @@ Section sim.
     by iApply (sim_tgt_constP_intro_weak with "[$] [$] [$]").
   Qed.
 
-  Lemma sim_tgt_constP_elim γσ_t γσ_s γκ σ_t σ_s κ
-    `{!mstateG Σ (m_state m_s)} `{!mstateG Σ (m_state m_t)} `{!mstateG Σ (option EV)} :
+  Lemma sim_tgt_constP_elim γσ_t γσ_s γκ σ_t σ_s κ :
     γσ_s ⤳ σ_s -∗
     (γσ_s ⤳@{m_state m_s} - -∗ γσ_t ⤳ σ_t -∗ γκ ⤳ κ -∗ σ_s ≈{m_s}≈>ₛ sim_src_constP γσ_t γκ) -∗
     sim_tgt_constP γσ_t γσ_s γκ κ σ_t.
@@ -608,8 +714,7 @@ Section sim.
     iApply ("HC" with "[$] [$] [$]").
   Qed.
 
-  Lemma sim_src_constP_elim γσ_t γκ σ_t σ_s κ κ'
-    `{!mstateG Σ (m_state m_s)} `{!mstateG Σ (m_state m_t)} `{!mstateG Σ (option EV)} :
+  Lemma sim_src_constP_elim γσ_t γκ σ_t σ_s κ κ' :
     γσ_t ⤳ σ_t -∗
     γκ ⤳ κ -∗
     (γσ_t ⤳@{m_state m_t} - -∗ γκ ⤳@{option EV} - -∗ ⌜κ = κ'⌝ ∗ σ_t ⪯{m_t, m_s} σ_s) -∗
@@ -621,12 +726,24 @@ Section sim.
     iApply ("HC" with "[$] [$]").
   Qed.
 
+  Lemma sim_src_constP_next γσ_t γσ_s γκ σ_t σ_s κ κ' :
+    γσ_t ⤳ σ_t -∗
+    γκ ⤳ κ -∗
+    γσ_s ⤳@{m_state m_s} - -∗
+    ⌜κ = κ'⌝ -∗
+    (γσ_s ⤳ σ_s -∗ σ_t ≈{m_t}≈>ₜ sim_tgt_constP γσ_t γσ_s γκ) -∗
+    sim_src_constP γσ_t γκ κ' σ_s.
+  Proof.
+    iIntros "?? Hσ_s -> HC". iApply (sim_src_constP_elim with "[$] [$]"). iIntros "Hσ_t Hκ".
+    iSplit; [done|]. iApply (sim_tgt_constP_intro with "Hσ_t Hσ_s Hκ HC").
+  Qed.
+
 End sim.
 
 Theorem sim_adequacy Σ EV (m_t m_s : module EV) `{!dimsumPreG Σ} `{!VisNoAng (m_trans m_s)} :
   (∀ `{Hinv : !invGS_gen HasNoLc Σ} `{Hord : !ord_laterGS Σ},
     ⊢ |={⊤}=>
-       let _ : dimsumGS Σ := DimsumGS _ _ _
+       let _ : dimsumGS Σ := DimsumGS _ _ _ _
        in
        m_init m_t ⪯{m_trans m_t, m_trans m_s} m_init m_s ) →
   trefines m_t m_s.
@@ -635,7 +752,7 @@ Proof.
   eapply uPred.pure_soundness. apply (step_fupdN_soundness_no_lc _ 0 0) => ? /=. simpl in *. iIntros "_".
   iMod (ord_later_alloc (OrdMax n)) as (?) "Ha".
   iMod Hsim as "Hsim".
-  clear Hsim. set (X := DimsumGS _ _ _ : dimsumGS Σ).
+  clear Hsim. set (X := DimsumGS _ _ _ _ : dimsumGS Σ).
   pose (F := (λ σ_t σ_s,
                ∀ n κs,
                ⌜σ_t ~{ m_trans m_t, κs, n }~>ₜ -⌝ -∗

@@ -609,7 +609,7 @@ Lemma memmove_refines_spec :
               (spec_mod locle_spec tt))
     (spec_mod main_spec tt).
 Proof.
-  apply (sim_adequacy #[dimsumΣ; recΣ]); [apply _..|].
+  eapply (sim_adequacy #[dimsumΣ; recΣ]); [apply _..|].
   iIntros (??) "!>". simpl.
   iApply (fupd_sim with "[-]").
   iMod recgs_alloc as (?) "[?[??]]". iModIntro.

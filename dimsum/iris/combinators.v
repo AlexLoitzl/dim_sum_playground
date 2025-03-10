@@ -3,11 +3,47 @@ From dimsum.core.iris Require Import sat.
 From dimsum.core.iris Require Export sim.
 Set Default Proof Using "Type".
 
+(* Definition embedP {Σ EV1 EV2} `{!dimsumGS Σ} {m1 : mod_trans EV1} {m2 : mod_trans EV2} *)
+(*   (Π : option EV2 → m_state m2 → iProp Σ) (f : m1.(m_state) → m2.(m_state)) : *)
+(*   option EV1 → m_state m1 → iProp Σ := λ κ σ1, *)
+(*   if κ is Some e then *)
+(*     (∀ σ1' Pσ1', ⌜m_step m1 σ1' (Some e) Pσ1'⌝ -∗ ⌜Pσ1' σ1⌝ -∗ f σ1' ≈{m2}≈>ₜ Π)%I *)
+(*   else *)
+(*     Π None (f σ1). *)
+
+(* Definition embedP {Σ EV1 EV2} `{!dimsumGS Σ} {m1 : mod_trans EV1} {m2 : mod_trans EV2} *)
+(*   (ts : tgt_src) (Π : option EV2 → m_state m2 → iProp Σ) (f : m1.(m_state) → m2.(m_state)) : *)
+(*   option EV1 → m_state m1 → iProp Σ := λ κ σ1, *)
+(*   (∀ σ1', σ1' ≈{ts, m1}≈> (λ κ' σ1', ⌜κ = κ'⌝ ∗ ⌜σ1 = σ1'⌝) -∗ *)
+(*     f σ1' ≈{ts, m2}≈> Π)%I. *)
+
 (** * map_mod *)
 
 Section map.
   Context {Σ : gFunctors} {EV1 EV2 : Type} {S : Type} `{!dimsumGS Σ}.
   Implicit Types (f : map_mod_fn EV1 EV2 S).
+
+(*   Lemma sim_map_embed ts m f σ σf Π : *)
+(*     (σ ≈{ts, m}≈> embedP (m2:=map_trans _ _) ts Π (λ σ, (σ, (σf, true)))) -∗ *)
+(*     (σ, (σf, true)) ≈{ts, map_trans m f}≈> Π. *)
+(*   Proof. *)
+(*     iIntros "Hsim". *)
+(*     iApply (sim_gen_include (map_trans _ _) (λ σ, (σ, (σf, true))) with "Hsim"). *)
+(*     iIntros "!>" (??) "Hsim". iIntros "HΠ". *)
+(*     iApply (sim_gen_ctx with "[-]"). iIntros "?". *)
+(*     iApply (fupd_sim_gen with "[-]"). *)
+(*     iMod ("Hsim" with "[$]") as "[HP| Hs]". { *)
+(*       iModIntro. iApply ("HΠ" with "HP"). iApply (sim_gen_stop with "[-]"). iSplit!. *)
+(*     } *)
+(*     iModIntro. *)
+(*     iApply *)
+(* iApply (sim_gen_step with "[-]"). *)
+(*     destruct ts. 2: admit. *)
+(*     iIntros (?? Hstep). inv_all/= @m_step. *)
+(*     all: iMod ("Hs" with "[//]") as (??) "Hs"; iModIntro; iExists (_, _); iSplit!; [done|]. *)
+(*     all: iModIntro; iMod "Hs"; iModIntro. *)
+(*     - do 2 case_match; simplify_eq/=. iRight. iSplit!. by iApply "Hs". *)
+(*     - iLeft. iSpecialize ("HΠ" with "Hs"). unfold embedP. *)
 
   Lemma sim_tgt_map m f σ σf Π :
     (σ ≈{m}≈>ₜ λ κ σ',
@@ -19,11 +55,10 @@ Section map.
     set Π' := (X in (_ ≈{ m }≈>ₜ X)%I).
     iApply (sim_gen_include (map_trans _ _) (λ σ, (σ, (σf, true))) with "Hsim").
     iIntros "!>" (??) "Hsim". iIntros "HΠ".
-    iApply (fupd_sim_gen with "[-]").
     iMod ("Hsim") as "[HP| Hs]". {
-      iModIntro. iApply (sim_gen_stop with "[-]"). by iApply ("HΠ" with "HP").
+      iApply (sim_gen_stop with "[-]"). by iApply ("HΠ" with "HP").
     }
-    iModIntro. iApply (sim_gen_step with "[-]"). iIntros (?? Hstep). inv_all/= @m_step.
+    iApply (sim_gen_step with "[-]"). iIntros (?? Hstep). inv_all/= @m_step.
     all: iMod ("Hs" with "[//]") as (??) "Hs"; iModIntro; iExists (_, _); iSplit!; [done|].
     all: iModIntro; iMod "Hs"; iModIntro.
     - do 2 case_match; simplify_eq/=. iRight. iSplit!. by iApply "Hs".
@@ -40,19 +75,18 @@ Section map.
     set Π' := (X in (_ ≈{ m }≈>ₛ X)%I).
     iApply (sim_gen_include (map_trans _ _) (λ σ, (σ, (σf, true))) with "Hsim").
     iIntros "!>" (??) "Hsim". iIntros "Hc".
-    iApply (fupd_sim_gen with "[-]").
     iMod ("Hsim") as "[?| [%κ [% [% Hs]]] ]". {
-      iModIntro. iApply (sim_gen_stop with "[-]").
+      iApply (sim_gen_stop with "[-]").
       iDestruct ("Hc" with "[$]") as (???[?[??]]) "Hc". by simplify_eq.
     }
     destruct κ.
     - exploit vis_no_all; [done|] => -[σ'' ?].
-      iMod ("Hs" with "[%]") as ">Hs"; [naive_solver|]. iModIntro.
+      iMod ("Hs" with "[%]") as ">Hs"; [naive_solver|].
       iDestruct ("Hc" with "[$]") as (????) "Hs". simplify_eq/=.
       iApply (sim_gen_step_end with "[-]"). iExists _, _ => /=. iSplit; [iPureIntro|].
       { econs. { apply: ProductStepBoth; [done|]. by econs. } done. }
       iModIntro. iIntros ([σ' ?] [??]) "!>". have ? : σ' = σ'' by naive_solver. by simplify_eq.
-    - iModIntro. iApply (sim_gen_step with "[-]"). iExists _, _ => /=. iSplit; [iPureIntro|].
+    - iApply (sim_gen_step with "[-]"). iExists _, _ => /=. iSplit; [iPureIntro|].
       { econs; [by econs|done]. }
       iModIntro. iIntros ([??][??]). simplify_eq. iMod ("Hs" with "[//]") as ">HF". iModIntro.
       iRight. iSplit!. by iApply "HF".
@@ -91,12 +125,11 @@ Section seq_product.
     set Π' := (X in (_ ≈{ m1 }≈>ₜ X)%I).
     iApply (sim_gen_include (seq_product_trans m1 m2) (λ σ1, (Some SPLeft, σ1, σ2)) with "Hsim").
     iIntros "!>" (??) "Hsim". iIntros "Hc".
-    iApply (fupd_sim_gen with "[-]").
     iMod ("Hsim") as "[HP| Hs ]". {
-      iModIntro. iDestruct ("Hc" with "[$] [//]") as "Hc".
+      iDestruct ("Hc" with "[$] [//]") as "Hc".
       by iApply (sim_gen_stop with "[-]").
     }
-    iModIntro. iApply (sim_gen_step with "[-]"). iIntros (?? Hstep). inv_all/= @m_step.
+    iApply (sim_gen_step with "[-]"). iIntros (?? Hstep). inv_all/= @m_step.
     iMod ("Hs" with "[//]") as (??) "Hs"; iModIntro.
     iExists (_, _, _). iSplit!; [done|]. iModIntro.
     iMod "Hs". iModIntro. case_match; simplify_eq/=.
@@ -114,12 +147,11 @@ Section seq_product.
     set Π' := (X in (_ ≈{ m2 }≈>ₜ X)%I).
     iApply (sim_gen_include (seq_product_trans m1 m2) (λ σ2, (Some SPRight, σ1, σ2)) with "Hsim").
     iIntros "!>" (??) "Hsim". iIntros "Hc".
-    iApply (fupd_sim_gen with "[-]").
     iMod ("Hsim") as "[HP| Hs ]". {
-      iModIntro. iDestruct ("Hc" with "[$] [//]") as "Hc".
+      iDestruct ("Hc" with "[$] [//]") as "Hc".
       by iApply (sim_gen_stop with "[-]").
     }
-    iModIntro. iApply (sim_gen_step with "[-]"). iIntros (?? Hstep). inv_all/= @m_step.
+    iApply (sim_gen_step with "[-]"). iIntros (?? Hstep). inv_all/= @m_step.
     iMod ("Hs" with "[//]") as (??) "Hs"; iModIntro.
     iExists (_, _, _). iSplit!; [done|]. iModIntro.
     iMod "Hs". iModIntro. case_match; simplify_eq/=.
@@ -145,19 +177,18 @@ Section seq_product.
     set Π' := (X in (_ ≈{ m1 }≈>ₛ X)%I).
     iApply (sim_gen_include (seq_product_trans m1 m2) (λ σ1, (Some SPLeft, σ1, σ2)) with "Hsim").
     iIntros "!>" (??) "Hsim". iIntros "Hc".
-    iApply (fupd_sim_gen with "[-]").
     iMod ("Hsim") as "[?| [%κ [% [% Hsim]]] ]". {
-      iModIntro. iDestruct ("Hc" with "[$]") as (??) "Hc".
+      iDestruct ("Hc" with "[$]") as (??) "Hc".
       iApply (sim_gen_stop with "[-]"). by simplify_eq/=.
     }
     destruct κ.
     - exploit vis_no_all; [done|] => -[σs1 ?].
-      iMod ("Hsim" with "[%]") as ">Hsim"; [naive_solver|]. iModIntro => /=.
+      iMod ("Hsim" with "[%]") as ">Hsim"; [naive_solver|] => /=.
       iDestruct ("Hc" with "[$]") as (s ?) "?".
       iApply (sim_gen_step with "[-]"). iExists _, _. iSplit.
       { iPureIntro. by apply: (SPLeftS _ _ _ _ _ s). }
       iIntros "!>" ([[? σs2]?] [?[??]]) "!>". iLeft. have ? : σs1 = σs2 by naive_solver. by simplify_eq/=.
-    - iModIntro. iApply (sim_gen_step with "[-]"). iExists _, _. iSplit.
+    - iApply (sim_gen_step with "[-]"). iExists _, _. iSplit.
       { iPureIntro. by econs. }
       iIntros "!>" ([[??] ?] [?[??]]). simplify_eq. iRight.
       iMod ("Hsim" with "[//]") as ">Hsim". iModIntro. simplify_eq/=. iSplit!. by iApply "Hsim".
@@ -172,19 +203,18 @@ Section seq_product.
     set Π' := (X in (_ ≈{ m2 }≈>ₛ X)%I).
     iApply (sim_gen_include (seq_product_trans m1 m2) (λ σ2, (Some SPRight, σ1, σ2)) with "Hsim").
     iIntros "!>" (??) "Hsim". iIntros "Hc".
-    iApply (fupd_sim_gen with "[-]").
     iMod ("Hsim") as "[?| [%κ [% [% Hsim]]] ]". {
-      iModIntro. iDestruct ("Hc" with "[$]") as (??) "Hc".
+      iDestruct ("Hc" with "[$]") as (??) "Hc".
       iApply (sim_gen_stop with "[-]"). by simplify_eq/=.
     }
     destruct κ.
     - exploit vis_no_all; [done|] => -[σs1 ?].
-      iMod ("Hsim" with "[%]") as ">Hsim"; [naive_solver|]. iModIntro => /=.
+      iMod ("Hsim" with "[%]") as ">Hsim"; [naive_solver|] => /=.
       iDestruct ("Hc" with "[$]") as (s ?) "?".
       iApply (sim_gen_step with "[-]"). iExists _, _. iSplit.
       { iPureIntro. by apply: (SPRightS _ _ _ _ _ s). }
       iIntros "!>" ([[? ?]σs2] [?[??]]) "!>". iLeft. have ? : σs1 = σs2 by naive_solver. by simplify_eq/=.
-    - iModIntro. iApply (sim_gen_step with "[-]"). iExists _, _. iSplit.
+    - iApply (sim_gen_step with "[-]"). iExists _, _. iSplit.
       { iPureIntro. by econs. }
       iIntros "!>" ([[??] ?] [?[??]]). simplify_eq. iRight.
       iMod ("Hsim" with "[//]") as ">Hsim". iModIntro. simplify_eq/=. iSplit!. by iApply "Hsim".
@@ -212,11 +242,10 @@ Section state_transform.
     iIntros (?) "Hsim".
     iApply (sim_gen_ind with "[] Hsim"). { solve_proper. }
     clear σ' σ HR. iIntros "!>" (σ'?) "Hsim". iIntros (σ HR) "Hc".
-    iApply (fupd_sim_gen with "[-]").
     iMod ("Hsim") as "[HP| Hs]". {
-      iModIntro. iApply (sim_gen_stop with "[-]"). by iApply ("Hc" with "HP").
+      iApply (sim_gen_stop with "[-]"). by iApply ("Hc" with "HP").
     }
-    iModIntro. iApply (sim_gen_step with "[-]"). iIntros (?? Hstep). inv_all/= @m_step.
+    iApply (sim_gen_step with "[-]"). iIntros (?? Hstep). inv_all/= @m_step.
     have ?: σ' = σ'0 by naive_solver. subst.
     iMod ("Hs" with "[//]") as (??) "Hs"; iModIntro; simplify_eq/=.
     exploit HRstep; [done..|] => -[??].
@@ -242,11 +271,10 @@ Section state_transform.
     iIntros (?) "Hsim".
     iApply (sim_gen_ind with "[] Hsim"). { solve_proper. }
     clear σ' σ HR. iIntros "!>" (σ'?) "Hsim". iIntros (σ HR) "Hc".
-    iApply (fupd_sim_gen with "[-]").
     iMod ("Hsim") as "[?| [% [% [% Hs]]] ]". {
-      iModIntro. iApply (sim_gen_stop with "[-]"). by iApply ("Hc" with "[$]").
+      iApply (sim_gen_stop with "[-]"). by iApply ("Hc" with "[$]").
     }
-    iModIntro. iApply (sim_gen_step with "[-]").
+    iApply (sim_gen_step with "[-]").
     iExists _, _. iSplit; [iPureIntro; by econs|].
     iIntros "!>" (? [?[??]]). iMod ("Hs" with "[//]") as ">Hs". iModIntro.
     case_match.
@@ -579,6 +607,26 @@ Section link.
         all: iApply ("Hsim" with "[//] [//]").
     - iIntros ([[[??]?]?] ?). simplify_eq/=. by iLeft.
   Qed.
+
+  Definition link_tgt_left_constP R {m1 m2 : mod_trans (io_event EV)}
+    (Π : option (io_event EV) → link_case EV * S * m_state m1 * m_state m2 → iProp Σ)
+    (γ_s γ_σ2: gname) : option (io_event EV) → m_state m1 → iProp Σ :=
+    λ κ σ1', (∀ s σ2, γ_s ⤳ s -∗ γ_σ2 ⤳ σ2 -∗ link_tgt_leftP R Π s σ2 κ σ1')%I.
+
+  Lemma sim_tgt_link_left_const R m1 m2 s σ1 σ2 γ_s γ_σ2 Π :
+    γ_s ⤳@{S} - -∗
+    γ_σ2 ⤳@{m_state m2} - -∗
+    (γ_s ⤳ s -∗ γ_σ2 ⤳ σ2 -∗ σ1 ≈{m1}≈>ₜ link_tgt_left_constP R Π γ_s γ_σ2) -∗
+    (MLFRun (Some SPLeft), s, σ1, σ2) ≈{link_trans R m1 m2}≈>ₜ Π.
+  Proof.
+    iIntros "Hγ_s Hγ_σ2 Hsim".
+    iMod (mstate_var_split γ_s with "Hγ_s") as "[??]".
+    iMod (mstate_var_split γ_σ2 with "Hγ_σ2") as "[??]".
+    iApply sim_tgt_link_left. iSpecialize ("Hsim" with "[$] [$]").
+    iApply (sim_gen_wand with "Hsim"). iIntros (??) "Hsim".
+    iApply ("Hsim" with "[$] [$]").
+  Qed.
+
 
   Lemma sim_tgt_link_left_recv R m1 m2 s σ1 σ2 Π e :
     (σ1 ≈{m1}≈>ₜ λ κ σ1',

@@ -86,7 +86,7 @@ Proof. rewrite /CoreCancelable => n y z Hvalid Heq. by rewrite core_id /= comm H
 Lemma core_cancelable_op x1 x2 :
   CoreCancelable x1 →
   CoreCancelable x2 →
-  (* TODO: Does this hold in general? *)
+  (* TODO: Does this hold in general? The right to left inclusion probably holds, the left to right probably not. *)
   pcore (x1 ⋅ x2) ≡ pcore x1 ⋅ pcore x2 →
   CoreCancelable (x1 ⋅ x2).
 Proof.

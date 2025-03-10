@@ -68,6 +68,9 @@ dimsum/iris/iris.v
 dimsum_examples/iris/rec_basic.v
 dimsum_examples/iris/rec.v
 dimsum_examples/iris/rec2.v
+dimsum_examples/iris/asm.v
+dimsum_examples/iris/memmove.v
+dimsum_examples/iris/echo.v
 
 dimsum/itree/program_logic/language.v
 # dimsum/itree/program_logic/bi_weakestpre.v
