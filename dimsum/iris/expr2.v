@@ -67,12 +67,6 @@ Definition switch `{!dimsumGS Σ} {S EV} (Π : option EV → S → iProp Σ)
 (*   (at level 70, format *)
 (* "κ  σ  '<-switch'  Π '//'   pre1  '∗'  pre2  '∗'  '//' σ'  Π'  <-POST  ts  EV  m '//'   post") : bi_scope. *)
 
-(* TODO: Why level 200 *)
-Notation "κ σ POST '<-switch' Π pre1 '∗' pre2 '∗' σ' Π' <- POST ts EV m post"  :=
-  (switch Π ({{κ σ POST, pre1 ∗ pre2 ∗ POST ts EV m ({{σ' Π', post}})}}))%I
-  (at level 200, format
-"κ  σ  POST '<-switch'  Π '//'   pre1  '∗'  pre2  '∗'  '//' σ'  Π'  <-POST  ts  EV  m '//'   post") : bi_scope.
-
 Lemma switch_mono `{!dimsumGS Σ} {S' EV} (Π : option EV → S' → iProp Σ) K1 K2 :
   switch Π K1 -∗
   (∀ κ σ P1 P2, K2 κ σ P1 -∗
