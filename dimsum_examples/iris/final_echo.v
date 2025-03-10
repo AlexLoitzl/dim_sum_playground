@@ -109,7 +109,7 @@ Section sim_getc.
     }}))}})}}) -∗
     TGT getc_spec @ Π {{ Φ }}.
   Proof.
-    iIntros "#Hs".
+    iIntros "Hs".
     rewrite {2}/getc_spec unfold_forever /TReceive bind_bind -/getc_spec bind_bind.
     iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>".
     rewrite bind_bind. setoid_rewrite bind_ret_l.
@@ -134,23 +134,44 @@ Section sim_getc.
     iApply "Hs'". iSplit!. iFrame.
     iIntros (??) "[-> [-> HC]]".
     iApply "HΠ" => /=. by iFrame.
-Qed.
+  Qed.
 
   Definition getc_fn_spec (P : Z → iProp Σ) (es : list expr) (POST : (val → iProp Σ) → iProp Σ) : iProp Σ :=
     ∃ v, P v ∗ ⌜es = []⌝ ∗ POST (λ ret, ⌜ret = v⌝ ∗ P (v + 1))%I.
 
-  Lemma sim_getc fns Π_l (P : Z → iProp Σ):
+    (* switch Π_l ({{κ σ_l POST, *)
+    (*   ∃ h v, ⌜κ = Some (Outgoing, ERCall "getc" [] h)⌝ ∗ P v ∗ *)
+    (* POST Tgt _ (spec_trans _ Z) ({{σ_r Π_r, *)
+    (*   ⌜σ_r = (getc_spec, v)⌝ ∗ *)
+    (* switch Π_r ({{κ σ_r' POST, *)
+    (*   ∃ e, ⌜κ = Some (Incoming, e)⌝ ∗ *)
+    (* POST Tgt _ (spec_trans _ Z) ({{σ_r'' Π_r', *)
+    (*   ⌜σ_r'' = σ_r'⌝ ∗ ⌜e = (ERCall "getc" [] h)⌝ ∗ *)
+    (* switch Π_r' ({{κ σ_r''' POST, *)
+    (*   ∃ h', ⌜κ = Some (Outgoing, ERReturn (ValNum v) h')⌝ ∗ ⌜σ_r''' = (getc_spec, (v + 1)%Z)⌝ ∗ *)
+    (* POST Tgt _ _ ({{σ_l' Π_l', *)
+    (*   ⌜σ_l' = σ_l⌝ ∗ *)
+    (* switch Π_l' ({{κ σ_l'' POST, *)
+    (*   ∃ e, ⌜κ = Some (Incoming, e)⌝ ∗ *)
+    (* POST Tgt _ _ ({{σ_l''' Π_l', *)
+    (*   ⌜σ_l'' = σ_l'''⌝ ∗ ⌜e = ERReturn v h'⌝ ∗ ⌜Π_l' = Π_l⌝ ∗ P (v + 1) *)
+    (*   }}) *)
+    (* }})}})}})}})}})}})}}) -∗ *)
+
+  Lemma sim_getc `{!specGS} fns Π_l Π_r (PL : m_state (spec_trans rec_event Z) → iProp Σ):
     rec_fn_auth fns -∗
     "getc" ↪ None -∗
-    switch_link Tgt Π_l ({{σ_l POST,
-      ∃ h v, P v ∗
-    POST (ERCall "getc" [] h) (spec_trans _ Z) (getc_spec, v) ({{σ_r'' Π_r',
+    □ switch_link Tgt Π_l ({{σ_l POST,
+      ∃ h v σg, PL σg ∗
+    POST (ERCall "getc" [] h) (spec_trans _ Z) σg ({{σ_r'' Π_r',
+      ⌜Π_r' = Π_r⌝ ∗
     switch_link Tgt Π_r' ({{σ_r''' POST,
-      ∃ h', ⌜σ_r''' = (getc_spec, (v + 1)%Z)⌝ ∗
+      ∃ h',
     POST (ERReturn (ValNum v) h') _ σ_l ({{σ_l''' Π_l',
-      ⌜Π_l' = Π_l⌝ ∗ P (v + 1)
+      ⌜Π_l' = Π_l⌝ ∗ PL σ_r'''
     }})}})}})}}) -∗
-    rec_fn_spec_hoare Tgt Π_l "getc" (getc_fn_spec P).
+    ∃ P, P 0 ∗ □ rec_fn_spec_hoare Tgt Π_l "getc" (getc_fn_spec P).
+  (* ⥥ₜ({{σ Π, ⌜σ = σg⌝ ∗ ⌜Π = Π_r⌝ ∗ TGT getc_spec @ Π {{Φg}}}}) ∗ *)
   Proof.
     iIntros "#? ? Hs". iIntros (es Φ) "[% [HP [-> HΦ]]]".
     iApply (sim_tgt_rec_Call_external with "[$]"). iIntros (???) "#??? !>".
