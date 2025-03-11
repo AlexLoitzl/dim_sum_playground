@@ -78,10 +78,10 @@ Notation "l '↦hs' dq v" := (heapUR_ptsto own_heap_s l dq v)
 Notation "l '↦hi' dq v" := (heapUR_ptsto own_heap_i l dq v)
   (at level 20, dq custom dfrac,format "l  ↦hi dq  v") : bi_scope.
 
-Notation "p '↪hs' dq d" := (heapUR_dom own_heap_s p dq d)
-  (at level 20, dq custom dfrac at level 1, format "p  '↪hs' dq  d") : bi_scope.
-Notation "p '↪hi' dq d" := (heapUR_dom own_heap_i p dq d)
-  (at level 20, dq custom dfrac at level 1, format "p  '↪hi' dq  d") : bi_scope.
+Notation "p '⤚hs' dq d" := (heapUR_dom own_heap_s p dq d)
+  (at level 20, dq custom dfrac at level 1, format "p  '⤚hs' dq  d") : bi_scope.
+Notation "p '⤚hi' dq d" := (heapUR_dom own_heap_i p dq d)
+  (at level 20, dq custom dfrac at level 1, format "p  '⤚hi' dq  d") : bi_scope.
 
 Notation "p '↦∗hs' dq b" := (heapUR_block own_heap_s p dq b)
   (at level 20, dq custom dfrac at level 1, format "p  '↦∗hs' dq  b") : bi_scope.
@@ -492,7 +492,7 @@ Qed.
 
 Lemma heap_inj_inv_lookup_dom_i p hi hs d rem dq:
   heap_inj_inv hi hs rem -∗
-  p ↪hi{dq} d -∗
+  p ⤚hi{dq} d -∗
   ⌜dom (h_block hi p) = d⌝.
 Proof.
   iIntros "[Hinvi [Hinvs[?[??]]]] ?".
@@ -501,7 +501,7 @@ Qed.
 
 Lemma heap_inj_inv_lookup_dom_s p hi hs d rem dq:
   heap_inj_inv hi hs rem -∗
-  p ↪hs{dq} d -∗
+  p ⤚hs{dq} d -∗
   ⌜dom (h_block hs p) = d⌝.
 Proof.
   iIntros "[Hinvi [Hinvs[?[??]]]] ?".

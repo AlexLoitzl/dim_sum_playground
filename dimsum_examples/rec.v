@@ -1181,6 +1181,10 @@ Proof.
     by erewrite lookup_total_correct.
 Qed.
 
+Lemma heap_from_blocks_h_blocks h :
+  heap_from_blocks (h_blocks h) = h.
+Proof. apply heap_state_blocks_eq. by rewrite h_blocks_heap_from_blocks. Qed.
+
 Lemma h_block_heap_merge_block p p' b h:
   p ∉ h_provs h →
   h_block (heap_merge (heap_from_blocks {[p := b]}) h) p' = if decide (p = p') then b else h_block h p'.

@@ -1677,5 +1677,27 @@ Section gset.
     rewrite map_img_insert_L big_sepM_insert // IH delete_notin //.
     iIntros "[H1 H2]". iApply (big_sepS_insert_2 with "H1 H2").
   Qed.
+
+  Lemma big_sepS_map {B} `{Countable B} (f : A → B) (Φ : B → PROP) s :
+    Inj (=) (=) f →
+    ([∗ set] k∈set_map f s, Φ k) ⊣⊢ ([∗ set] k∈s, Φ (f k)).
+  Proof.
+    move => Hinj.
+    induction s as [|x s ? IH] using set_ind_L.
+    { by rewrite set_map_empty !big_sepS_empty. }
+    rewrite set_map_union_L set_map_singleton_L !big_sepS_union ?IH ?big_sepS_singleton //.
+    - set_solver.
+    - apply disjoint_singleton_l. apply/elem_of_map. naive_solver.
+  Qed.
+
+  Lemma big_sepS_dom {B} Φ (m : gmap A B) :
+    ([∗ set] k∈dom m, Φ k) ⊣⊢ ([∗ map] k↦_∈m, Φ k).
+  Proof.
+    induction m as [|i x m ? IH] using map_ind.
+    { by rewrite dom_empty_L big_sepM_empty !big_sepS_empty. }
+    rewrite dom_insert_L big_sepM_insert // -IH big_sepS_union ?big_sepS_singleton //.
+    apply disjoint_singleton_l. by apply not_elem_of_dom.
+  Qed.
+
 End gset.
 End big_op.

@@ -15,7 +15,7 @@ Record BiOwn (PROP : bi) `{!BUpd PROP} (r : ucmra) := {
 Arguments bi_own {_ _ _} _ _.
 
 (** ** Instance for [own] *)
-Program Definition bi_own_own (r : ucmra) `{!inG Σ r} `{!CmraDiscrete r} (γ : gname) :
+Program Definition bi_own_own {r : ucmra} `{!inG Σ r} `{!CmraDiscrete r} (γ : gname) :
   BiOwn (iProp Σ) r := {|
   bi_own r := own γ r;
 |}.

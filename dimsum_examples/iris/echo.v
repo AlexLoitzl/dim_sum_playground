@@ -201,7 +201,7 @@ Section echo.
     pose (Hspec := SpecGS γ).
 
     iApply (sim_tgt_rec_Call_external); [done|].
-    iIntros (???) "Hfns' Hh Ha !>". iIntros (??) "[-> [-> Hσ]]".
+    iIntros (???) "Hfns' Hh !>". iIntros (??) "[-> [-> Hσ]]".
     iApply "Hswitch". iFrame. iSplit!.
     iIntros (??). iDestruct 1 as (->) "Hs".
     iApply (sim_gen_expr_intro _ tt with "[Hγ] [-]"); simpl; [done..|].
@@ -240,7 +240,7 @@ Section echo.
 
     iIntros (es ?). iDestruct 1 as (->) "HΦ".
     iApply (sim_tgt_rec_Call_external); [done|].
-    iIntros (???) "Hfns'' Hh Ha !>". iIntros (??) "[-> [-> Hσ]]".
+    iIntros (???) "Hfns'' Hh !>". iIntros (??) "[-> [-> Hσ]]".
     iApply "Hswitch". iFrame. iSplit!.
     iIntros (??). iDestruct 1 as (->) "Hs".
     iApply (sim_gen_expr_intro _ tt with "[Hγ] [-]"); simpl; [done..|].
@@ -282,7 +282,7 @@ Section echo.
     rec_state_interp (rec_init echo_prog) None -∗
     (rec_init echo_prog) ⪯{rec_trans, spec_trans rec_event ()} (echo_spec, ()).
   Proof.
-    iIntros "[#Hfns [Hh Ha]] /=".
+    iIntros "[#Hfns Hh] /=".
     iMod (mstate_var_alloc (m_state (spec_trans rec_event ()))) as (γσ_s) "Hγσ_s".
     iMod (mstate_var_alloc (m_state rec_trans)) as (γσ_t) "Hγσ_t".
     iMod (mstate_var_alloc (option rec_event)) as (γκ) "Hγκ".
@@ -317,11 +317,10 @@ Section echo.
 
     iApply (sim_src_constP_next with "[Hγσ_t] [Hγκ] [Hγσ_s] [%] [-]"); [done..|].
     iIntros "Hγσ_s".
+    iMod (heapUR_alloc_blocks _ (h_blocks h) with "Hh") as "[Hh _]". { set_solver. }
+    rewrite right_id_L heap_from_blocks_h_blocks.
 
-    iMod (rec_mapsto_alloc_big (h_heap h) with "Hh") as "[Hh _]". { apply map_disjoint_empty_r. }
-
-    iApply (sim_gen_expr_intro _ [] with "[Hh Ha]"). { done. }
-    { rewrite /= /rec_state_interp dom_empty_L right_id_L /=. iFrame "#∗". by iApply rec_alloc_fake. }
+    iApply (sim_gen_expr_intro _ [] with "[Hh]"). { done. } { by iFrame. }
     iApply (sim_gen_expr_bind _ [ReturnExtCtx _] with "[-]") => /=.
     iApply (sim_echo_spec with "[] [] [] Hγσ_s [//]").
     1-3: by iApply (rec_fn_intro with "[$]").
@@ -348,7 +347,7 @@ Lemma echo_refines_echo_spec :
 Proof.
   eapply (sim_adequacy #[dimsumΣ; recΣ]); [eapply _..|].
   iIntros (??) "!>". simpl.
-  iMod recgs_alloc as (?) "[?[??]]".
+  iMod recgs_alloc as (?) "[??]".
   iApply echo_spec_sim. iFrame.
 Qed.
 
@@ -596,7 +595,7 @@ Section getc_read.
     iApply (sim_getc with "[//]") => /=. iSplit!.
     iIntros (es ?) => /=. iDestruct 1 as (?? ->) "[Hl HΦ]".
     iApply sim_tgt_rec_Call_external. { done. }
-    iIntros (K h fns) "? ? ? !>".
+    iIntros (K h fns) "? ? !>".
     iIntros (??) => /=. iDestruct 1 as (??) "HR". simplify_eq.
     iApply "HC" => /=. iSplit!. { admit. }
     iIntros ([i regs0 mem0 instrs]?) "[% HC]"; simplify_eq/=.

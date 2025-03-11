@@ -434,10 +434,10 @@ Proof.
   have ? : dom bs ## h_provs hm by rewrite dom_gset_to_gmap.
 
   iApply (weak_embed_bupd_intro (sat γa) with "[$]").
-  iMod (heapUR_alloc_blocks own_heap_s _ bs with "Hinva") as "[? Ha]" => //.
+  iMod (heapUR_alloc_blocks own_heap_s bs with "Hinva") as "[? Ha]" => //.
   iIntros "!> ?".
   iApply (weak_embed_bupd_intro (sat γb) with "[$]").
-  iMod (heapUR_alloc_blocks own_heap_i _ bs with "Hinvb") as "[? Hb]" => //.
+  iMod (heapUR_alloc_blocks own_heap_i bs with "Hinvb") as "[? Hb]" => //.
   iIntros "!> ? !>". iFrame. iSplit. 2: {
     iPureIntro. rewrite h_static_provs_heap_merge h_static_provs_heap_from_blocks.
     rewrite dom_gset_to_gmap Hs. set_solver.
@@ -676,14 +676,14 @@ Proof.
       apply: satisfiable_bmono; [apply heap_inj_init|].
       iIntros "(? & ? & Hinvi & Hinvs)".
       iMod (heapUR_alloc_blocks with "Hinvi") as "[Hinvi $]"; [set_solver|].
-      iMod (heapUR_alloc_blocks _ _ (hinit ∪ staticbs) with "Hinvs") as "[Hinvs Hbs]"; [set_solver|].
+      iMod (heapUR_alloc_blocks _ (hinit ∪ staticbs) with "Hinvs") as "[Hinvs Hbs]"; [set_solver|].
       iDestruct (big_sepM_union with "Hbs") as "[$ ?]";
         [apply map_disjoint_difference_r'|].
       rewrite !right_id. iModIntro. iAccu.
     } {
       apply: satisfiable_bmono; [apply heap_inj_init|].
       iIntros "(? & ? & Hinvi & Hinvs)".
-      iMod (heapUR_alloc_blocks _ _ (hinit ∪ staticbs) with "Hinvi") as "[Hinvi Hbs]"; [set_solver|].
+      iMod (heapUR_alloc_blocks _ (hinit ∪ staticbs) with "Hinvi") as "[Hinvi Hbs]"; [set_solver|].
       iMod (heapUR_alloc_blocks with "Hinvs") as "[Hinvs $]"; [set_solver|].
       iDestruct (big_sepM_union with "Hbs") as "[$ ?]";
         [apply map_disjoint_difference_r'|].
