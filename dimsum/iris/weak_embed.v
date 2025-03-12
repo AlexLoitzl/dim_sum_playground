@@ -232,11 +232,11 @@ Section weak_embed_class_instances.
   Implicit Types P Q R : PROP1.
 
 Global Instance as_emp_valid_weak_embed (φ : Prop) (P : PROP1) :
-  AsEmpValid0 φ P → AsEmpValid φ ⌈P @ W⌉.
+  AsEmpValid0 DirectionIntoEmpValid φ P → AsEmpValid DirectionIntoEmpValid φ ⌈P @ W⌉.
 Proof.
-  rewrite /AsEmpValid0/AsEmpValid => ->. split; [apply weak_embed_emp_valid_2|].
-  admit.
-Admitted. (* TODO: remove this, once https://gitlab.mpi-sws.org/iris/iris/-/merge_requests/1104 is merged *)
+  rewrite /AsEmpValid0/AsEmpValid => /= -[? _]. split => ??//.
+  apply: weak_embed_emp_valid_2. naive_solver.
+Qed.
 
 Global Instance into_pure_weak_embed P φ :
   IntoPure P φ → IntoPure ⌈P⌉ φ.
