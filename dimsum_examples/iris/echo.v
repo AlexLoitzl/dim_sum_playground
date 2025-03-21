@@ -148,6 +148,39 @@ Definition TCallRet {S} (f : string) (vs : list val) (h : heap_state) :
   else
     TUb.
 
+Section TCallRet.
+  Context `{!dimsumGS Σ} `{!specGS} {S : Type}.
+
+  Lemma sim_src_TCallRet f vs h (k: _ → spec rec_event S void) Π Φ :
+    switch Π ({{κ σ POST,
+      ∃ f' vs' h1,
+      ⌜f' = f⌝ ∗ ⌜vs' = vs⌝ ∗ ⌜h1 = h⌝ ∗ ⌜κ = Some (Outgoing, ERCall f vs h)⌝ ∗
+    POST Src _ (spec_trans rec_event S) ({{σ' Π',
+      ⌜σ = σ'⌝ ∗  ∃ e,
+    switch Π' ({{κ σ POST,
+      ⌜κ = Some (Incoming, e)⌝ ∗
+    POST Src _ (spec_trans rec_event S) ({{ σ'' Π'',
+      ⌜σ = σ''⌝ ∗ ⌜Π = Π''⌝ ∗ (∀ v h', ⌜e = ERReturn v h'⌝ -∗ Φ (k (v, h'))) }})}})}})}}) -∗
+    SRC (Spec.bind (TCallRet f vs h) k) @ Π {{ Φ }}.
+  Proof.
+    iIntros "HC" => /=. rewrite /TCallRet bind_bind.
+    iApply sim_gen_TVis. iIntros (s) "Hs". iIntros "% % /=". iIntros "[% [% HΠ]]". subst.
+    iApply "HC" => /=. iSplit!.
+    iIntros (??) "[% [% HC]]" => /=. subst.
+    iApply (sim_gen_expr_intro _ tt with "[Hs] [-]"); simpl; [done..|]. rewrite bind_bind.
+    iApply (sim_src_TExist _). rewrite bind_bind.
+    iApply sim_gen_TVis. iIntros (s') "Hs". iIntros (??) "[% [% HΠ']]" => /=.
+    subst. iApply "HC" => /=. iSplit!.
+    iIntros (??) "[% [% HC]]". destruct!/=.
+    iApply "HΠ". iSplit!. iSplitL "Hs". 1: done.
+    destruct e. iApply sim_src_TUb.
+    rewrite bind_ret_l.
+    iApply sim_gen_expr_stop.
+    by iApply "HC".
+  Qed.
+
+End TCallRet.
+
 Definition echo_spec_body : spec rec_event unit unit :=
   h ← TExist _;
   '(c, h') ← TCallRet "getc" [] h;

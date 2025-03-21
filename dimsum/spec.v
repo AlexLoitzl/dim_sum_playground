@@ -148,6 +148,7 @@ Definition TAssertOpt {EV S A} (o : option A) : spec EV S A :=
 
 Definition TReceive {EV S} {A : Set} (e : A → EV) : spec EV S A :=
   Spec.bind (TExist A) (λ x, Spec.bind (TVis (e x)) (λ _, TRet x)).
+
 (** * Notations *)
 
 Module SpecNotations.

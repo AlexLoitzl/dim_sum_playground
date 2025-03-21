@@ -427,7 +427,7 @@ Section memmove.
   Local Canonical Structure spec_mod_lang_unit.
   Lemma sim_locle s fns fns1 Φ l1 l2 Π_s :
     let Π := λ κ P, (∀ σl, (σl ⤇ₜ λ Π, TGT locle_spec [{Π}] {{_, _, _, False}}) -∗
-              link_tgt_leftP (rec_link_filter fns1 {["locle"]}) Π_s s σl κ P)%I in
+              tgt_link_run_leftP (rec_link_filter fns1 {["locle"]}) Π_s s σl κ P)%I in
     rec_fn_auth fns -∗
     "locle" ↪ None -∗
     (∀ b, ⌜l1.1 = l2.1 → b = bool_decide (l1.2 ≤ l2.2)⌝ -∗ Φ (Val (ValBool b)) None Π) -∗
@@ -437,13 +437,13 @@ Section memmove.
     iApply (sim_tgt_rec_Call_external with "[$]"). iIntros (? σ') "? Hσ' !>".
     iIntros (σl) "Hσl".
     iIntros (??????). destruct!/=. case_bool_decide => //. rewrite (bool_decide_true (_ ∈ _)) //.
-    iApply (sim_tgt_link_right_recv with "[-]"). iApply "Hσl".
+    iApply (sim_tgt_link_recv_right with "[-]"). iApply "Hσl".
     rewrite /locle_spec unfold_forever -/locle_spec.
     rewrite /TReceive bind_bind bind_bind.
     iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>".
     rewrite bind_bind. setoid_rewrite bind_ret_l.
     iApply (sim_tgt_TVis with "[-]"). iIntros (?) "Hσl !>". iIntros (?). simplify_eq/=.
-    iApply (sim_tgt_link_right with "[-]"). iApply "Hσl".
+    iApply (sim_tgt_link_run_right with "[-]"). iApply "Hσl".
     rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
     rewrite bind_bind. iApply (sim_tgt_TAll with "[-]"). iIntros "!>".
     rewrite bind_bind. iApply (sim_tgt_TAll with "[-]"). iIntros "!>".
@@ -452,11 +452,11 @@ Section memmove.
     rewrite bind_bind. iApply (sim_tgt_TAssert with "[-]"). iIntros (?) "!>".
     iApply (sim_tgt_TVis with "[-]"). iIntros (?) "Hσl !>".
     iIntros (??????). destruct!/=.
-    iApply (sim_tgt_link_left_recv with "[-]"). iApply "Hσ'".
+    iApply (sim_tgt_link_recv_left with "[-]"). iApply "Hσ'".
     iApply (sim_tgt_rec_Waiting with "[$]").
-    iSplit. { iIntros. iModIntro. iIntros. simplify_eq. }
+    iSplit. { iIntros. iModIntro. iIntros (?). simplify_eq. }
     iIntros (????) "Hσ' !>". iIntros (?). simplify_eq/=.
-    iApply (sim_tgt_link_left with "[-]"). iApply ("Hσ'" with "[$]").
+    iApply (sim_tgt_link_run_left with "[-]"). iApply ("Hσ'" with "[$]").
     iApply (sim_gen_expr_wand1 with "[HΦ]").
     { iApply sim_gen_expr_stop2. by iApply "HΦ". }
     iIntros (??) "HΠ". by iApply "HΠ".
@@ -491,12 +491,12 @@ Section memmove.
     rewrite bool_decide_true; [|done].
     iApply sim_gen_expr_stop1. iIntros (?) "Hsrc". iSplit!.
     iApply (sim_tgtP_intro with "[-]").
-    iApply (sim_tgt_link_left_recv with "[-]").
+    iApply (sim_tgt_link_recv_left with "[-]").
     iApply (sim_gen_expr_elim _ (Some _) [] with "[] [-]"); [done| by iSplit |] => /=.
     iApply (sim_tgt_rec_Waiting with "[$]").
     iSplit; [|by iIntros].
     iIntros (????? Hin) "Htgt !>". iIntros (?). simplify_map_eq.
-    iApply (sim_tgt_link_left with "[-]").
+    iApply (sim_tgt_link_run_left with "[-]").
     iApply fupd_sim_gen.
     iMod (heapUR_alloc_blocks _ (h_blocks h) with "Hh") as "[Hh _]". { set_solver. } iModIntro.
     rewrite right_id_L heap_from_blocks_h_blocks.
@@ -570,12 +570,12 @@ Section memmove.
     iApply "Hsrc". iApply sim_src_TAssume. iIntros (?). iApply sim_gen_expr_stop1.
     iIntros (?) "Hsrc". iSplit!. case_match; destruct!/=.
     iApply (sim_tgtP_intro with "[-]").
-    iApply (sim_tgt_link_left_recv with "[-]").
+    iApply (sim_tgt_link_recv_left with "[-]").
     iApply "Htgt".
     iApply (sim_tgt_rec_Waiting with "[$]").
-    iSplit; [iIntros; iModIntro; by iIntros|].
+    iSplit; [iIntros; iModIntro; by iIntros(?)|].
     iIntros (????) "Htgt !>". iIntros (?). simplify_eq.
-    iApply (sim_tgt_link_left with "[-]").
+    iApply (sim_tgt_link_run_left with "[-]").
     iApply ("Htgt" with "[$]").
     iApply sim_gen_expr_stop2 => /=.
     iApply (sim_tgt_rec_LetE with "[-]"). iIntros "!>" => /=.
@@ -596,12 +596,12 @@ Section memmove.
     iApply "Hsrc". iApply sim_src_TAssume. iIntros (?). iApply sim_gen_expr_stop1.
     iIntros (?) "Hsrc". iSplit!. case_match; destruct!/=.
     iApply (sim_tgtP_intro with "[-]").
-    iApply (sim_tgt_link_left_recv with "[-]").
+    iApply (sim_tgt_link_recv_left with "[-]").
     iApply "Htgt".
     iApply (sim_tgt_rec_Waiting with "[$]").
-    iSplit; [iIntros; iModIntro; by iIntros|].
+    iSplit; [iIntros; iModIntro; by iIntros(?)|].
     iIntros (????) "Htgt !>". iIntros (?). simplify_eq.
-    iApply (sim_tgt_link_left with "[-]").
+    iApply (sim_tgt_link_run_left with "[-]").
     iApply ("Htgt" with "[$]").
     iApply sim_gen_expr_stop2 => /=.
     iApply (sim_tgt_rec_LetE with "[-]"). iIntros "!>" => /=.

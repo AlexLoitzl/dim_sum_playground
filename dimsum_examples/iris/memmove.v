@@ -565,32 +565,32 @@ Section memmove.
     rewrite bool_decide_true; [|done].
     iApply (sim_src_constP_next with "[Hγσ_t] [Hγκ] [Hγσ_s] [%] [-]"); [done..|].
     iIntros "Hγσ_s".
-    iApply (sim_tgt_link_left_recv with "[-]").
+    iApply (sim_tgt_link_recv_left with "[-]").
     iApply (sim_tgt_rec_Waiting_raw _ []).
     iSplit; [|by iIntros].
     iIntros (???? Hin) "!>". iIntros (?). simplify_map_eq.
-    iApply (sim_tgt_link_left with "[-]").
+    iApply (sim_tgt_link_run_left with "[-]").
     iMod (heapUR_alloc_blocks _ (h_blocks h) with "Hh") as "[Hh _]". { set_solver. }
     rewrite right_id_L heap_from_blocks_h_blocks.
 
     iApply (sim_gen_expr_intro _ [] with "[Hh]"). { done. } { by iFrame. }
 
-    set (Π := link_tgt_leftP _ _ _ _).
+    set (Π := tgt_link_run_leftP _ _ _ _).
 
     iApply (sim_gen_expr_bind _ [ReturnExtCtx _] with "[-]") => /=.
     iApply (sim_main_full with "[] [] [] [] [] Hγσ_s"). 1-4: by iApply (rec_fn_intro with "[$]").
     { iIntros "!>". iApply sim_locle2. 1: done. 1: { by iApply (rec_fn_intro with "[$]"). }
       iIntros (??). iDestruct 1 as (?? ->) "HC" => /=.
       iIntros (??????). destruct!/=. rewrite bool_decide_false //. rewrite bool_decide_true //.
-      iApply (sim_tgt_link_right_recv with "[-]"). iApply "HC". iSplit!. iIntros (??). iDestruct 1 as (? ->) "HC" => /=.
+      iApply (sim_tgt_link_recv_right with "[-]"). iApply "HC". iSplit!. iIntros (??). iDestruct 1 as (? ->) "HC" => /=.
       iIntros (?). simplify_eq.
-      iApply (sim_tgt_link_right with "[-]"). iApply "HC". iSplit!.
+      iApply (sim_tgt_link_run_right with "[-]"). iApply "HC". iSplit!.
       iIntros (??). iDestruct 1 as (?? -> ->) "HC" => /=.
       iIntros (??????). destruct!/=.
-      iApply (sim_tgt_link_left_recv with "[-]"). iApply "HC". iSplit!.
+      iApply (sim_tgt_link_recv_left with "[-]"). iApply "HC". iSplit!.
       iIntros (??). iDestruct 1 as (? ->) "HC" => /=.
       iIntros (?). simplify_eq.
-      iApply (sim_tgt_link_left with "[-]"). by iApply "HC". } { done. }
+      iApply (sim_tgt_link_run_left with "[-]"). by iApply "HC". } { done. }
     iSplit!.
     - iIntros "!>" (??). iDestruct 1 as (??? ->) "[Hγσ_s HC]" => /=.
       iIntros  (??????). destruct!/=. rewrite !bool_decide_false //.
@@ -610,11 +610,11 @@ Section memmove.
       iApply "HC". iSplit!. iIntros (??). iDestruct 1 as (?? -> ->) "HC".
       iApply (sim_src_constP_next with "[Hγσ_t] [Hγκ] [Hγσ_s] [%] [-]"); [done..|].
       iIntros "Hγσ_s". destruct!/=.
-      iApply (sim_tgt_link_left_recv with "[-]").
+      iApply (sim_tgt_link_recv_left with "[-]").
       iApply ("HC" with "[-]"). iFrame. iSplit!.
       iIntros (??). iDestruct 1 as (? ->) "HC".
       iIntros (?). simplify_eq.
-      iApply (sim_tgt_link_left with "[-]").
+      iApply (sim_tgt_link_run_left with "[-]").
       iApply "HC". iSplit!.
     - iIntros (?) "[% [Hγσ_s [Hs %]]]". iApply sim_tgt_rec_ReturnExt.
       iIntros (???) "Hfns''' Hh !>".
