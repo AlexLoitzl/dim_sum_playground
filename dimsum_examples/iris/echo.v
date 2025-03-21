@@ -1,4 +1,4 @@
-From iris.bi.lib Require Import fixpoint.
+From iris.bi.lib Require Import fixpoint_mono.
 From iris.proofmode Require Import proofmode.
 
 Section bi_loop.
@@ -149,31 +149,27 @@ Definition TCallRet {S} (f : string) (vs : list val) (h : heap_state) :
     TUb.
 
 Section TCallRet.
-
   Context `{!dimsumGS Σ} `{!specGS} {S : Type}.
 
   Lemma sim_src_TCallRet f vs h (k: _ → spec rec_event S void) Π Φ :
     switch Π ({{κ σ POST,
       ∃ f' vs' h1,
-        ⌜f' = f⌝ ∗ ⌜vs' = vs⌝ ∗ ⌜h1 = h⌝ ∗
-        ⌜κ = Some (Outgoing, ERCall f vs h)⌝ ∗
-        POST Src _ (spec_trans rec_event S) ({{σ' Π',
-          ⌜σ = σ'⌝ ∗  ∃ e,
-          switch Π' ({{κ σ POST,
-            ⌜κ = Some (Incoming, e)⌝ ∗
-            POST Src _ (spec_trans rec_event S) ({{ σ'' Π'',
-              ⌜σ = σ''⌝ ∗
-              ⌜Π = Π''⌝ ∗
-              (∀ v h', ⌜e = ERReturn v h'⌝ -∗ Φ (k (v, h'))) }})}})}})}}) -∗
+      ⌜f' = f⌝ ∗ ⌜vs' = vs⌝ ∗ ⌜h1 = h⌝ ∗ ⌜κ = Some (Outgoing, ERCall f vs h)⌝ ∗
+    POST Src _ (spec_trans rec_event S) ({{σ' Π',
+      ⌜σ = σ'⌝ ∗  ∃ e,
+    switch Π' ({{κ σ POST,
+      ⌜κ = Some (Incoming, e)⌝ ∗
+    POST Src _ (spec_trans rec_event S) ({{ σ'' Π'',
+      ⌜σ = σ''⌝ ∗ ⌜Π = Π''⌝ ∗ (∀ v h', ⌜e = ERReturn v h'⌝ -∗ Φ (k (v, h'))) }})}})}})}}) -∗
     SRC (Spec.bind (TCallRet f vs h) k) @ Π {{ Φ }}.
   Proof.
     iIntros "HC" => /=. rewrite /TCallRet bind_bind.
     iApply sim_gen_TVis. iIntros (s) "Hs". iIntros "% % /=". iIntros "[% [% HΠ]]". subst.
     iApply "HC" => /=. iSplit!.
     iIntros (??) "[% [% HC]]" => /=. subst.
-    iApply (sim_gen_expr_intro _ tt with "[Hs] [-]"); simpl; [done..|].
-    rewrite bind_bind. iApply (sim_src_TExist _).
-    rewrite bind_bind. iApply sim_gen_TVis. iIntros (s') "Hs". iIntros (??) "[% [% HΠ']]" => /=.
+    iApply (sim_gen_expr_intro _ tt with "[Hs] [-]"); simpl; [done..|]. rewrite bind_bind.
+    iApply (sim_src_TExist _). rewrite bind_bind.
+    iApply sim_gen_TVis. iIntros (s') "Hs". iIntros (??) "[% [% HΠ']]" => /=.
     subst. iApply "HC" => /=. iSplit!.
     iIntros (??) "[% [% HC]]". destruct!/=.
     iApply "HΠ". iSplit!. iSplitL "Hs". 1: done.
@@ -181,40 +177,6 @@ Section TCallRet.
     rewrite bind_ret_l.
     iApply sim_gen_expr_stop.
     by iApply "HC".
-  Qed.
-
-  (* NOTE : This version does not require equality on Π but instead throws out Φ
-     Ideally this should not be necessary as the user should keep the Πs the same *)
-  Lemma sim_src_TCallRet' f vs h (k: _ → spec rec_event S void) Π Φ :
-    switch Π ({{κ σ POST,
-      ∃ f' vs' h1,
-        ⌜f' = f⌝ ∗ ⌜vs' = vs⌝ ∗ ⌜h1 = h⌝ ∗
-        ⌜κ = Some (Outgoing, ERCall f vs h)⌝ ∗
-        POST Src _ (spec_trans rec_event S) ({{σ' Π',
-          ⌜σ = σ'⌝ ∗  ∃ e,
-          switch Π' ({{κ σ POST,
-            ⌜κ = Some (Incoming, e)⌝ ∗
-            POST Src _ (spec_trans rec_event S) ({{ σ'' Π'',
-              ⌜σ = σ''⌝ ∗
-              (∀ v h', ⌜e = ERReturn v h'⌝ -∗
-                       ⌜σ''.1 ≡ k (v, h')⌝ -∗
-                       spec_state σ''.2 -∗
-                       σ'' ≈{(spec_trans rec_event S)}≈>ₛ Π'')}})}})}})}}) -∗
-    SRC (Spec.bind (TCallRet f vs h) k) @ Π {{ Φ }}.
-  Proof.
-    iIntros "HC" => /=. rewrite /TCallRet bind_bind.
-    iApply sim_gen_TVis. iIntros (s) "Hs". rewrite /switch_id. iIntros "% % /=". iIntros "[% [% ?]]". subst.
-    iApply "HC" => /=. iSplit!.
-    iIntros (??) "[% [% HC]]" => /=. subst.
-    iApply (sim_gen_expr_intro _ tt with "[Hs] [-]"); simpl; [done..|].
-    rewrite bind_bind. iApply (sim_src_TExist _).
-    rewrite bind_bind. iApply sim_gen_TVis. iIntros (s') "Hs". iIntros (??) "[% [% _]]" => /=.
-    subst. iApply "HC" => /=. iSplit!.
-    iIntros (??) "[% HC]". subst.
-    destruct e.
-    { iApply (sim_gen_expr_intro _ tt with "[Hs] [-]"); simpl; [done..|]. iApply sim_src_TUb. }
-    iApply ("HC" $! ret h0 with "[//] [] [$]").
-    by rewrite bind_ret_l.
   Qed.
 
 End TCallRet.
@@ -272,7 +234,7 @@ Section echo.
     pose (Hspec := SpecGS γ).
 
     iApply (sim_tgt_rec_Call_external); [done|].
-    iIntros (???) "Hfns' Hh Ha !>". iIntros (??) "[-> [-> Hσ]]".
+    iIntros (???) "Hfns' Hh !>". iIntros (??) "[-> [-> Hσ]]".
     iApply "Hswitch". iFrame. iSplit!.
     iIntros (??). iDestruct 1 as (->) "[% Hs]".
     iApply (sim_gen_expr_intro _ tt with "[Hγ] [-]"); simpl; [done..|].
@@ -302,7 +264,7 @@ Section echo.
     iApply "Hσ". iSplit!. iFrame. iApply "HΦ".
     iIntros (es ?). iDestruct 1 as (->) "HΦ".
     iApply (sim_tgt_rec_Call_external); [done|].
-    iIntros (???) "Hfns'' Hh Ha !>". iIntros (??) "[-> [-> Hσ]]".
+    iIntros (???) "Hfns'' Hh !>". iIntros (??) "[-> [-> Hσ]]".
     iApply "Hswitch". iFrame. iSplit!.
     iIntros (??). iDestruct 1 as (->) "[% Hs]". subst.
     iApply (sim_gen_expr_intro _ tt with "[Hγ] [-]"); simpl; [done..|].
@@ -336,7 +298,7 @@ Section echo.
     rec_state_interp (rec_init echo_prog) None -∗
     (rec_init echo_prog) ⪯{rec_trans, spec_trans rec_event ()} (echo_spec, ()).
   Proof.
-    iIntros "[#Hfns [Hh Ha]] /=".
+    iIntros "[#Hfns Hh] /=".
     iMod (mstate_var_alloc (m_state (spec_trans rec_event ()))) as (γσ_s) "Hγσ_s".
     iMod (mstate_var_alloc (m_state rec_trans)) as (γσ_t) "Hγσ_t".
     iMod (mstate_var_alloc (option rec_event)) as (γκ) "Hγκ".
@@ -371,11 +333,10 @@ Section echo.
 
     iApply (sim_src_constP_next with "[Hγσ_t] [Hγκ] [Hγσ_s] [%] [-]"); [done..|].
     iIntros "Hγσ_s".
+    iMod (heapUR_alloc_blocks _ (h_blocks h) with "Hh") as "[Hh _]". { set_solver. }
+    rewrite right_id_L heap_from_blocks_h_blocks.
 
-    iMod (rec_mapsto_alloc_big (h_heap h) with "Hh") as "[Hh _]". { apply map_disjoint_empty_r. }
-
-    iApply (sim_gen_expr_intro _ [] with "[Hh Ha]"). { done. }
-    { rewrite /= /rec_state_interp dom_empty_L right_id_L /=. iFrame "#∗". by iApply rec_alloc_fake. }
+    iApply (sim_gen_expr_intro _ [] with "[Hh]"). { done. } { by iFrame. }
     iApply (sim_gen_expr_bind _ [ReturnExtCtx _] with "[-]") => /=.
     iApply (sim_echo_spec with "[] [] [] Hγσ_s [//]").
     1-3: by iApply (rec_fn_intro with "[$]").
@@ -402,7 +363,7 @@ Lemma echo_refines_echo_spec :
 Proof.
   eapply (sim_adequacy #[dimsumΣ; recΣ]); [eapply _..|].
   iIntros (??) "!>". simpl.
-  iMod recgs_alloc as (?) "[?[??]]".
+  iMod recgs_alloc as (?) "[??]".
   iApply echo_spec_sim. iFrame.
 Qed.
 
@@ -650,7 +611,7 @@ Section getc_read.
     iApply (sim_getc with "[//]") => /=. iSplit!.
     iIntros (es ?) => /=. iDestruct 1 as (?? ->) "[Hl HΦ]".
     iApply sim_tgt_rec_Call_external. { done. }
-    iIntros (K h fns) "? ? ? !>".
+    iIntros (K h fns) "? ? !>".
     iIntros (??) => /=. iDestruct 1 as (??) "HR". simplify_eq.
     iApply "HC" => /=. iSplit!. { admit. }
     iIntros ([i regs0 mem0 instrs]?) "[% HC]"; simplify_eq/=.

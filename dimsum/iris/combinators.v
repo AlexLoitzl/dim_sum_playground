@@ -457,7 +457,7 @@ Section prepost.
 
   Lemma sim_tgt_prepost_Recv1 i o m s σ x Π e γ :
     (∃ r y, ⌜pp_to_ex (i e s) (λ r' y', r = r' ∧ y = y')⌝ ∗
-        |==> sat_open γ ∗ sat γ (x ∗ y) ∗
+        |==> ⌈{sat γ}⌉ ∗ ⌈x ∗ y @ sat γ⌉ ∗
            ∀ x', sat_closed γ false x' -∗ Π None (SMProgRecv r.1, σ, (PPInside, r.2, uPred_shrink x'))) -∗
     (SMFilter, σ, (PPRecv1 e, s, uPred_shrink x)) ≈{prepost_trans i o m}≈>ₜ Π.
   Proof using Type*.
@@ -477,7 +477,7 @@ Section prepost.
 
   Lemma sim_tgt_prepost_Inside i o m s σ x Π e γ b :
     (sat_closed γ b x ∗ ∀ r y x', ⌜pp_to_ex (o e s) (λ r' y', r' = r ∧ y' = y)⌝ -∗
-       sat_open γ -∗ sat γ (if b then x ∗ y else y) -∗ sat γ x' -∗
+       ⌈{sat γ}⌉ -∗ ⌈if b then x ∗ y else y @ sat γ⌉ -∗ ⌈x' @ sat γ⌉ -∗
         ▷ₒ Π (Some r.1) (SMFilter, σ, (PPOutside, r.2, uPred_shrink x'))) -∗
     (SMFilterRecv e, σ, (PPInside, s, uPred_shrink x)) ≈{prepost_trans i o m}≈>ₜ Π.
   Proof using Type*.
@@ -490,8 +490,8 @@ Section prepost.
     iApply (sim_gen_step with "[-]"). iIntros (???). inv_all/= @m_step.
     revert select (satisfiable _). rewrite uPred_expand_shrink assoc => ?.
     iMod ("Hclosed" with "[//]") as "[Ha Hsat]".
-    iAssert (sat γ (if b then x ∗ y else y) ∗ sat γ x')%I with "[Hsat]" as "[??]".
-    { destruct b; rewrite !sat_sep; iDestruct!; iFrame. }
+    iAssert (⌈if b then x ∗ y else y @ sat γ⌉ ∗ ⌈x' @ sat γ⌉)%I with "[Hsat]" as "[??]".
+    { destruct b; rewrite !weak_embed_sep; iDestruct!; iFrame. }
     iSpecialize ("HΠ" with "[//] [$] [$] [$]").
     iModIntro. iSplit!. do 2 iModIntro. iRight. iSplit!.
     iApply (sim_gen_step with "[-]"). iIntros (???). inv_all/= @m_step.
@@ -511,7 +511,7 @@ Section prepost.
 
   Lemma sim_src_prepost_Recv1 i o m s σ x Π e γ b `{!VisNoAng m}:
     (sat_closed γ b x ∗ ∀ r y x', ⌜pp_to_ex (i e s) (λ r' y', r' = r ∧ y' = y)⌝ -∗
-           sat_open γ -∗ sat γ (if b then x ∗ y else y) -∗ sat γ x' -∗
+           ⌈{sat γ}⌉ -∗ ⌈if b then x ∗ y else y @ sat γ⌉ -∗ ⌈x' @ sat γ⌉ -∗
            Π None (SMProgRecv r.1, σ, (PPInside, r.2, uPred_shrink x'))) -∗
     (SMFilter, σ, (PPRecv1 e, s, uPred_shrink x)) ≈{prepost_trans i o m}≈>ₛ Π.
   Proof using Type*.
@@ -521,8 +521,8 @@ Section prepost.
     iIntros "!>" ([[??]?] [?[y[[x' [Hsat ?]]?]]]%pp_to_ex_exists). simplify_eq/=.
     rewrite uPred_expand_shrink in Hsat.
     iMod ("Hclosed" with "[%]") as "[Ha Hsat]". { by rewrite comm. }
-    iAssert (sat γ (if b then x ∗ y else y) ∗ sat γ x')%I with "[Hsat]" as "[??]".
-    { destruct b; rewrite !sat_sep; iDestruct!; iFrame. }
+    iAssert (⌈if b then x ∗ y else y @ sat γ⌉ ∗ ⌈x' @ sat γ⌉)%I with "[Hsat]" as "[??]".
+    { destruct b; rewrite !weak_embed_sep; iDestruct!; iFrame. }
     iModIntro. iRight. iSplit!. iApply (sim_gen_step with "[-]").
     iExists _, _. iSplit; [iPureIntro; econs|]. simplify_eq/=.
     iIntros "!>" ([[??]?] ?). iModIntro. iLeft. simplify_eq/=.
@@ -531,7 +531,7 @@ Section prepost.
 
   Lemma sim_src_prepost_Inside i o m s σ x Π e γ `{!VisNoAng m} :
     (∃ r y, ⌜pp_to_ex (o e s) (λ r' y', r' = r ∧ y' = y)⌝ ∗
-       |==> sat_open γ ∗ sat γ (x ∗ y) ∗
+       |==> ⌈{sat γ}⌉ ∗ ⌈x ∗ y @ sat γ⌉ ∗
         ∀ x', sat_closed γ false x' -∗ Π (Some r.1) (SMFilter, σ, (PPOutside, r.2, uPred_shrink x'))) -∗
     (SMFilterRecv e, σ, (PPInside, s, uPred_shrink x)) ≈{prepost_trans i o m}≈>ₛ Π.
   Proof using Type*.
@@ -555,7 +555,6 @@ End prepost.
 
 (** * link *)
 (* TODO: Add rules for src *)
-
 Section link.
   Context {Σ : gFunctors} {EV : Type} {S : Type} `{!dimsumGS Σ}.
   Implicit Types (R : seq_product_case → S → EV → seq_product_case → S → EV → bool → Prop).

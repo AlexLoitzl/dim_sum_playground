@@ -314,6 +314,9 @@ Section fresh_map.
     fresh_map S X !! i = None ↔ i ∉ S.
   Proof. rewrite -not_elem_of_list_to_map. rewrite fst_zip; [set_solver|]. by rewrite length_fresh_list. Qed.
 
+  Lemma fresh_map_lookup_is_Some (S : gset A) (X : gset B) i:
+    is_Some (fresh_map S X !! i) ↔ i ∈ S.
+  Proof. rewrite -not_eq_None_Some fresh_map_lookup_None. destruct (decide (i ∈ S)); naive_solver. Qed.
 
   Lemma fresh_map_bij S X i1 i2 j :
     fresh_map S X !! i1 = Some j →
@@ -344,13 +347,26 @@ Section map_filter.
   Lemma map_lookup_filter_true m i :
     (∀ x, m !! i = Some x → P (i, x)) → filter P m !! i = m !! i.
   Proof. move => ?. rewrite map_lookup_filter. destruct (m !! i) => //=. case_guard; naive_solver. Qed.
-
-(* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/394 *)
-  Lemma map_filter_empty_iff_2 m :
-    map_Forall (λ i x, ¬P (i,x)) m →
-    filter P m = ∅.
-  Proof. apply map_filter_empty_iff. Qed.
 End map_filter.
+
+Section img.
+  Context `{FinMap K M, SemiSet A SA}.
+  Implicit Types m : M A.
+  Implicit Types x y : A.
+  Implicit Types X : SA.
+
+  (* avoid writing ≡@{D} everywhere... *)
+  Notation map_img := (map_img (M:=M A) (SA:=SA)).
+
+  Section leibniz.
+    Context `{!LeibnizEquiv SA}.
+
+  Lemma map_img_insert_L m i x :
+    map_img (<[i:=x]> m) = {[ x ]} ∪ map_img (delete i m).
+  Proof. unfold_leibniz. apply map_img_insert. Qed.
+  End leibniz.
+End img.
+
 
 Section curry_uncurry.
   Context `{Countable K1, Countable K2} {A : Type}.
@@ -389,6 +405,45 @@ Proof.
   - rewrite lookup_union_l //. by apply lookup_singleton_None.
 Qed.
 End theorems.
+
+Section kmap.
+  Context `{FinMap K1 M1} `{FinMap K2 M2}.
+  Context (f : K1 → K2).
+  Local Notation kmap := (kmap (M1:=M1) (M2:=M2)).
+
+  Lemma lookup_kmap_Some_strong {A} (m : M1 A) (j : K2) x :
+    (∀ i j, is_Some (m !! i) → is_Some (m !! j) → f i = f j → i = j) →
+    kmap f m !! j = Some x ↔ ∃ i, j = f i ∧ m !! i = Some x.
+  Proof using Type*.
+    intros Hinj.
+    assert (∀ x',
+      (j, x) ∈ prod_map f id <$> map_to_list m →
+      (j, x') ∈ prod_map f id <$> map_to_list m → x = x').
+    { intros x'. rewrite !elem_of_list_fmap.
+      intros [[j' y1] [??]] [[? y2] [??]]; simplify_eq/=.
+      apply (map_to_list_unique m j') => //.
+      ogeneralize* Hinj; [| |done|naive_solver].
+      all: by eexists; apply elem_of_map_to_list.
+    }
+    unfold kmap. rewrite <-elem_of_list_to_map', elem_of_list_fmap by done.
+    setoid_rewrite elem_of_map_to_list'. split.
+    - intros [[??] [??]]; naive_solver.
+    - intros [? [??]]. eexists (_, _); naive_solver.
+  Qed.
+End kmap.
+
+Section theorems.
+Context `{FinMap K M}.
+Lemma insert_alter {A} (m : M A) i x f : <[i:=x]>(alter f i m) = <[i:=x]>m.
+Proof using Type*. unfold insert, map_insert, alter, map_alter. by rewrite <-partial_alter_compose. Qed.
+
+Lemma alter_eq_insert {A} (m : M A) i f x : m !! i = Some x → alter f i m = <[i:=f x]>m.
+Proof using Type*. unfold insert, map_insert, alter, map_alter. move => Heq. apply partial_alter_ext. move => ? <-. by rewrite Heq. Qed.
+
+Lemma alter_eq_insert_const {A} (m : M A) i x : is_Some (m !! i) → alter (λ _, x) i m = <[i:=x]>m.
+Proof using Type*. move => [??]. by erewrite alter_eq_insert. Qed.
+End theorems.
+
 
 (** ** Lemmas about map_difference *)
 Section theorems.
@@ -802,6 +857,87 @@ Proof.
     rewrite list_lookup_middle ?lookup_app_r ?lookup_cons_ne_0; [|lia..].
     move => ?. apply Hnotin2. by apply: elem_of_list_lookup_2.
 Qed.
+
+(** * equalize induction principles for set and map *)
+Section fin_set.
+Context `{FinSet A C} `{!RelDecision (∈@{C})}.
+Implicit Types X Y : C.
+
+Lemma set_equalize_ind Y (P : C → Prop) :
+  Proper ((≡) ==> impl) P →
+  (∀ x X, x ∉ X → x ∈ Y → P ({[ x ]} ∪ X) → P X) →
+  (∀ x X, x ∈ X → x ∉ Y → P (X ∖ {[x]}) → P X) →
+  P Y →
+  ∀ X, P X.
+Proof using Type*.
+  move => ? Hadd Hdel HPY X.
+  have [Z HZ] : ∃ Z, Z ≡ X ∖ Y by naive_solver.
+  move: X HZ. pattern Z. apply set_ind; clear Z.
+  { move => ?? Heq ??. rewrite -Heq. naive_solver. } 2: {
+    move => x Z Hx IH X HZ.
+    apply: (Hdel x); [set_solver..|].
+    apply IH. set_solver.
+  }
+  move => X.
+  have [Z HZ] : ∃ Z, Z ≡ Y ∖ X by naive_solver.
+  move: X HZ. pattern Z. apply set_ind; clear Z.
+  { move => ?? Heq ??. rewrite -Heq. naive_solver. } 2: {
+    move => x Z Hx IH X HZ Hempty.
+    apply: (Hadd x); [set_solver..|].
+    apply IH; set_solver.
+  }
+  move => X ??.
+  have -> : X ≡ Y => //.
+  apply set_equiv_subseteq.
+  split; set_solver.
+Qed.
+Lemma set_equalize_ind_L Y `{!LeibnizEquiv C} (P : C → Prop) :
+  (∀ x X, x ∉ X → x ∈ Y → P ({[ x ]} ∪ X) → P X) →
+  (∀ x X, x ∈ X → x ∉ Y → P (X ∖ {[x]}) → P X) →
+  P Y →
+  ∀ X, P X.
+Proof using Type*. apply set_equalize_ind. by intros ?? ->%leibniz_equiv_iff. Qed.
+End fin_set.
+
+Section fin_map.
+(* TODO: remove LeibnizEquiv assumption? *)
+Context `{FinMap K M} `{FinSet K D} `{∀ A, Dom (M A) D} `{!FinMapDom K M D} `{!LeibnizEquiv D} `{!RelDecision (∈@{D})}.
+
+Lemma map_equalize_ind {A} (m' : M A) (P : M A → Prop) :
+  (∀ i x m, m !! i = None → m' !! i = Some x → P (<[i:=x]>m) → P m) →
+  (∀ i x m, m !! i = Some x → m' !! i = None → P (delete i m) → P m) →
+(* We could add x ≠ x', but this would require decidability on A and
+the client can also easily do it themselves if they want it by using [insert_id] *)
+  (∀ i x x' m, m !! i = Some x → m' !! i = Some x' → P (<[i:=x']>m) → P m) →
+  P m' →
+  ∀ m, P m.
+Proof using Type*.
+  move => Hdel Hadd Hboth HPm' m.
+  have [d Hd] : ∃ d, d = dom m by naive_solver.
+  elim/(set_equalize_ind_L (dom m')) : d m Hd. {
+    move => x ? Hm /elem_of_dom[??] IH m ?. subst.
+    apply: Hdel; [|done|]. { by apply not_elem_of_dom. }
+    apply IH. by rewrite dom_insert_L.
+  } {
+    move => x ? Hm /not_elem_of_dom? IH m ?. subst.
+    move: Hm => /elem_of_dom[??].
+    apply: Hadd; [done..|].
+    apply IH. by rewrite dom_delete_L.
+  }
+  move => m Hdom.
+  have -> : m = m ∪ m'. {
+    apply map_eq => ?. apply option_eq => ?.
+    rewrite lookup_union_Some_raw -not_elem_of_dom -Hdom not_elem_of_dom.
+    naive_solver.
+  }
+  have {}Hdom : dom m ⊆ dom m' by rewrite Hdom.
+  elim/(map_ind (A:=A)): m Hdom. { by rewrite left_id_L. }
+  move => ???? IH. rewrite dom_insert. move => /union_subseteq[/singleton_subseteq_l/elem_of_dom[??] ?].
+  apply: Hboth; simplify_map_eq; [done..|].
+  rewrite -insert_union_l insert_insert insert_union_r // insert_id //. by apply IH.
+Qed.
+End fin_map.
+
 
 (** * Lemmas about [option] *)
 Definition option_prefix {A} (o1 o2 : option A) : Prop :=
@@ -1369,7 +1505,73 @@ Section sep_map.
       rewrite !lookup_union_Some_raw lookup_insert_Some. naive_solver.
     - rewrite -insert_union_r //. rewrite !big_sepM_insert //. 2: { by apply lookup_union_None. }
       iFrame.
-Qed.
+  Qed.
+
+  Lemma big_sepM_impl_rel {K1 K2 A1 A2} `{Countable K1} `{Countable K2}
+    (R : K1 → A1 → K2 → A2 → Prop) (Φ : K1 → A1 → PROP) (Φ' : K2 → A2 → PROP) (m1 : gmap K1 A1) (m2 : gmap K2 A2) `{!BiAffine PROP}:
+    (∀ k2 v2, m2 !! k2 = Some v2 → ∃ k1 v1, R k1 v1 k2 v2 ∧ m1 !! k1 = Some v1 ∧ (Φ k1 v1 ⊢ Φ' k2 v2) ∧
+      ∀ k2' v2', m2 !! k2' = Some v2' → R k1 v1 k2' v2' → k2 = k2') →
+    ([∗ map] k↦v∈m1, Φ k v) -∗
+    ([∗ map] k↦v∈m2, Φ' k v).
+  Proof.
+    iIntros (HR) "Hm".
+    iInduction m2 as [|k v m2 Hk] "IH" using map_ind forall (m1 HR) => //.
+    exploit HR; [apply lookup_insert|] => -[?[?[?[?[HΦ Hinj1]]]]].
+    rewrite (big_sepM_delete _ m1) //. iDestruct "Hm" as "[??]".
+    iApply big_sepM_insert => //. iDestruct (HΦ with "[$]") as "$".
+    iApply ("IH" with "[%] [$]").
+    move => ???. exploit HR.
+    { apply lookup_insert_Some. right. split; [|done]. naive_solver. }
+    move => [? [? [? [? [? Hinj2]]]]]. split! => //.
+    - apply lookup_delete_Some. split!. move => ?. simplify_eq.
+      exploit Hinj1; [|done|move => ?]; by simplify_map_eq.
+    - move => ???. apply Hinj2. by simplify_map_eq.
+  Qed.
+
+  Lemma big_sepM_impl_frame Φ Φ' m P :
+    ([∗ map] k↦v∈m, Φ k v) -∗
+    □ (∀ k v, ⌜m !! k = Some v⌝ → P -∗ Φ k v -∗ P ∗ Φ' k v) -∗
+    P -∗
+    ([∗ map] k↦v∈m, Φ' k v) ∗ P.
+  Proof.
+    iIntros "Hm #Himpl HP".
+    iInduction m as [|] "IH" using map_ind.
+    { by iFrame. }
+    iDestruct (big_sepM_insert with "Hm") as "[??]"; [done|].
+    iDestruct ("Himpl" with "[%] HP [$]") as "[??]". { by simplify_map_eq. }
+    iDestruct ("IH" with "[] [$] [$]") as "[? $]".
+    { iIntros "!>" (???). iApply "Himpl". iPureIntro. by simplify_map_eq. }
+    rewrite big_sepM_insert //. iFrame.
+  Qed.
+
+  Lemma big_sepM_impl_bupd_ex_frame `{!BiBUpd PROP} {B} `{Countable K} (P : B → PROP) Φ Φ' m b :
+    ([∗ map] k↦v∈m, Φ k v) -∗
+    □ (∀ k v b, ⌜m !! k = Some v⌝ → P b -∗ Φ k v ==∗ ∃ b', P b' ∗ Φ' k v) -∗
+    P b ==∗
+    ∃ b' : B, ([∗ map] k↦v∈m, Φ' k v) ∗ P b'.
+  Proof.
+    iIntros "Hm #Himpl HP".
+    iInduction m as [|] "IH" using map_ind forall (b).
+    { iFrame. by iModIntro. }
+    iDestruct (big_sepM_insert with "Hm") as "[??]"; [done|].
+    iMod ("Himpl" with "[%] HP [$]") as (?) "[??]". { by simplify_map_eq. }
+    iMod ("IH" with "[] [$] [$]") as (?) "[? $]".
+    { iIntros "!>" (????). iApply "Himpl". iPureIntro. by simplify_map_eq. }
+    iModIntro. rewrite big_sepM_insert //. iFrame.
+  Qed.
+
+  Lemma big_sepM_impl_bupd_frame `{!BiBUpd PROP} Φ Φ' m P :
+    ([∗ map] k↦v∈m, Φ k v) -∗
+    □ (∀ k v, ⌜m !! k = Some v⌝ → P -∗ Φ k v ==∗ P ∗ Φ' k v) -∗
+    P ==∗
+    ([∗ map] k↦v∈m, Φ' k v) ∗ P.
+  Proof.
+    iIntros "Hm #Himpl HP".
+    iMod (big_sepM_impl_bupd_ex_frame (λ _ : unit, P) with "Hm [] HP") as (?) "$" => //.
+    iIntros "!>" (????) "? ?". iMod ("Himpl" with "[//] [$] [$]") as "$". iModIntro.
+    by iExists tt.
+  Qed.
+
 End sep_map.
 End big_op.
 
@@ -1425,4 +1627,77 @@ Section map2.
   Qed.
 
 End map2.
+End big_op.
+
+(** * Lemmas about [big_sepS] *)
+Section big_op.
+Context {PROP : bi}.
+Implicit Types P Q : PROP.
+Implicit Types Ps Qs : list PROP.
+Implicit Types A : Type.
+Section gset.
+  Context `{Countable A}.
+  Implicit Types X : gset A.
+  Implicit Types Φ : A → PROP.
+
+  Lemma big_sepS_exist {V} (Φ : A → V → PROP) s :
+    ([∗ set] k∈ s, ∃ v, Φ k v) ⊢ ∃ m, ⌜s = dom m⌝ ∗ ([∗ map] k↦v ∈ m, Φ k v).
+  Proof.
+    induction s as [|k s Hk IH] using set_ind_L.
+    { iIntros "?". iExists ∅. by iSplit. }
+    rewrite big_sepS_insert // IH.
+    iIntros "[[%v ?] [%m [-> ?]]]".
+    iExists (<[k:=v]>m). rewrite big_sepM_insert. 2: by apply not_elem_of_dom.
+    iFrame. iPureIntro. set_solver.
+  Qed.
+
+  Lemma big_sepS_map_img_1 {K} `{Countable K} Φ (m : gmap K A) :
+    (∀ i j k, m !! i = Some k → m !! j = Some k → i = j) →
+    ([∗ set] k∈map_img m, Φ k) ⊢ ([∗ map] k∈m, Φ k).
+  Proof.
+    induction m as [|i x m ? IH] using map_ind.
+    { iIntros (?) "?". by rewrite map_img_empty_L big_sepS_empty. }
+    move => Hinj.
+    rewrite map_img_insert_L big_sepM_insert // big_sepS_insert. 2: {
+      apply not_elem_of_map_img. move => ?. rewrite lookup_delete_Some.
+      move => [Hneq ?]. contradict Hneq. apply: Hinj; [by simplify_map_eq|].
+      apply lookup_insert_Some; naive_solver.
+    }
+    rewrite delete_notin // IH //.
+    move => ??? ??. apply: Hinj; apply lookup_insert_Some; naive_solver.
+  Qed.
+
+  Lemma big_sepS_map_img_2 {K} `{Countable K} Φ (m : gmap K A) :
+    (∀ x, TCOr (Affine (Φ x)) (Absorbing (Φ x))) →
+    ([∗ map] k∈m, Φ k) ⊢ ([∗ set] k∈map_img m, Φ k).
+  Proof.
+    move => ?.
+    induction m as [|i x m ? IH] using map_ind.
+    { iIntros "?". by rewrite map_img_empty_L big_sepS_empty. }
+    rewrite map_img_insert_L big_sepM_insert // IH delete_notin //.
+    iIntros "[H1 H2]". iApply (big_sepS_insert_2 with "H1 H2").
+  Qed.
+
+  Lemma big_sepS_map {B} `{Countable B} (f : A → B) (Φ : B → PROP) s :
+    Inj (=) (=) f →
+    ([∗ set] k∈set_map f s, Φ k) ⊣⊢ ([∗ set] k∈s, Φ (f k)).
+  Proof.
+    move => Hinj.
+    induction s as [|x s ? IH] using set_ind_L.
+    { by rewrite set_map_empty !big_sepS_empty. }
+    rewrite set_map_union_L set_map_singleton_L !big_sepS_union ?IH ?big_sepS_singleton //.
+    - set_solver.
+    - apply disjoint_singleton_l. apply/elem_of_map. naive_solver.
+  Qed.
+
+  Lemma big_sepS_dom {B} Φ (m : gmap A B) :
+    ([∗ set] k∈dom m, Φ k) ⊣⊢ ([∗ map] k↦_∈m, Φ k).
+  Proof.
+    induction m as [|i x m ? IH] using map_ind.
+    { by rewrite dom_empty_L big_sepM_empty !big_sepS_empty. }
+    rewrite dom_insert_L big_sepM_insert // -IH big_sepS_union ?big_sepS_singleton //.
+    apply disjoint_singleton_l. by apply not_elem_of_dom.
+  Qed.
+
+End gset.
 End big_op.

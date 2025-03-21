@@ -1,4 +1,4 @@
-From iris.bi Require Import fixpoint.
+From iris.bi Require Import fixpoint_mono.
 From iris.proofmode Require Export proofmode.
 From iris.base_logic.lib Require Export fancy_updates.
 From dimsum.core Require Export module trefines.
@@ -25,8 +25,6 @@ Global Arguments mtrans {_ _} _.
 Global Arguments mexpr_rel {_ _} _ _ _.
 Global Arguments mstate_interp {_ _} _ _.
 
-
-(* NOTE - This is actually a little  *)
 Definition sim_gen_mapsto_state `{!dimsumGS Σ} {EV} (ts : tgt_src) (m : mod_trans EV)
   (H_s : (m_state m) → (option EV → m_state m → iProp Σ) → iProp Σ) : iProp Σ :=
   ∀ σ Π, H_s σ Π -∗ σ ≈{ts, m}≈> Π.
@@ -50,27 +48,9 @@ Definition switch `{!dimsumGS Σ} {S EV} (Π : option EV → S → iProp Σ)
   (∀ κ σ, K κ σ (λ ts' EV2 m' PΠ', ⥥{ts', m'}PΠ') -∗  Π κ σ).
   (* (∀ κ σ, K κ σ (λ ts' EV2 m' PΠ', ∀ σ' Π', PΠ' σ' Π' -∗ σ' ≈{ ts', m' }≈> Π') -∗  Π κ σ). *)
 
-(* TODO: It's annoying that with lambda it doesn't get printed nicely *)
-(* I cannot repeat POST *)
-(* Notation "κ σ POST '<-switch' Π pre '∗' K "  := (switch Π ({{κ σ POST, pre ∗ K}}))%I *)
-(*   (at level 70, K at level 200, format *)
-(* "κ  σ  POST  '<-switch'  Π '//'   pre  '∗' '//' K") : bi_scope. *)
-
-(* Notation "κ σ '<-switch' Π pre '∗' POST K "  := (switch Π ({{κ σ POST, pre ∗ POST K}}))%I *)
-(*   (at level 70, K at level 200, format *)
-(* "κ  σ  '<-switch'  Π '//'   pre  '∗' '//' POST K") : bi_scope. *)
-
-(* https://coq.inria.fr/doc/V8.18.0/refman/user-extensions/syntax-extensions.html#notations-with-expressions-used-both-as-binder-and-term *)
-(* https://coq.inria.fr/doc/V8.18.0/refman/user-extensions/syntax-extensions.html#locating-notations *)
-(* Notation "κ σ '<-switch' Π pre1 '∗' pre2 '∗' σ' Π' <-POST ts EV m post"  := *)
-(*   (switch Π ({{κ σ POST, pre1 ∗ pre2 ∗ POST ts EV m ({{σ' Π', post}})}}))%I *)
-(*   (at level 70, format *)
-(* "κ  σ  '<-switch'  Π '//'   pre1  '∗'  pre2  '∗'  '//' σ'  Π'  <-POST  ts  EV  m '//'   post") : bi_scope. *)
-
 Lemma switch_mono `{!dimsumGS Σ} {S' EV} (Π : option EV → S' → iProp Σ) K1 K2 :
   switch Π K1 -∗
-  (∀ κ σ P1 P2, K2 κ σ P1 -∗
-                (∀ ts m Q1 Q2, P1 ts EV m Q1 -∗ (∀ σ Π, Q2 σ Π -∗ Q1 σ Π) -∗ P2 ts EV m Q2) -∗ K1 κ σ P2) -∗
+  (∀ κ σ P1 P2, K2 κ σ P1 -∗ (∀ ts m Q1 Q2, P1 ts EV m Q1 -∗ (∀ σ Π, Q2 σ Π -∗ Q1 σ Π) -∗ P2 ts EV m Q2) -∗ K1 κ σ P2) -∗
   switch Π K2.
 Proof.
   iIntros "Hs Hmono" (??) "HK2". iApply "Hs".

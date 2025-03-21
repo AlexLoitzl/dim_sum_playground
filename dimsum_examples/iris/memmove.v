@@ -282,7 +282,7 @@ Section memmove.
     rec_fn_spec_hoare Tgt Π "locle" locle_fn_spec.
   Proof.
     iIntros "#Hfns #Hf HΠ" (es Φ) "HΦ". iDestruct "HΦ" as (l1 l2 ->) "HΦ".
-    iApply (sim_tgt_rec_Call_external with "[$]"). iIntros (???) "#??? !>".
+    iApply (sim_tgt_rec_Call_external with "[$]"). iIntros (???) "#?? !>".
     iIntros (??) "[% [% Hσ]]". subst. iApply "HΠ". iSplit!. iIntros (??) "[-> HΠi]".
     iMod (mstate_var_alloc unit) as (γ) "?".
     iMod (mstate_var_split γ tt with "[$]") as "[Hγ ?]".
@@ -423,7 +423,7 @@ Section memmove.
 
     iIntros (??). iDestruct 1 as (->) "HΦ".
     iApply (sim_tgt_rec_Call_external); [done|].
-    iIntros (???) "Hfns' Hh Ha !>". iIntros (??) "[-> [-> Hσ]]".
+    iIntros (???) "Hfns' Hh !>". iIntros (??) "[-> [-> Hσ]]".
     iApply "Hs". iSplit!. iFrame. iSplit!. iIntros (??) "[-> HC]".
     iApply (sim_gen_expr_intro _ tt with "[Hγ] [-]"); simpl; [done..|].
     unfold main_spec_body.
@@ -448,7 +448,7 @@ Section memmove.
 
     iIntros (??). iDestruct 1 as (->) "HΦ".
     iApply (sim_tgt_rec_Call_external); [done|].
-    iIntros (???) "Hfns'' Hh Ha !>". iIntros (??) "[-> [-> Hσ]]".
+    iIntros (???) "Hfns'' Hh !>". iIntros (??) "[-> [-> Hσ]]".
     iApply "Hs". iSplit!. iFrame. iSplit!. iIntros (??) "[-> HC]".
     iApply (sim_gen_expr_intro _ tt with "[Hγ] [-]"); simpl; [done..|].
     unfold main_spec_body.
@@ -533,7 +533,7 @@ Section memmove.
     (MLFRun None, [], rec_init (main_prog ∪ memmove_prog ∪ memcpy_prog), (locle_spec, ())) ⪯{m_t,
       spec_trans rec_event ()} (main_spec, ()).
   Proof.
-    iIntros "[#Hfns [Hh Ha]] /=".
+    iIntros "[#Hfns Hh] /=".
     iMod (mstate_var_alloc (m_state (spec_trans rec_event ()))) as (γσ_s) "Hγσ_s".
     iMod (mstate_var_alloc (m_state m_t)) as (γσ_t) "Hγσ_t".
     iMod (mstate_var_alloc (option rec_event)) as (γκ) "Hγκ".
@@ -571,10 +571,10 @@ Section memmove.
     iSplit; [|by iIntros].
     iIntros (???? Hin) "!>". iIntros (?). simplify_map_eq.
     iApply (sim_tgt_link_run_left with "[-]").
-    iMod (rec_mapsto_alloc_big (h_heap h) with "Hh") as "[Hh _]". { apply map_disjoint_empty_r. }
+    iMod (heapUR_alloc_blocks _ (h_blocks h) with "Hh") as "[Hh _]". { set_solver. }
+    rewrite right_id_L heap_from_blocks_h_blocks.
 
-    iApply (sim_gen_expr_intro _ [] with "[Hh Ha]"). { done. }
-    { rewrite /= /rec_state_interp dom_empty_L right_id_L /=. iFrame "#∗". by iApply rec_alloc_fake. }
+    iApply (sim_gen_expr_intro _ [] with "[Hh]"). { done. } { by iFrame. }
 
     set (Π := tgt_link_run_leftP _ _ _ _).
 
@@ -618,7 +618,7 @@ Section memmove.
       iApply (sim_tgt_link_run_left with "[-]").
       iApply "HC". iSplit!.
     - iIntros (?) "[% [Hγσ_s [Hs %]]]". iApply sim_tgt_rec_ReturnExt.
-      iIntros (???) "Hfns''' Hh Ha !>".
+      iIntros (???) "Hfns''' Hh !>".
       iIntros (??) "[-> [-> _]]" => /=. iIntros (??????). destruct!/=.
       iApply (sim_tgt_constP_elim γσ_t γσ_s γκ with "[Hγσ_s] [-]"); [done..|].
       iIntros "Hγσ_s Hγσ_t Hγκ".
@@ -635,7 +635,7 @@ Lemma memmove_refines_spec :
 Proof.
   eapply (sim_adequacy #[dimsumΣ; recΣ]); [eapply _..|].
   iIntros (??) "!>". simpl.
-  iMod recgs_alloc as (?) "[?[??]]".
+  iMod recgs_alloc as (?) "[??]".
   iApply memmove_sim. iFrame.
 Qed.
 

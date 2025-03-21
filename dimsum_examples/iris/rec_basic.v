@@ -1,7 +1,7 @@
 From iris.algebra Require Import big_op gmap frac agree dfrac_agree.
 From iris.base_logic.lib Require Import ghost_map.
 From dimsum.core.iris Require Export iris.
-From dimsum.examples Require Export rec.
+From dimsum.examples Require Export rec heapUR.
 Set Default Proof Using "Type".
 
 Local Open Scope Z_scope.
@@ -74,55 +74,34 @@ Definition to_fns : gmap string fndef → fnsUR :=
 
 
 Class recPreGS (Σ : gFunctors) := RecPreGS {
-  rec_mapsto_ghost_map_preG :: ghost_mapG Σ loc val;
-  rec_alloc_ghost_map_preG :: ghost_mapG Σ prov Z;
+  rec_heapUR_preG :: inG Σ heapUR;
   rec_fn_preG :: inG Σ fnsUR;
 }.
 
 Class recGS (Σ : gFunctors) := RecGS {
-  rec_mapsto_ghost_mapG :: ghost_mapG Σ loc val;
-  rec_alloc_ghost_mapG :: ghost_mapG Σ prov Z;
+  rec_heapUR_G :: inG Σ heapUR;
   rec_fnG :: inG Σ fnsUR;
-  rec_mapsto_name : gname;
-  rec_alloc_name : gname;
+  rec_heap_name : gname;
   rec_fn_name : gname;
 }.
 
 Definition recΣ : gFunctors :=
-  #[ ghost_mapΣ loc val; ghost_mapΣ prov Z; GFunctor fnsUR ].
+  #[GFunctor heapUR; GFunctor fnsUR ].
 
 Global Instance subG_recΣ Σ :
   subG recΣ Σ → recPreGS Σ.
 Proof. solve_inG. Qed.
 
+Notation "l ↦ v" := (heapUR_ptsto (bi_own_own rec_heap_name) l (DfracOwn 1) v)
+  (at level 20, format "l  ↦  v") : bi_scope.
+Notation "p ↦∗ b" := (heapUR_block (bi_own_own rec_heap_name) p (DfracOwn 1) b)
+  (at level 20, format "p  ↦∗  b") : bi_scope.
+Notation "p ⤚ d" := (heapUR_dom (bi_own_own rec_heap_name) p (DfracOwn 1) d)
+  (at level 20, format "p  ⤚  d") : bi_scope.
+Notation rec_inv := (heapUR_inv (bi_own_own rec_heap_name)).
+
 Section definitions.
   Context `{!recGS Σ}.
-
-  Definition rec_mapsto_def (l : loc) (q : dfrac) (v : val) : iProp Σ :=
-    ghost_map_elem rec_mapsto_name l q v.
-  Local Definition rec_mapsto_aux : seal (@rec_mapsto_def).
-  Proof. by eexists. Qed.
-  Definition rec_mapsto := rec_mapsto_aux.(unseal).
-  Local Definition rec_mapsto_unseal :
-    @rec_mapsto = @rec_mapsto_def := rec_mapsto_aux.(seal_eq).
-
-  Definition rec_mapsto_auth (h : gmap loc val) : iProp Σ :=
-    ghost_map_auth rec_mapsto_name 1 h.
-
-  Definition rec_alloc_def (l : loc) (sz : Z) : iProp Σ :=
-    ⌜l.2 = 0⌝ ∗ ⌜is_ProvBlock l.1⌝ ∗
-    ghost_map_elem rec_alloc_name l.1 (DfracOwn 1) sz.
-  Local Definition rec_alloc_aux : seal (@rec_alloc_def).
-  Proof. by eexists. Qed.
-  Definition rec_alloc := rec_alloc_aux.(unseal).
-  Local Definition rec_alloc_unseal :
-    @rec_alloc = @rec_alloc_def := rec_alloc_aux.(seal_eq).
-
-  Definition rec_alloc_auth (h : gset loc) : iProp Σ :=
-    ∃ m,
-    ⌜∀ p sz, m !! p = Some sz → sz > 0⌝ ∗
-    ⌜∀ p sz, m !! p = Some sz → ∀ l', l'.1 = p → l' ∈ h ↔ 0 ≤ l'.2 < sz⌝ ∗
-    ghost_map_auth rec_alloc_name 1 m.
 
   Definition rec_fn_auth (fns : gmap string fndef) : iProp Σ :=
     own rec_fn_name (to_fns fns).
@@ -139,215 +118,17 @@ Section definitions.
     if os is Some h then
       ⌜st_heap σ = h⌝
     else
-      rec_mapsto_auth (h_heap (st_heap σ)) ∗ rec_alloc_auth (dom (h_heap (st_heap σ))).
+      rec_inv (st_heap σ).
 End definitions.
 
-Notation "l ↦ v" := (rec_mapsto l (DfracOwn 1) v)
-  (at level 20, format "l  ↦  v") : bi_scope.
 Notation "f ↪ fn" := (rec_fn_mapsto f fn)
   (at level 20, format "f  ↪  fn") : bi_scope.
 
 Local Ltac unseal := rewrite
-  ?rec_mapsto_unseal /rec_mapsto_def /rec_mapsto_auth
-  ?rec_alloc_unseal /rec_alloc_def /rec_alloc_auth
   ?rec_fn_mapsto_unseal /rec_fn_mapsto_def /rec_fn_auth.
 
 Section lemmas.
   Context `{!recGS Σ}.
-
-  (** mapsto ghost state  *)
-  Lemma rec_mapsto_lookup h l v :
-    rec_mapsto_auth h -∗ l ↦ v -∗ ⌜h !! l = Some v⌝.
-  Proof. unseal. apply ghost_map_lookup. Qed.
-
-  Lemma rec_mapsto_update h l v v' :
-    rec_mapsto_auth h -∗ l ↦ v ==∗ rec_mapsto_auth (alter (λ _, v') l h) ∗ l ↦ v'.
-  Proof.
-    iIntros "Hh Hl".
-    iDestruct (rec_mapsto_lookup with "Hh Hl") as %?.
-    unseal.
-    iMod (ghost_map_update with "Hh Hl") as "[? $]".
-    have -> : (<[l:=v']> h) = (alter (λ _ : val, v') l h); [|done].
-    apply partial_alter_ext => ??. by simplify_map_eq.
-  Qed.
-
-  Lemma rec_mapsto_alloc_big h' h :
-    h' ##ₘ h →
-    rec_mapsto_auth h ==∗
-    rec_mapsto_auth (h' ∪ h) ∗ [∗ map] l↦v∈h', l ↦ v.
-  Proof. unseal. apply ghost_map_insert_big. Qed.
-
-  Local Transparent heap_alloc_h.
-  Lemma rec_mapsto_alloc h l sz :
-    heap_is_fresh h l →
-    rec_mapsto_auth (h_heap h) ==∗
-    rec_mapsto_auth (h_heap (heap_alloc h l sz)) ∗ [∗ list] o∈seqZ 0 sz, (l +ₗ o) ↦ 0.
-  Proof.
-    iIntros (Ha) "Hh".
-    iMod (rec_mapsto_alloc_big with "Hh") as "[$ ?]".
-    { apply map_disjoint_spec => ??? /lookup_kmap_Some[?[??]] /lookup_heap_Some_elem_of_h_provs?.
-      simplify_eq. destruct Ha. naive_solver. }
-    iModIntro. rewrite big_sepM_kmap_intro big_sepM_zero_block.
-    rewrite /offset_loc. destruct Ha as [?[->?]]. by setoid_rewrite Z.add_0_l.
-  Qed.
-  Local Opaque heap_alloc_h.
-
-  Lemma rec_mapsto_alloc_list h ls h' szs :
-    heap_alloc_list szs ls h h' →
-    rec_mapsto_auth (h_heap h) ==∗
-    rec_mapsto_auth (h_heap h') ∗ ([∗ list] l;n∈ls; szs, [∗ list] o∈seqZ 0 n, (l +ₗ o) ↦ 0).
-  Proof.
-    iIntros (Ha) "Hh".
-    iInduction (szs) as [|sz szs] "IH" forall (ls h h' Ha); destruct!/=. { by iFrame. }
-    iMod (rec_mapsto_alloc with "Hh") as "[Hh $]"; [done|].
-    iApply ("IH" with "[//] Hh").
-  Qed.
-
-  Lemma seqZ_succ m i :
-    0 ≤ i →
-    seqZ m (Z.succ i) = seqZ m i ++ [m + i].
-  Proof. intros ?. by rewrite -(Z2Nat.id i) // -Nat2Z.inj_succ seqZ_S. Qed.
-
-  Lemma rec_mapsto_free h l sz :
-    heap_range h l sz →
-    0 ≤ sz →
-    rec_mapsto_auth (h_heap h) -∗
-    ([∗ list] o∈seqZ 0 sz, ∃ v, (l +ₗ o) ↦ v) ==∗
-    rec_mapsto_auth (h_heap (heap_free h l)).
-  Proof.
-    iIntros (Hr Hsz) "Ha Hl".
-    iAssert (∃ vs, ⌜sz = length vs⌝ ∗ [∗ map] l↦v∈array l vs, l↦v)%I with "[Hl]" as (vs ?) "Hl".
-    { clear Hr.
-      iInduction sz as [|sz|sz] "IH" using (Z.succ_pred_induction 0) forall (Hsz).
-      { iExists []. iSplit!. } 2: { lia. }
-      rewrite seqZ_succ // big_sepL_app /=. iDestruct "Hl" as "[Hl [[%v Hv] _]]". rewrite Z.add_0_l.
-      iDestruct ("IH" with "[//] [$]") as (vs ?) "?". subst.
-      iExists (vs ++ [v]). iSplit; [iPureIntro; rewrite length_app /=; lia|].
-      rewrite array_app array_cons array_nil. iApply (big_sepM_union_2 with "[$]").
-      by iApply (big_sepM_insert_2 with "[Hv]").
-    }
-    unseal.
-    iMod (ghost_map_delete_big with "Ha [$]") => /=.
-    have -> : (h_heap h ∖ array l vs = (filter (λ '(l', _), l'.1 ≠ l.1) (h_heap h))); [|done].
-    apply map_eq => i. apply option_eq => v.
-    rewrite map_lookup_filter_Some lookup_difference_Some.
-    rewrite array_lookup_None.
-    unfold heap_range in Hr. split; [|naive_solver lia].
-    move => [Hh ?]. split!. move => ?. have := Hr i. rewrite Hh /is_Some. naive_solver lia.
-  Qed.
-
-  (** alloc ghost state  *)
-  Lemma rec_alloc_fake h :
-    rec_alloc_auth ∅ -∗ rec_alloc_auth h.
-  Proof.
-    unseal. iDestruct 1 as (m Hsz Hl) "?".
-    have -> : m = ∅. {
-      apply map_empty => i. apply eq_None_ne_Some_2 => ??.
-      have := Hl _ _ ltac:(done) (i, 0). set_unfold. naive_solver lia. }
-    iExists ∅. iFrame. iPureIntro. naive_solver.
-  Qed.
-
-  Local Transparent heap_alloc_h.
-  Lemma rec_alloc_alloc h l sz :
-    heap_is_fresh h l →
-    0 < sz →
-    rec_alloc_auth (dom (h_heap h)) ==∗
-    rec_alloc_auth (dom (h_heap (heap_alloc h l sz))) ∗ rec_alloc l sz.
-  Proof.
-    iIntros ([Hn [Hl0 ?]] ?) "Ha". unseal.
-    iDestruct "Ha" as (m Hsz Hin) "Ha".
-    iMod (ghost_map_insert l.1 sz with "Ha") as "[Ha ?]". {
-      apply eq_None_not_Some => -[??].
-      have [//|_ Hdom]:= Hin _ _ ltac:(done) (l.1, 0).
-      apply Hn. apply (lookup_heap_is_Some_elem_of_h_provs (l.1, 0)).
-      apply elem_of_dom. naive_solver lia.
-    }
-    iModIntro. iFrame. iSplit!.
-    - move => ?? /lookup_insert_Some. naive_solver lia.
-    - move => ?? /lookup_insert_Some[[??]|[??]] l' ?; simplify_eq.
-      + rewrite dom_union_L elem_of_union dom_kmap_L elem_of_map elem_of_dom.
-        setoid_rewrite elem_of_dom_zero_block.
-        split => ?; destruct!/=.
-        * lia.
-        * revert select (is_Some _) => /lookup_heap_is_Some_elem_of_h_provs. congruence.
-        * left. eexists (l'.2) => /=. split. { apply loc_eq. split!. }
-          lia.
-      + rewrite dom_union_L elem_of_union dom_kmap_L elem_of_map.
-        setoid_rewrite elem_of_dom_zero_block.
-        split; move => ?; destruct!/=. 1: set_solver. all: naive_solver lia.
-  Qed.
-  Local Opaque heap_alloc_h.
-
-  Lemma rec_alloc_alloc_list szs h h' ls :
-    heap_alloc_list szs ls h h' →
-    Forall (λ sz, 0 < sz) szs →
-    rec_alloc_auth (dom (h_heap h)) ==∗
-    rec_alloc_auth (dom (h_heap h')) ∗ [∗ list] l;sz∈ls;szs, rec_alloc l sz.
-  Proof.
-    iIntros (Ha Hall) "Ha".
-    iInduction (szs) as [|sz szs] "IH" forall (ls h h' Ha Hall); destruct!/=. { by iFrame. }
-    decompose_Forall.
-    iMod (rec_alloc_alloc with "Ha") as "[Ha $]"; [done..|].
-    iApply ("IH" with "[//] [//] Ha").
-  Qed.
-
-  Lemma rec_alloc_range h l sz :
-    rec_alloc_auth (dom (h_heap h)) -∗
-    rec_alloc l sz -∗
-    ⌜heap_range h l sz⌝.
-  Proof.
-    unseal. iDestruct 1 as (p Hsz Hl) "?". iIntros "[% [% ?]]".
-    iDestruct (ghost_map_lookup with "[$] [$]") as %?.
-    iPureIntro. setoid_rewrite elem_of_dom in Hl.
-    move => ??. rewrite Hl //. lia.
-  Qed.
-
-  Lemma rec_alloc_block l sz :
-    rec_alloc l sz -∗
-    ⌜is_ProvBlock l.1⌝.
-  Proof. unseal. iIntros "[% [% ?]]". done. Qed.
-
-  Lemma rec_alloc_size h l sz :
-    rec_alloc_auth (dom (h_heap h)) -∗
-    rec_alloc l sz -∗
-    ⌜0 < sz⌝.
-    unseal. iDestruct 1 as (p Hsz Hl) "?". iIntros "[% [% ?]]".
-    iDestruct (ghost_map_lookup with "[$] [$]") as %?.
-    iPureIntro. naive_solver lia.
-  Qed.
-
-  Lemma rec_alloc_free h l sz :
-    rec_alloc_auth (dom (h_heap h)) -∗
-    rec_alloc l sz ==∗
-    rec_alloc_auth (dom (h_heap (heap_free h l))).
-  Proof.
-    unseal. iDestruct 1 as (p Hsz Hl) "?". iIntros "[% [% ?]]".
-    iMod (ghost_map_delete with "[$] [$]"). iModIntro. iExists _. iFrame.
-    iPureIntro. split => ?? /lookup_delete_Some. 1: naive_solver.
-    move => [??] ?? /=. rewrite -Hl //.
-    rewrite !elem_of_dom map_lookup_filter_true //. naive_solver.
-  Qed.
-
-  Lemma rec_alloc_free_list h ls szs :
-    rec_mapsto_auth (h_heap h) -∗
-    rec_alloc_auth (dom (h_heap h)) -∗
-    ([∗ list] l;sz ∈ ls;szs, rec_alloc l sz) -∗
-    ([∗ list] l;n ∈ ls;szs, [∗ list] o ∈ seqZ 0 n, ∃ v0 : val, (l +ₗ o) ↦ v0) ==∗
-    ∃ h', ⌜heap_free_list (zip ls szs) h h'⌝ ∗ rec_mapsto_auth (h_heap h') ∗ rec_alloc_auth (dom (h_heap h')).
-  Proof.
-    iIntros "Hh Ha Has Hls".
-    iInduction (szs) as [|sz szs] "IH" forall (h ls).
-    { iModIntro. iDestruct (big_sepL2_nil_inv_r with "Has") as %?. simplify_eq/=. iSplit!. iFrame. }
-    iDestruct (big_sepL2_cons_inv_r with "Has") as (???) "[??]".
-    iDestruct (big_sepL2_cons_inv_r with "Hls") as (???) "[??]". simplify_eq/=.
-    iDestruct (rec_alloc_range with "[$] [$]") as %?.
-    iDestruct (rec_alloc_size with "[$] [$]") as %?.
-    iDestruct (rec_alloc_block with "[$]") as %?.
-    iMod (rec_mapsto_free with "Hh [$]") as "Hh"; [done|lia|].
-    iMod (rec_alloc_free with "Ha [$]") as "Ha".
-    iMod ("IH" with "Hh Ha [$] [$]") as (??) "[??]". iModIntro.
-    iSplit!; [done|]. iFrame.
-  Qed.
 
   (** fn ghost state  *)
   Global Instance rec_fn_auth_pers fns : Persistent (rec_fn_auth fns).
@@ -380,12 +161,10 @@ Section lemmas.
 End lemmas.
 
 Lemma recgs_alloc `{!recPreGS Σ} fns :
-  ⊢ |==> ∃ H : recGS Σ, rec_mapsto_auth ∅ ∗ rec_alloc_auth ∅ ∗ rec_fn_auth fns.
+  ⊢ |==> ∃ H : recGS Σ, rec_inv ∅ ∗ rec_fn_auth fns.
 Proof.
   iMod (own_alloc (to_fns fns)) as (γf) "#Hfns" => //.
-  iMod (ghost_map_alloc (V:=val)) as (γh) "[??]".
-  iMod (ghost_map_alloc (V:=Z) ∅) as (γa) "[??]".
-
-  iModIntro. iExists (RecGS _ _ _ _ γh γa γf). iFrame "#∗".
-  iPureIntro; split!.
+  iMod (own_alloc heapUR_init) as (γh) "Hh"; [apply heapUR_init_valid|].
+  iDestruct (heapUR_init_own (bi_own_own γh) with "Hh") as "?".
+  iModIntro. iExists (RecGS _ _ _ γh γf). iFrame "#∗".
 Qed.

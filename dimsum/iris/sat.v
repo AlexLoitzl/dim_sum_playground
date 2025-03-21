@@ -5,6 +5,7 @@ From iris.algebra.lib Require Import gmap_view.
 From iris.proofmode Require Export proofmode.
 From dimsum.core Require Export satisfiable.
 From dimsum.core Require Import axioms.
+From dimsum.core.iris Require Export weak_embed.
 From iris.prelude Require Import options.
 
 (** * upstream *)
@@ -29,6 +30,20 @@ Section cmra.
     split; simpl; [done|].
     exists a'; split; [done|]. rewrite !left_id. done.
   Qed.
+
+  Lemma view_frag_proj_included b y:
+    ◯V b ≼ y → b ≼ view_frag_proj y.
+  Proof. move => [? ->]/=. apply cmra_included_l. Qed.
+
+  Lemma view_frag_proj_frag_included x:
+    ◯V (view_frag_proj x) ≼ x.
+  Proof.
+    destruct x as [a f].
+    eexists (View a ε).  simpl.
+    rewrite /op/=/cmra_op/=/view_op_instance/=.
+    by f_equiv; rewrite ?left_id ?right_id.
+  Qed.
+
 End cmra.
 
   Lemma cmra_opM_op_assoc {A : cmra} (x1 : A) x2 x3 :
@@ -195,40 +210,50 @@ Class satG Σ (M : ucmra) := SatG {
 }.
 Local Existing Instance sat_inG.
 
-Definition sat {Σ M} `{!satG Σ M} : gname → uPred M → iProp Σ :=
-  λ γ P, (∃ m, ⌜uPred_holds P 0 m⌝ ∗ own γ (auth_frag m))%I.
+Definition satΣ M : gFunctors :=
+  #[ GFunctor (authR M) ].
 
-Definition sat_open {Σ M} `{!satG Σ M} : gname → iProp Σ :=
-  λ γ, (∃ m, own γ (auth_auth (DfracOwn 1) m))%I.
+Global Instance subG_satΣ Σ M :
+  subG (satΣ M) Σ → satG Σ M.
+Proof. solve_inG. Qed.
 
-Definition sat_closed {Σ M} `{!satG Σ M} : gname → bool → uPred M → iProp Σ :=
-  λ γ b F, (∀ P', ⌜satisfiable (P' ∗ F)⌝ ==∗ sat_open γ ∗ sat γ (if b then P' ∗ F else P'))%I.
-
-Global Instance: Params (@sat) 4 := {}.
-Global Instance: Params (@sat_open) 4 := {}.
-Global Instance: Params (@sat_closed) 5 := {}.
+(* TODO: make a nice abstraction for this disjunction? Some proofs about it are repeated below. *)
+Definition sat_embed {Σ M} `{!satG Σ M} (γ : gname) :
+  WeakEmbed (uPred M) (iProp Σ) := {|
+    weak_embed P :=
+      (∃ m, ⌜uPred_holds P 0 m⌝ ∗ (⌜m ≼ ε⌝ ∨ own γ (auth_frag m)))%I;
+    weak_embed_tok := (∃ m, own γ (auth_auth (DfracOwn 1) m))%I;
+|}.
 
 Section sat.
   Context {Σ : gFunctors} {M : ucmra}.
-  Context `{!satG Σ M} {Hdiscrete : CmraDiscrete M}.
+  Context {G : satG Σ M} {Hdiscrete : CmraDiscrete M} (γ : gname).
+  Local Notation "⌈ P ⌉" := (weak_embed (sat_embed γ) P) : bi_scope.
   Implicit Types (P : uPred M).
 
-  Global Instance sat_proper γ : Proper ((≡) ==> (≡)) (sat γ).
+  Global Instance sat_ne n :
+    Proper ((dist n) ==> (dist n)) (weak_embed (sat_embed γ)).
   Proof.
     move => P1 P2 [Heq].
-    iSplit; iIntros "[%x [% Hx]]".
-    all: iDestruct (own_valid with "Hx") as "#Hvalid"; rewrite auth_frag_validI.
-    (* TODO: Is this use of excluded middle necessary? *)
-    all: destruct (AxClassic (✓{0} x)); [|by iDestruct (uPred.cmra_valid_elim with "Hvalid") as %?].
-    all: iExists _; iFrame; iPureIntro; by apply Heq.
+    rewrite /weak_embed/=. f_equiv => x.
+    destruct (AxClassic (✓{0} x)) as [|Hf].
+    - do 2 f_equiv. by apply Heq; [lia|].
+    - apply equiv_dist. iSplit; iIntros "[_ [%|Hm]]".
+      1,3: contradict Hf; apply: cmra_validN_included; [apply ucmra_unit_validN|done].
+      all: iDestruct (own_valid with "Hm") as "#Hvalid"; rewrite auth_frag_validI;
+        by iDestruct (uPred.cmra_valid_elim with "Hvalid") as %?.
   Qed.
 
-  (** ** Commuting connectives with [sat] *)
-  Lemma sat_mono γ P1 P2 :
+  Lemma sat_mono P1 P2 :
     (P1 ⊢ P2) →
-    sat γ P1 ⊢ sat γ P2.
+    ⌈P1⌉ ⊢ ⌈P2⌉.
   Proof.
-    iIntros ([Hwand]) "[%m [%Hholds Hm]]".
+    rewrite /weak_embed/=.
+    iIntros ([Hwand]) "[%m [%Hholds [%Hε | Hm]]]". {
+      iExists ε. iSplit; [iPureIntro|by iLeft].
+      apply Hwand. { by apply cmra_valid_validN, ucmra_unit_valid. }
+      apply: uPred_mono; [done| |done]. by apply cmra_included_includedN.
+    }
     iDestruct (own_valid with "Hm") as "#Hvalid". rewrite auth_frag_validI.
     iExists _. iFrame.
     (* TODO: Is this use of excluded middle necessary? *)
@@ -236,12 +261,143 @@ Section sat.
     by iDestruct (uPred.cmra_valid_elim with "Hvalid") as %?.
   Qed.
 
-  Lemma sat_bupd γ P :
-    sat_open γ -∗
-    sat γ (|==> P) ==∗
-    sat_open γ ∗ sat γ P.
+(*
+  Lemma sat_emp_valid_inj P :
+    (⊢ ⌈P⌉) → ⊢ P.
+  Proof.
+    rewrite /weak_embed/=.
+    (* move => ?. *)
+    (* Set Printing All. *)
+    setoid_rewrite <-bi.persistent_and_sep. 2: apply _.
+    rewrite /bi_emp_valid/bi_entails.
+    uPred.unseal.
+    move => [Hx]. ogeneralize* (Hx 0 ε). 1: admit. 1: done.
+    rewrite {1}/uPred_holds/= {1}/uPred_holds/= {1}/uPred_holds/=.
+    move => [m [? Hor]].
+    have ? : m ≼ ε.
+    - destruct Hor as [?|Hown] => //.
+      move: Hown. rewrite own.own_eq/own.own_def.
+      uPred.unseal.
+      rewrite /uPred_holds/=/own.iRes_singleton.
+      admit.
+    - constructor. move => ????. apply: uPred_mono; [done| |].
+      1: admit. admit. (* This is a problem, how do we know that P is independent of the step index? *)
+  Abort.
+*)
+
+  Lemma sat_emp :
+    ⊢ ⌈emp⌉.
+  Proof. iExists ε. iSplit; [|by iLeft]. iPureIntro. by uPred.unseal. Qed.
+
+  Lemma sat_and_2 P1 P2 :
+     ⌈P1⌉ ∧ ⌈P2⌉ ⊢ ⌈P1 ∧ P2⌉.
   Proof using Hdiscrete.
-    iIntros "[%ma Ha] [%mf [%Hholds Hf]]".
+    rewrite /weak_embed/=. rewrite bi.and_exist_l. apply bi.exist_elim => m1.
+    rewrite bi.and_exist_r. apply bi.exist_elim => m2.
+    rewrite -!bi.persistent_and_sep -!bi.and_assoc. apply bi.pure_elim_l => ?.
+    rewrite bi.and_comm -!bi.and_assoc. apply bi.pure_elim_l => ?.
+    rewrite bi.and_or_r !bi.and_or_l.
+    repeat apply bi.or_elim.
+    - iIntros "[% %]". iExists ε. iSplit; [|by iLeft]. iPureIntro.
+      uPred.unseal. split; (apply: uPred_mono; [done|by apply cmra_included_includedN |done]).
+    - iIntros "[% ?]". iExists m2. iSplit; [|by iRight]. iPureIntro.
+      uPred.unseal. split => //. apply: uPred_mono; [done| |done].
+      apply cmra_included_includedN. etrans; [done|]. apply ucmra_unit_least.
+    - iIntros "[? %]". iExists m1. iSplit; [|by iRight]. iPureIntro.
+      uPred.unseal. split => //. apply: uPred_mono; [done| |done].
+      apply cmra_included_includedN. etrans; [done|]. apply ucmra_unit_least.
+    - rewrite own_and_total. iIntros "[%m [? [%Hi1 %Hi2]]]".
+      move: Hi1 =>/view_frag_proj_included Hi1. move: Hi2 =>/view_frag_proj_included Hi2.
+      iExists (view_frag_proj m). iSplit.
+      + iPureIntro. uPred.unseal. split; (apply: uPred_mono; [done|by apply cmra_included_includedN|done]).
+      + iRight. iApply (own_mono with "[$]"). apply view_frag_proj_frag_included.
+  Qed.
+
+  Lemma sat_exist_2 A (P : A → _) :
+     ⌈∃ x : A, P x⌉ ⊢ ∃ x, ⌈P x⌉.
+  Proof.
+    rewrite /weak_embed/=.
+    iIntros "[%m [%Hholds H]]".
+    do [uPred.unseal] in Hholds. destruct Hholds as [??].
+    iExists _, _. by iFrame.
+  Qed.
+
+  Lemma sat_sep P1 P2 :
+    ⌈P1 ∗ P2⌉ ⊣⊢ ⌈P1⌉ ∗ ⌈P2⌉.
+  Proof using Hdiscrete.
+    rewrite /weak_embed/=.
+    iSplit.
+    - iIntros "[%m [%Hholds H]]".
+      do [uPred.unseal] in Hholds. destruct Hholds as [m1 [m2 [Heq%discrete_iff [??]]]]. 2: apply _.
+      rewrite Heq auth_frag_op own_op. iDestruct "H" as "[%Hε | [H1 H2]]".
+      + iSplitL; iExists _.
+        all: iSplit; [done|]; iLeft; iPureIntro.
+        all: etrans; [|done]. 1: apply cmra_included_l. 1: apply cmra_included_r.
+      + iSplitL "H1"; iExists _; by iFrame.
+    - iIntros "[[%m1 [%Hholds1 H1]] [%m2 [%Hholds2 H2]]]".
+      iExists (m1 ⋅ m2). iSplit. { iPureIntro. uPred.unseal. eexists _, _. eauto. }
+      iDestruct "H1" as "[%Hincl1 | H1]"; iDestruct "H2" as "[%Hincl2 | H2]".
+      + iLeft. iPureIntro. etrans; [by apply: cmra_mono_r|]. by rewrite left_id.
+      + iRight. iApply (own_mono _ (ε ⋅ _) with "[H2]"); [|by rewrite left_id].
+        rewrite auth_frag_op. by apply cmra_mono_r, auth_frag_mono.
+      + iRight. iApply (own_mono _ (_ ⋅ ε) with "[H1]"); [|by rewrite right_id].
+        rewrite auth_frag_op. by apply cmra_mono_l, auth_frag_mono.
+      + iCombine "H1 H2" as "$".
+  Qed.
+
+  Lemma sat_persistently_1 P :
+    ⌈<pers> P⌉ ⊢ <pers> ⌈P⌉.
+  Proof.
+    rewrite /weak_embed/=.
+    iIntros "[%m1 [%Hholds1 H1]]".
+    iExists (core m1).
+    iSplit. { iModIntro. iPureIntro. move: Hholds1. by uPred.unseal. }
+    iDestruct "H1" as "[%Hincl |H1]".
+    - iModIntro. iLeft. iPureIntro. by etrans; [apply cmra_included_core|].
+    - iDestruct (own_mono with "H1") as "H1". { apply cmra_included_core. }
+      iDestruct "H1" as "#?".
+      iModIntro. by iRight.
+  Qed.
+
+  Lemma sat_persistently_2 P :
+    <pers> ⌈P⌉ ⊢ ⌈<pers> P⌉.
+  Proof.
+    rewrite /weak_embed/=.
+    iIntros "[%m1 [%Hholds1 H1]]".
+    iDestruct "H1" as "#H1".
+    (* Likely does not hold?! *)
+    iExists (m1). iFrame "H1".
+    iPureIntro. move: Hholds1. uPred.unseal.
+  Abort.
+
+
+  Lemma sat_mixin :
+    BiWeakEmbedMixin (uPred M) (iProp Σ) (sat_embed γ).
+  Proof using Type*.
+    split; simpl.
+    - solve_proper.
+    - move => ??. by apply sat_mono.
+    - iSplit; [by iIntros "?"|iIntros "?"; iApply sat_emp].
+    - iIntros "?". iApply sat_emp.
+    - move => *. by rewrite sat_and_2.
+    - move => *. by rewrite sat_exist_2.
+    - move => *. by rewrite sat_sep.
+    - move => *. apply sat_persistently_1.
+  Qed.
+
+  Definition sat : BiWeakEmbed (uPred M) (iProp Σ) :=
+    {| bi_weak_embed_mixin := sat_mixin |}.
+
+
+
+  Lemma sat_bupd P :
+    ⌈|==> P⌉ ==∗⌈sat⌉ ⌈P⌉.
+  Proof using Hdiscrete.
+    rewrite -weak_embed_bupd_elim /weak_embed/weak_embed_tok/=.
+    iIntros "[%mf [%Hholds Hf]] [%ma Ha]".
+    iAssert (|==> own γ (◯ mf))%I with "[Hf]" as ">Hf". {
+      iDestruct "Hf" as "[%Hincl|$]"; [|done]. iMod (own_unit _ γ) as "Ho".
+      iModIntro. iApply (own_mono with "Ho"). by apply auth_frag_mono. }
     iCombine "Ha Hf" as "H".
     do [uPred.unseal] in Hholds.
     iMod (own_updateP (λ x, ∃ ma' mf', x ≡ ● ma' ⋅ ◯ mf' ∧ uPred_holds P 0 mf')  with "H")
@@ -257,81 +413,25 @@ Section sat.
     - apply cmra_valid_validN. by rewrite -assoc.
   Qed.
 
-  Lemma sat_sep γ P1 P2 :
-    sat γ (P1 ∗ P2) ⊣⊢ sat γ P1 ∗ sat γ P2.
-  Proof using Hdiscrete.
-    iSplit.
-    - iIntros "[%m [%Hholds H]]".
-      do [uPred.unseal] in Hholds. destruct Hholds as [m1 [m2 [Heq%discrete_iff [??]]]]. 2: apply _.
-      rewrite Heq auth_frag_op own_op. iDestruct "H" as "[H1 H2]".
-      iSplitL "H1"; iExists _; by iFrame.
-    - iIntros "[[%m1 [%Hholds1 H1]] [%m2 [%Hholds2 H2]]]".
-      iExists (m1 ⋅ m2).
-      iCombine "H1 H2" as "$".
-      iPureIntro. uPred.unseal. eexists _, _. eauto.
-  Qed.
+  Global Instance bi_sat_bupd : BiWeakEmbedBUpd sat.
+  Proof. unfold BiWeakEmbedBUpd. apply sat_bupd. Qed.
+End sat.
 
-  Lemma sat_exist A γ (P : A → _) :
-    sat γ (∃ x : A, P x) ⊣⊢ ∃ x, sat γ (P x).
-  Proof.
-    iSplit.
-    - iIntros "[%m [%Hholds H]]".
-      do [uPred.unseal] in Hholds. destruct Hholds as [??].
-      iExists _, _. by iFrame.
-    - iIntros "[% ?]". iApply (sat_mono with "[$]").
-      iIntros. by iExists _.
-  Qed.
+Definition sat_closed {Σ M} `{!satG Σ M} `{!CmraDiscrete M} :
+  gname → bool → uPred M → iProp Σ :=
+  λ γ b F, (∀ P', ⌜satisfiable (P' ∗ F)⌝ ==∗ ⌈{sat γ}⌉ ∗
+    ⌈if b then P' ∗ F else P' @ sat γ⌉)%I.
 
-  Lemma sat_pure γ Φ :
-    sat γ ⌜Φ⌝ ⊢ ⌜Φ⌝.
-  Proof. iIntros "[%m [%Hholds H]]". do [uPred.unseal] in Hholds. done. Qed.
 
-  Lemma sat_persistently_1 γ P :
-    sat γ (<pers> P) ⊢ <pers> sat γ P.
-  Proof.
-    iIntros "[%m1 [%Hholds1 H1]]".
-    iExists (core m1).
-    iDestruct (own_mono with "H1") as "H1". { apply cmra_included_core. }
-    iDestruct "H1" as "#H1".
-    iModIntro. iSplit; [|done].
-    iPureIntro. move: Hholds1. uPred.unseal. done.
-  Qed.
-
-  Lemma sat_affinely γ P :
-    sat γ (<affine> P) ⊣⊢ <affine> sat γ P.
-  Proof. by rewrite !bi.affine_affinely. Qed.
-
-  Lemma sat_intuitionistically_1 γ P :
-    sat γ (□ P) ⊢ □ sat γ P.
-  Proof.
-    rewrite sat_affinely /bi_intuitionistically. f_equiv.
-    apply sat_persistently_1.
-  Qed.
-
-  (** ** proof mode instances *)
-  Global Instance sat_persistent γ P `{!Persistent P} : Persistent (sat γ P).
-  Proof.
-    rewrite /Persistent.
-    iIntros "P". iApply sat_persistently_1.
-    by iApply sat_mono.
-  Qed.
-
-  Global Instance sat_into_sep γ P Q : IntoSep (sat γ (P ∗ Q)) (sat γ P) (sat γ Q).
-  Proof using Hdiscrete. by rewrite /IntoSep sat_sep. Qed.
-
-  Global Instance sat_into_exist {A} γ (Φ : A → uPred M) name :
-    AsIdentName Φ name →
-    IntoExist (sat γ (∃ x, Φ x)) (λ x, sat γ (Φ x)) name | 1.
-  Proof. move => ?. by rewrite /IntoExist sat_exist. Qed.
-
-  Global Instance sat_into_pure γ Φ :
-    IntoPure (sat γ ⌜Φ⌝) Φ.
-  Proof. by rewrite /IntoPure sat_pure. Qed.
+Section sat.
+  Context {Σ : gFunctors} {M : ucmra}.
+  Context `{!satG Σ M} {Hdiscrete : CmraDiscrete M}.
+  Implicit Types (P : uPred M).
 
   (** ** rules for interacting with [sat] *)
   Lemma sat_alloc_open P :
     satisfiable P →
-    ⊢ |==> ∃ γ, sat_open γ ∗ sat γ P.
+    ⊢ |==> ∃ γ, ⌈{sat γ}⌉ ∗ ⌈P @ sat γ⌉.
   Proof using Hdiscrete.
     move => [x [/cmra_discrete_valid_iff Hvalid ?]].
     iMod (own_alloc (● x ⋅ ◯ x)) as (γ) "[Ha Hf]". { by apply auth_both_valid_discrete. }
@@ -350,18 +450,18 @@ Section sat.
   Qed.
 
   Lemma sat_switch γ P Q G :
-    (P ⊢ ∃ P', P' ∗ ⌜sat γ P' ∗ Q -∗ G⌝) →
-    sat γ P ∗ Q -∗ G.
+    (P ⊢ ∃ P', P' ∗ ⌜⌈P' @ sat γ⌉ ∗ Q -∗ G⌝) →
+    ⌈P @ sat γ⌉ ∗ Q -∗ G.
   Proof using Hdiscrete.
     iIntros (Himpl) "[Hsat HQ]".
-    iDestruct (sat_mono with "Hsat") as "Hsat"; [done|].
+    iDestruct (weak_embed_mono with "Hsat") as "Hsat"; [done|].
     iDestruct "Hsat" as (P') "[Hsat1 %HG]".
     iApply HG. iFrame.
   Qed.
 
   Lemma sat_switch_sep γ P Q G1 G2 :
-    (P ⊢ ∃ P', G1 ∗ P' ∗ ⌜sat γ P' ∗ Q -∗ G2⌝) →
-    sat γ P ∗ Q -∗ sat γ G1 ∗ G2.
+    (P ⊢ ∃ P', G1 ∗ P' ∗ ⌜⌈P' @ sat γ⌉ ∗ Q -∗ G2⌝) →
+    ⌈P @ sat γ⌉ ∗ Q -∗ ⌈G1 @ sat γ⌉ ∗ G2.
   Proof using Hdiscrete.
     iIntros (Himpl). iApply sat_switch.
     iIntros "HP". iDestruct (Himpl with "HP") as (P') "[? [? %HG]]".
@@ -370,22 +470,28 @@ Section sat.
   Qed.
 
   Lemma sat_switch_bupd γ P Q G :
-    (P ⊢ |==> ∃ P', P' ∗ ⌜sat_open γ ∗ sat γ P' ∗ Q -∗ G⌝) →
-    sat_open γ ∗ sat γ P ∗ Q ==∗ G.
+    (P ⊢ |==> ∃ P', P' ∗ ⌜⌈P' @ sat γ⌉ ∗ Q ==∗⌈sat γ⌉ G⌝) →
+     ⌈P @ sat γ⌉ ∗ Q ==∗⌈sat γ⌉ G.
   Proof using Hdiscrete.
-    iIntros (Himpl) "[Hauth [Hsat HQ]]".
-    iDestruct (sat_mono with "Hsat") as "Hsat"; [done|].
-    iMod (sat_bupd with "Hauth Hsat") as "[Hauth Hsat]".
+    iIntros (Himpl) "[Hsat HQ]".
+    iDestruct (weak_embed_mono with "Hsat") as "Hsat"; [done|].
+    iMod (weak_embed_bupd_bupd with "Hsat") as "Hsat".
     iDestruct "Hsat" as (P') "[Hsat1 %HG]".
     iApply HG. by iFrame.
   Qed.
 
   Lemma sat_close γ P `{!∀ x : M, CoreCancelable x} :
-    sat γ P -∗
-    sat_open γ -∗
+    ⌈P @ sat γ⌉ -∗
+    ⌈{sat γ}⌉ -∗
     ∃ F, ⌜satisfiable (P ∗ F)⌝ ∗ sat_closed γ false F.
   Proof using Hdiscrete.
+    rewrite /weak_embed/weak_embed_tok/=.
     iIntros "[%m [%Hholds Hm]] [%a Ha]".
+    iAssert (own γ (◯ m) ∗ own γ (● a))%I with "[Ha Hm]" as "[Hm Ha]". {
+      iDestruct "Hm" as "[%Hincl|$]"; [|done].
+      iDestruct (own_mono _ _ (ε ⋅ _) with "Ha") as "Ha"; [by rewrite left_id|].
+      iDestruct "Ha" as "[Hε $]". iApply (own_mono with "Hε"). by apply auth_frag_mono.
+    }
     iDestruct (own_valid_2 with "Ha Hm") as %[[f Heq] Hvalid]%auth_both_valid_discrete.
     setoid_subst.
     iExists (uPred_ownM (core m ⋅ f)). iSplit.

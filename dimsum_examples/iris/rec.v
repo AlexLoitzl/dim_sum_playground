@@ -24,13 +24,11 @@ Section lifting.
   Lemma sim_tgt_rec_Waiting fns Π Φ (b : bool) h :
     rec_fn_auth fns -∗
     ((∀ f fn vs h' σ, ⌜fns !! f = Some fn⌝ -∗
-         (rec_mapsto_auth (h_heap h') -∗
-          rec_alloc_auth (dom (h_heap h')) -∗
+         (rec_inv h' -∗
           σ ⤇ₜ λ Π', TGT ReturnExt b (Call (Val (ValFn f)) (Val <$> vs)) [{ Π' }] {{ Φ }}) -∗
         ▷ₒ Π (Some (Incoming, ERCall f vs h')) σ) ∧
       ∀ v h' σ, ⌜b⌝ -∗
-          (rec_mapsto_auth (h_heap h') -∗
-           rec_alloc_auth (dom (h_heap h')) -∗
+          (rec_inv h' -∗
            σ ⤇ₜ λ Π', TGT Val v [{ Π' }] {{ Φ }}) -∗
        ▷ₒ Π (Some (Incoming, ERReturn v h')) σ) -∗
     TGT Waiting b @ h [{ Π }] {{ Φ }}.
@@ -44,26 +42,25 @@ Section lifting.
     move => [? [Hstep ?]]. inv Hstep.
     - iDestruct "HΦ" as "[HΦ _]". iDestruct ("HΦ" with "[//]") as "HΦ".
       iModIntro. iSplit!. iIntros "Htgt". iApply "HΦ".
-      iIntros "??". iApply "Htgt"; [done|]. iFrame.
+      iIntros "?". iApply "Htgt"; [done|]. iFrame.
     - iDestruct "HΦ" as "[_ HΦ]". iDestruct ("HΦ" with "[//]") as "HΦ".
-      iModIntro. iSplit!. iIntros "Htgt". iApply "HΦ". iIntros "??". iApply "Htgt"; [done|]. iFrame.
+      iModIntro. iSplit!. iIntros "Htgt". iApply "HΦ". iIntros "?". iApply "Htgt"; [done|]. iFrame.
   Qed.
 
   Lemma sim_tgt_rec_ReturnExt v Π Φ (b : bool) :
     (∀ h σ,
-      rec_mapsto_auth (h_heap h) -∗
-      rec_alloc_auth (dom (h_heap h)) -∗
+      rec_inv h -∗
       (σ ⤇ₜ λ Π', TGT Waiting b @ h [{ Π' }] {{ Φ }}) -∗
       ▷ₒ Π (Some (Outgoing, ERReturn v h)) σ) -∗
     TGT ReturnExt b (Val v) [{ Π }] {{ Φ }}.
   Proof.
     iIntros "HΦ".
-    iApply sim_tgt_expr_step => /=. iIntros (? [e h0 fns0] ?? ? Hp) "[Hfns' [Hh Ha]]". simplify_eq/=.
+    iApply sim_tgt_expr_step => /=. iIntros (? [e h0 fns0] ?? ? Hp) "[Hfns' Hh]". simplify_eq/=.
     exploit prim_step_inv_head; [done|..].
     { apply sub_redexes_are_values_item; case; naive_solver. }
     { done. }
     move => [? [Hstep ?]]. inv Hstep.
-    iSpecialize ("HΦ" $! _ with "[$] [$]"). iModIntro. iSplit!.
+    iSpecialize ("HΦ" $! _ with "[$]"). iModIntro. iSplit!.
     iIntros "Htgt". iApply "HΦ". iApply "Htgt"; [done|]. by iFrame.
   Qed.
 
@@ -74,7 +71,7 @@ Section lifting.
     TGT Call (Val (ValFn f)) es [{ Π }] {{ Φ }}.
   Proof.
     destruct AsVals0. iIntros (?) "Hfn HΦ".
-    iApply sim_tgt_expr_step_None => /=. iIntros (? [e h fns] ?? ? Hp) "[Hfns [Hh Ha]]". simplify_eq/=.
+    iApply sim_tgt_expr_step_None => /=. iIntros (? [e h fns] ?? ? Hp) "[Hfns Hh]". simplify_eq/=.
     iDestruct (rec_fn_lookup with "[$] [$]") as %?.
     rewrite right_id_L in Hp.
     exploit prim_step_inv_head; [done|..].
@@ -88,14 +85,13 @@ Section lifting.
   Lemma sim_tgt_rec_Call_external f es Π Φ vs `{!AsVals es vs None} :
     f ↪ None -∗
     (∀ h σ,
-      rec_mapsto_auth (h_heap h) -∗
-      rec_alloc_auth (dom (h_heap h)) -∗
+      rec_inv h -∗
       (σ ⤇ₜ λ Π', TGT Waiting true @ h [{ Π' }] {{ Φ }}) -∗
       ▷ₒ Π (Some (Outgoing, ERCall f vs h)) σ) -∗
     TGT Call (Val (ValFn f)) es [{ Π }] {{ Φ }}.
   Proof.
     destruct AsVals0. iIntros "Hfn HΦ".
-    iApply sim_tgt_expr_step => /=. iIntros (? [e h0 fns0] ?? ? Hp) "[Hfns' [Hh Ha]]". simplify_eq/=.
+    iApply sim_tgt_expr_step => /=. iIntros (? [e h0 fns0] ?? ? Hp) "[Hfns' Hh]". simplify_eq/=.
     iDestruct (rec_fn_lookup with "[$] [$]") as %?.
     rewrite right_id_L in Hp.
     exploit prim_step_inv_head; [done|..].
@@ -103,7 +99,7 @@ Section lifting.
       move => /= ??? e' [_ Heq]. by apply: list_expr_val_inv. }
     { done. }
     move => [? [Hstep ?]]. inv Hstep.
-    iSpecialize ("HΦ" $! _ with "[$] [$]"). iModIntro. iSplit!.
+    iSpecialize ("HΦ" $! _ with "[$]"). iModIntro. iSplit!.
     iIntros "Htgt". iApply "HΦ". iApply "Htgt"; [done|]. by iFrame.
   Qed.
 
@@ -113,7 +109,7 @@ Section lifting.
     TGT BinOp (Val v1) op (Val v2) [{ Π }] {{ Φ }}.
   Proof.
     iIntros (Hop) "HΦ".
-    iApply sim_tgt_expr_step_None => /=. iIntros (? [e' h fns] ?? ? Hp) "[Hfns [Hh Ha]]". simplify_eq/=.
+    iApply sim_tgt_expr_step_None => /=. iIntros (? [e' h fns] ?? ? Hp) "[Hfns Hh]". simplify_eq/=.
     exploit prim_step_inv_head; [done|..].
     { apply sub_redexes_are_values_item; case; naive_solver. }
     { done. }
@@ -128,8 +124,8 @@ Section lifting.
     TGT Load (Val (ValLoc l)) [{ Π }] {{ Φ }}.
   Proof.
     iIntros "Hl HΦ".
-    iApply sim_tgt_expr_step_None => /=. iIntros (? [e' h fns] ???  Hp) "[Hfns [Hh Ha]]". simplify_eq/=.
-    iDestruct (rec_mapsto_lookup with "[$] [$]") as %?.
+    iApply sim_tgt_expr_step_None => /=. iIntros (? [e' h fns] ???  Hp) "[Hfns Hh]". simplify_eq/=.
+    iDestruct (heapUR_lookup with "[$] [$]") as %?.
     exploit prim_step_inv_head; [done|..].
     { apply sub_redexes_are_values_item; case; naive_solver. }
     { done. }
@@ -145,16 +141,16 @@ Section lifting.
     TGT Store (Val (ValLoc l)) (Val v') [{ Π }] {{ Φ }}.
   Proof.
     iIntros "Hl HΦ".
-    iApply sim_tgt_expr_step_None => /=. iIntros (? [e' h fns] ?? ? Hp) "[Hfns [Hh Ha]]". simplify_eq/=.
-    iDestruct (rec_mapsto_lookup with "[$] [$]") as %?.
-    iMod (rec_mapsto_update with "[$] [$]") as "[??]".
+    iApply sim_tgt_expr_step_None => /=. iIntros (? [e' h fns] ?? ? Hp) "[Hfns Hh]". simplify_eq/=.
+    iDestruct (heapUR_lookup with "[$] [$]") as %?.
+    iMod (heapUR_update with "[$] [$]") as "[??]".
     iSpecialize ("HΦ" with "[$]").
     exploit prim_step_inv_head; [done|..].
     { apply sub_redexes_are_values_item; case; naive_solver. }
     { done. }
     move => [? [Hstep ?]]. inv Hstep.
     iModIntro. iSplit!. { by eexists. } iModIntro. iExists None, _. iSplit!.
-    iFrame => /=. rewrite dom_alter_L. iFrame. by iApply sim_gen_expr_stop2.
+    iFrame => /=. by iApply sim_gen_expr_stop2.
   Qed.
 
   Lemma sim_tgt_rec_AllocA e Π Φ vs :
@@ -165,25 +161,39 @@ Section lifting.
     TGT AllocA vs e [{ Π }] {{ Φ }}.
   Proof.
     iIntros (Hall) "HΦ".
-    iApply sim_tgt_expr_step_None => /=. iIntros (? [e' h fns] ?? ? Hp) "[Hfns [Hh Ha]]". simplify_eq/=.
+    iApply sim_tgt_expr_step_None => /=. iIntros (? [e' h fns] ?? ? Hp) "[Hfns Hh]". simplify_eq/=.
     exploit prim_step_inv_head; [done|..].
     { apply sub_redexes_are_values_item; case; naive_solver. }
     { done. }
     move => [? [Hstep ?]]. inv Hstep.
-    iMod (rec_mapsto_alloc_list with "Hh") as "[Hh ?]"; [done|].
-    iMod (rec_alloc_alloc_list with "Ha") as "[Ha Has]"; [done..|].
-    iSpecialize ("HΦ" with "[$]").
+    iMod (heapUR_alloc_list with "Hh") as "[Hh Hb]"; [done|].
+    iDestruct (big_sepL2_sep with "Hb") as "[Hd Hl]".
+    iSpecialize ("HΦ" with "[Hl]"). {
+      iApply (big_sepL2_impl with "Hl"). iIntros "!>" (?????) "?".
+      rewrite big_sepM_kmap_intro big_sepM_zero_block.
+      iApply (big_sepL_impl with "[$]"). iIntros "!>" (???) "?".
+      rewrite /offset_loc. by erewrite heap_alloc_list_offset_zero.
+    }
+
     iModIntro. iSplit!. iModIntro. iExists None, _. iSplit!. iFrame => /=.
     iApply (sim_gen_expr_bind _ [FreeACtx _] _ with "[-]") => /=.
     iApply (sim_gen_expr_wand with "HΦ") => /=.
     iIntros (? ? ?) "[% [% [% [Hl HΦ]]]]" => /=. simplify_eq/=.
 
-    iApply sim_tgt_expr_step_None => /=. iIntros (? [e' h'' fns'] ?? ? Hp') "[Hfns [Hh Ha]]". simplify_eq/=.
+    iApply sim_tgt_expr_step_None => /=. iIntros (? [e' h'' fns'] ?? ? Hp') "[Hfns Hh]". simplify_eq/=.
     exploit prim_step_inv_head; [done|..].
     { apply sub_redexes_are_values_item; case; naive_solver. }
     { done. }
     move => [? [Hstep ?]]. inv Hstep.
-    iMod (rec_alloc_free_list with "Hh Ha [$] [$]") as (??) "[??]".
+    iDestruct (big_sepL2_sep_2 with "Hd Hl") as "Hb".
+    iMod (heapUR_free_list with "[$] [Hb]") as (??) "?". 2: {
+       iApply (big_sepL2_impl with "Hb").
+       iIntros "!>" (?????) "[$ ?]".
+       rewrite big_sepS_map big_sepS_dom big_sepM_zero_block.
+       iApply (big_sepL_impl with "[$]").
+       iIntros "!>" (???) "[% ?]". rewrite /offset_loc.
+       erewrite heap_alloc_list_offset_zero => //. iFrame.
+    } { apply Forall_lookup_2 => ???. split; [by apply: heap_alloc_list_is_block|by apply:heap_alloc_list_offset_zero]. }
     iModIntro. iSplit!; [done|]. iModIntro. iExists None, _. iSplit!. iFrame => /=.
     by iApply sim_gen_expr_stop2.
   Qed.
@@ -193,7 +203,7 @@ Section lifting.
     TGT LetE s (Val v) e [{ Π }] {{ Φ }}.
   Proof.
     iIntros "HΦ".
-    iApply sim_tgt_expr_step_None => /=. iIntros (? [e' h fns] ?? ? Hp) "[Hfns [Hh Ha]]". simplify_eq/=.
+    iApply sim_tgt_expr_step_None => /=. iIntros (? [e' h fns] ?? ? Hp) "[Hfns Hh]". simplify_eq/=.
     exploit prim_step_inv_head; [done|..].
     { apply sub_redexes_are_values_item; case; naive_solver. }
     { done. }
@@ -206,7 +216,7 @@ Section lifting.
     TGT If (Val (ValBool b)) e1 e2 [{ Π }] {{ Φ }}.
   Proof.
     iIntros "HΦ".
-    iApply sim_tgt_expr_step_None => /=. iIntros (? [e' h fns] ?? ? Hp) "[Hfns [Hh Ha]]". simplify_eq/=.
+    iApply sim_tgt_expr_step_None => /=. iIntros (? [e' h fns] ?? ? Hp) "[Hfns Hh]". simplify_eq/=.
     exploit prim_step_inv_head; [done|..].
     { apply sub_redexes_are_values_item; case; naive_solver. }
     { done. }
@@ -424,7 +434,7 @@ Section memmove.
     TGT Call (Val (ValFn "locle")) [Val (ValLoc l1); Val $ ValLoc l2] [{ Π }] {{ Φ }}.
   Proof.
     iIntros (Π) "#Hfns #Hf HΦ".
-    iApply (sim_tgt_rec_Call_external with "[$]"). iIntros (? σ') "?? Hσ' !>".
+    iApply (sim_tgt_rec_Call_external with "[$]"). iIntros (? σ') "? Hσ' !>".
     iIntros (σl) "Hσl".
     iIntros (??????). destruct!/=. case_bool_decide => //. rewrite (bool_decide_true (_ ∈ _)) //.
     iApply (sim_tgt_link_recv_right with "[-]"). iApply "Hσl".
@@ -446,7 +456,7 @@ Section memmove.
     iApply (sim_tgt_rec_Waiting with "[$]").
     iSplit. { iIntros. iModIntro. iIntros (?). simplify_eq. }
     iIntros (????) "Hσ' !>". iIntros (?). simplify_eq/=.
-    iApply (sim_tgt_link_run_left with "[-]"). iApply ("Hσ'" with "[$] [$]").
+    iApply (sim_tgt_link_run_left with "[-]"). iApply ("Hσ'" with "[$]").
     iApply (sim_gen_expr_wand1 with "[HΦ]").
     { iApply sim_gen_expr_stop2. by iApply "HΦ". }
     iIntros (??) "HΠ". by iApply "HΠ".
@@ -465,7 +475,7 @@ Section memmove.
       rec_link_trans {["main"; "memmove"; "memcpy"]} {["locle"]} rec_trans (spec_trans rec_event ()),
       spec_trans rec_event ()} (main_spec, ()).
   Proof.
-    iIntros "[#Hfns [Hh Ha]] /=". iApply (sim_tgtP_intro with "[-]").
+    iIntros "[#Hfns Hh] /=". iApply (sim_tgtP_intro with "[-]").
     iApply (sim_tgt_link_None with "[-]").
     iIntros "!>" (??????). destruct!/=. case_match; destruct!/=.
     unfold sim_tgtP.
@@ -488,9 +498,9 @@ Section memmove.
     iIntros (????? Hin) "Htgt !>". iIntros (?). simplify_map_eq.
     iApply (sim_tgt_link_run_left with "[-]").
     iApply fupd_sim_gen.
-    iMod (rec_mapsto_alloc_big (h_heap h) with "Hh") as "[Hh _]". { apply map_disjoint_empty_r. } iModIntro.
-    iApply ("Htgt" with "[Hh] [Ha]"). { by rewrite right_id_L. }
-    { rewrite dom_empty_L. by iApply rec_alloc_fake. }
+    iMod (heapUR_alloc_blocks _ (h_blocks h) with "Hh") as "[Hh _]". { set_solver. } iModIntro.
+    rewrite right_id_L heap_from_blocks_h_blocks.
+    iApply ("Htgt" with "Hh").
     iApply (sim_gen_expr_bind _ [ReturnExtCtx _]).
     iApply sim_tgt_rec_Call_internal. 2: { by iApply (rec_fn_intro with "[$]"). } { done. }
     iModIntro => /=.
@@ -548,7 +558,7 @@ Section memmove.
     iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
     iApply (sim_tgt_rec_Load with "Hl1"). iIntros "Hl1 !>" => /=.
     iApply (sim_tgt_rec_Call_external). { by iApply (rec_fn_intro with "[$]"). }
-    iIntros (??) "Hh Ha Htgt !>". iIntros (?) "Hlocle".
+    iIntros (??) "Hh Htgt !>". iIntros (?) "Hlocle".
     iIntros (??????). destruct!/=. rewrite bool_decide_false//.
     iApply "Hsrc". iApply sim_src_TExist. iApply sim_src_TVis.
     iIntros (?) "Hsrc". iSplit!.
@@ -563,10 +573,10 @@ Section memmove.
     iApply (sim_tgt_link_recv_left with "[-]").
     iApply "Htgt".
     iApply (sim_tgt_rec_Waiting with "[$]").
-    iSplit; [by iIntros (??????) "? !> %"|].
+    iSplit; [iIntros; iModIntro; by iIntros(?)|].
     iIntros (????) "Htgt !>". iIntros (?). simplify_eq.
     iApply (sim_tgt_link_run_left with "[-]").
-    iApply ("Htgt" with "[$] [$]").
+    iApply ("Htgt" with "[$]").
     iApply sim_gen_expr_stop2 => /=.
     iApply (sim_tgt_rec_LetE with "[-]"). iIntros "!>" => /=.
     iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
@@ -575,7 +585,7 @@ Section memmove.
     iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
     iApply (sim_tgt_rec_Load with "Hl2"). iIntros "Hl2 !>" => /=.
     iApply (sim_tgt_rec_Call_external). { by iApply (rec_fn_intro with "[$]"). }
-    iIntros (??) "Hh Ha Htgt !>".
+    iIntros (??) "Hh Htgt !>".
     iIntros (??????). destruct!/=. rewrite bool_decide_false//.
     iApply "Hsrc". iApply sim_src_TExist. iApply sim_src_TVis.
     iIntros (?) "Hsrc". iSplit!. iApply (sim_tgtP_intro with "[-]").
@@ -589,14 +599,14 @@ Section memmove.
     iApply (sim_tgt_link_recv_left with "[-]").
     iApply "Htgt".
     iApply (sim_tgt_rec_Waiting with "[$]").
-    iSplit; [by iIntros (??????) "? !> %"|].
+    iSplit; [iIntros; iModIntro; by iIntros(?)|].
     iIntros (????) "Htgt !>". iIntros (?). simplify_eq.
     iApply (sim_tgt_link_run_left with "[-]").
-    iApply ("Htgt" with "[$] [$]").
+    iApply ("Htgt" with "[$]").
     iApply sim_gen_expr_stop2 => /=.
     iApply (sim_tgt_rec_LetE with "[-]"). iIntros "!>" => /=.
     iApply sim_gen_expr_stop2 => /=. iSplit!. iFrame.
-    iApply sim_tgt_rec_ReturnExt. iIntros (??) "Hh Ha ? !>".
+    iApply sim_tgt_rec_ReturnExt. iIntros (??) "Hh ? !>".
     iIntros (??????). destruct!/=.
     iApply "Hsrc". iApply sim_src_TUb_end.
     Unshelve. exact: tt.
@@ -612,7 +622,7 @@ Proof.
   eapply (sim_adequacy #[dimsumΣ; recΣ]); [apply _..|].
   iIntros (??) "!>". simpl.
   iApply (fupd_sim with "[-]").
-  iMod recgs_alloc as (?) "[?[??]]". iModIntro.
+  iMod recgs_alloc as (?) "[??]". iModIntro.
   iApply memmove_sim. iFrame.
 Qed.
 
