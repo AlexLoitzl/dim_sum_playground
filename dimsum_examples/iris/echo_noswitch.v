@@ -1,5 +1,5 @@
 From iris.proofmode Require Import proofmode.
-From iris.bi.lib Require Import fixpoint.
+From iris.bi.lib Require Import fixpoint_mono.
 From dimsum.examples.iris Require Import asm rec2.
 Set Default Proof Using "Type".
 
@@ -87,7 +87,7 @@ Section echo_getc.
     (MLFRun None, [], rec_init echo_prog, (getc_spec, 0)) ⪯{m_t,
       spec_trans rec_event Z} (echo_getc_spec, 0).
   Proof.
-    iIntros "[#Hfns [Hh Ha]] /=".
+    iIntros "[#Hfns Hh] /=".
 
     (* REVIEW: Am I saying here that I have r/w over the modules, and when I step through one *)
     (* I ensure I cannot change the other by splitting the var? *)
@@ -168,10 +168,10 @@ Section echo_getc.
     iApply (sim_tgt_link_left_const_run γt_q γt_r γt_oe with "[$] [$] [$] [-]").
     iIntros "Hγt_q Hγt_r Hγt_oe".
 
-    iMod (rec_mapsto_alloc_big (h_heap h) with "Hh") as "[Hh _]". { apply map_disjoint_empty_r. }
+    iMod (heapUR_alloc_blocks _ (h_blocks h) with "Hh") as "[Hh _]". { set_solver. }
+    rewrite right_id_L heap_from_blocks_h_blocks.
 
-    iApply (sim_gen_expr_intro _ [] with "[Hh Ha]"). { done. }
-    { rewrite /= /rec_state_interp dom_empty_L right_id_L /=. iFrame "#∗". by iApply rec_alloc_fake. }
+    iApply (sim_gen_expr_intro _ [] with "[Hh]"). { done. } { by iFrame. }
 
     set (Π := tgt_link_left_constP _ _ _ _ _).
 
@@ -200,7 +200,7 @@ Section echo_getc.
       iIntros "% _ !>" => /=.
       iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
       iApply sim_tgt_rec_Call_external;[by iApply (rec_fn_intro with "[$]")|].
-      iIntros (???) "_ Hma Haa !>".
+      iIntros (???) "_ Hma !>".
 
       (* NOTE: Here I am throwing out way back in *)
       iIntros (??) "[% [% HΠ]]" => /=. subst.
@@ -259,7 +259,7 @@ Section echo_getc.
       iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
 
       iApply sim_tgt_rec_Call_external;[by iApply (rec_fn_intro with "[$]")|].
-      iIntros (???) "_ ? ? !> %% [% [% HΠ]] %%% Hγt_q' Hγt_r' Hγt_oe'" => /=. subst.
+      iIntros (???) "_ ? !> %% [% [% HΠ]] %%% Hγt_q' Hγt_r' Hγt_oe'" => /=. subst.
 
       iDestruct (mstate_var_merge with "Hγt_oe Hγt_oe'") as "[<- Hγt_oe]".
       iDestruct (mstate_var_merge with "Hγt_q Hγt_q'") as "[<- Hγt_q]".

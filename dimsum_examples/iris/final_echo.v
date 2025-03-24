@@ -1,6 +1,7 @@
 From iris.proofmode Require Import proofmode.
-From iris.bi.lib Require Import fixpoint.
+From iris.bi.lib Require Import fixpoint_mono.
 From dimsum.examples.iris Require Import asm rec2.
+
 Set Default Proof Using "Type".
 
 Local Open Scope Z_scope.
@@ -150,7 +151,7 @@ Qed.
     rec_fn_spec_hoare Tgt Π_l "getc" (getc_fn_spec P).
   Proof.
     iIntros "#? ? Hs". iIntros (es Φ) "[% [HP [-> HΦ]]]".
-    iApply (sim_tgt_rec_Call_external with "[$]"). iIntros (???) "#??? !>".
+    iApply (sim_tgt_rec_Call_external with "[$]"). iIntros (???) "#?? !>".
     iIntros (??) "[% [% HΠ]]". subst. iApply "Hs". iFrame. iSplit!. iIntros (??) "[-> Hs]".
 
     iMod (mstate_var_alloc Z) as (γ) "?".
@@ -380,7 +381,7 @@ Section echo_getc.
     iIntros (??) "[[Hγ_oe [Hγ_q Hγ_r]] [-> HΦ']]".
 
     iApply (sim_tgt_rec_Call_external with "[$]").
-    iIntros (???) "#? ? ? !> %% [% [% HΠ]]" => /=. subst.
+    iIntros (???) "#? ? !> %% [% [% HΠ]]" => /=. subst.
     iApply "Hs" => /=. iSplit!. iFrame. iSplit!.
     iIntros (? Πs) "[% [% Hs']]" => /=. subst.
 
@@ -415,7 +416,7 @@ Section echo_getc.
     iIntros (??) "[[Hγ_oe [Hγ_q Hγ_r]] [-> HΦ']]".
 
     iApply (sim_tgt_rec_Call_external with "[$]").
-    iIntros (???) "#? ? ? !> %% [% [% HΠ]]" => /=. subst.
+    iIntros (???) "#? ? !> %% [% [% HΠ]]" => /=. subst.
     iApply "Hs" => /=. iSplit!. iFrame. iSplit!.
     iIntros (? Πs2) "[% [% Hs']]" => /=. subst.
 
@@ -454,7 +455,7 @@ Section echo_getc.
     (MLFRun None, [], rec_init echo_prog, (getc_spec, 0)) ⪯{m_t,
       spec_trans rec_event Z} (echo_getc_spec, 0).
   Proof.
-    iIntros "[#Hfns [Hh Ha]] /=".
+    iIntros "[#Hfns Hh] /=".
 
     iMod (mstate_var_alloc (m_state (spec_trans rec_event Z))) as (γs) "Hγs".
     (* Entire Target Module *)
@@ -511,10 +512,10 @@ Section echo_getc.
     iApply (sim_tgt_link_left_const_run γt_q γt_r γt_oe with "[$] [$] [$] [-]").
     iIntros "Hγt_q Hγt_r Hγt_oe".
 
-    iMod (rec_mapsto_alloc_big (h_heap h) with "Hh") as "[Hh _]". { apply map_disjoint_empty_r. }
+    iMod (heapUR_alloc_blocks _ (h_blocks h) with "Hh") as "[Hh _]". { set_solver. }
+    rewrite right_id_L heap_from_blocks_h_blocks.
 
-    iApply (sim_gen_expr_intro _ [] with "[Hh Ha]"). { done. }
-    { rewrite /= /rec_state_interp dom_empty_L right_id_L /=. iFrame "#∗". by iApply rec_alloc_fake. }
+    iApply (sim_gen_expr_intro _ [] with "[Hh]"). { done. } { by iFrame. }
 
     set (Π_s := sim_src_constP γκ γt (EV := rec_event) (m_t := m_t) (m_s := spec_trans rec_event Z)).
     set (Π_t := tgt_link_left_constP _ _ _ _ _).
@@ -595,7 +596,7 @@ Section echo_getc.
 
       iApply "HC". iSplit!. iFrame.
     - iIntros (?) "[% [% [% [Hγs [% [Hγt_oe [Hγt_q Hγt_r]]]]]]]".
-      iApply sim_tgt_rec_ReturnExt. iIntros (???) "#? ? ? !> %% [% [% ?]] /=".
+      iApply sim_tgt_rec_ReturnExt. iIntros (???) "#? ? !> %% [% [% ?]] /=".
       subst.
       iIntros (???) "???".
 
