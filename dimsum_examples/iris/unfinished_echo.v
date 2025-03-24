@@ -1,5 +1,5 @@
 From iris.proofmode Require Import proofmode.
-From iris.bi.lib Require Import fixpoint.
+From iris.bi.lib Require Import fixpoint_mono.
 From dimsum.examples.iris Require Import asm rec2.
 Set Default Proof Using "Type".
 
@@ -139,9 +139,10 @@ Section sim_getc.
   Definition getc_fn_spec (P : Z → iProp Σ) (es : list expr) (POST : (val → iProp Σ) → iProp Σ) : iProp Σ :=
     ∃ v, P v ∗ ⌜es = []⌝ ∗ POST (λ ret, ⌜ret = v⌝ ∗ P (v + 1))%I.
 
-  (* I think this is the wrong level of abstraction *)
-  (* This is not a spec for getc, this is a spec of calling getc in the linked module *)
-  (* While the P is abstract, in the Proof itself, the P will capture whatever the PL is *)
+  Definition splittable (P : Z → iProp Σ) (PL : m_state (spec_trans rec_event Z) → iProp Σ) :=
+    ∀ v, P v -∗
+    ∃ P' σ, PL σ ∗ P' σ ∗ (∀ σ', PL σ' -∗ P' σ' -∗ P v).
+
   Lemma sim_getc fns Π_l Π_r (PL : m_state (spec_trans rec_event Z) → iProp Σ) (σi : (m_state (spec_trans rec_event Z))) :
     rec_fn_auth fns -∗
     "getc" ↪ None -∗
@@ -156,8 +157,7 @@ Section sim_getc.
     POST (ERReturn (ValNum v) h') _ σ_l ({{_ Π_l',
       ⌜Π_l' = Π_l⌝ ∗ PL σ_r'
     }})}})}})}}) -∗
-    |==> ∃ P, P 0 ∗ □ rec_fn_spec_hoare Tgt Π_l "getc" (getc_fn_spec P).
-  (* ⥥ₜ({{σ Π, ⌜σ = σg⌝ ∗ ⌜Π = Π_r⌝ ∗ TGT getc_spec @ Π {{Φg}}}}) ∗ *)
+    |==> ∃ P, P 0 ∗ □ rec_fn_spec_hoare Tgt Π_l "getc" (getc_fn_spec P) ∗ ⌜splittable P PL⌝.
   Proof.
     iIntros "#? #? HPL %<-  #Hs".
 
@@ -167,15 +167,16 @@ Section sim_getc.
 
     set P := (λ (v : Z), ∃ σ Φg, PL σ ∗ spec_state v ∗
                            ⥥ₜ({{σ' Π, ⌜σ' = σ⌝ ∗ ⌜Π = Π_r⌝ ∗ TGT getc_spec @ Π {{Φg}}}}))%I.
+
     iExists P.
-    iModIntro. iSplit.
+    iModIntro. iSplit!.
     - iExists _, (λ e, sim_post Tgt () Π_r e).
       iFrame.
       iIntros (??) "[-> [-> H]]" => /=.
       iApply (sim_gen_expr_intro with "[Hγ]") => /= //.
     - iIntros "!> %% [% [[% [% [HPL [Hγ Hg]]]] [-> HΦ]]]".
       iApply (sim_tgt_rec_Call_external with "[$]").
-      iIntros (???) "#?Htoa Haa !>".
+      iIntros (???) "#?Htoa !>".
       iIntros (? σr) "[-> [-> HΠr]]" => /=. subst.
       iApply "Hs" => /=. iFrame. iSplit!.
       iIntros (? Π'') "[-> [-> Hs']]" => /=.
@@ -195,6 +196,11 @@ Section sim_getc.
       iApply "HΦ". iFrame. iSplit!.
       iIntros (??) "[-> [-> ?]]" => /=.
       iApply "Hg". by iSplit!.
+    - iIntros (v) "[% [% [? ?]]]".
+      iExists (λ σ, ∃ Φg, spec_state v ∗ ⥥ₜ({{σ' Π, ⌜σ' = σ⌝ ∗ ⌜Π = Π_r⌝ ∗ TGT getc_spec @ Π {{Φg}}}}))%I, _.
+      iFrame.
+      iIntros (?) "? [% [? ?]]".
+      iExists _, _. iFrame.
   Qed.
 
 End sim_getc.
@@ -228,7 +234,7 @@ Section echo_getc.
     (MLFRun None, [], rec_init echo_prog, (getc_spec, 0)) ⪯{m_t,
       spec_trans rec_event Z} (echo_getc_spec, 0).
   Proof.
-    iIntros "[#Hfns [Hh Ha]] /=".
+    iIntros "[#Hfns Hh] /=".
 
     (* REVIEW: Am I saying here that I have r/w over the modules, and when I step through one *)
     (* I ensure I cannot change the other by splitting the var? *)
@@ -309,12 +315,13 @@ Section echo_getc.
     iApply (sim_tgt_link_left_const_run γt_q γt_r γt_oe with "[$] [$] [$] [-]").
     iIntros "Hγt_q Hγt_r Hγt_oe".
 
-    iMod (rec_mapsto_alloc_big (h_heap h) with "Hh") as "[Hh _]". { apply map_disjoint_empty_r. }
 
-    set (Πl := tgt_link_left_constP _ _ _ _ _).
+    iMod (heapUR_alloc_blocks _ (h_blocks h) with "Hh") as "[Hh _]". { set_solver. }
+    rewrite right_id_L heap_from_blocks_h_blocks.
 
-    iApply (sim_gen_expr_intro _ [] with "[Hh Ha]"). { done. }
-    { rewrite /= /rec_state_interp dom_empty_L right_id_L /=. iFrame "#∗". by iApply rec_alloc_fake. }
+    set (Π := tgt_link_left_constP _ _ _ _ _).
+
+    iApply (sim_gen_expr_intro _ [] with "[Hh]"). { done. } { by iFrame. }
 
     iApply (sim_gen_expr_bind _ [ReturnExtCtx _] with "[-]") => /=.
 
@@ -328,7 +335,7 @@ Section echo_getc.
     set P := (λ (σ : spec rec_event Z void * Z),
                 γt_l ⤳@{(m_state rec_trans)} - ∗ γt_r ⤳ σ ∗
                 γt_oe ⤳ @None rec_ev ∗ γt_q ⤳ [None : seq_product_case])%I.
-    iDestruct (sim_getc _ Πl _ P (getc_spec, 0) with "[$] [] [$] [//] [//]") as "H".
+    iDestruct (sim_getc _ Π _ P (getc_spec, 0) with "[$] [] [$] [//] [//]") as "H".
     { by iApply (rec_fn_intro with "[$]"). }
     iMod ("H" with "[]") as "[% [HP #Hgetc]]".
 
