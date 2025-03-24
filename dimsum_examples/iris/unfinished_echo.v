@@ -302,6 +302,9 @@ Section echo_getc.
     (* Target's spec module (Right linking case - getc) *)
     iMod (mstate_var_alloc (m_state (spec_trans rec_event Z))) as (γt_r) "Hγt_r".
 
+    (* Target's rec module (Left linking case - echo) *)
+    iMod (mstate_var_alloc (m_state rec_trans)) as (γt_l) "Hγt_l".
+
     (* Target's right spec state*)
     iMod (mstate_var_alloc Z) as (γt_r_s) "Hγt_r_s".
     pose (HTgtSpec := SpecGS γt_r_s).
@@ -312,14 +315,14 @@ Section echo_getc.
     (* Linking event to pass around *)
     iMod (mstate_var_alloc (option rec_ev)) as (γt_oe) "Hγt_oe".
 
-    iApply (sim_tgt_link_left_const_run γt_q γt_r γt_oe with "[$] [$] [$] [-]").
+    iApply (sim_tgt_link_left_const_run γt_q γt_l γt_r γt_oe with "[$] [$] [$] [$] [-]").
     iIntros "Hγt_q Hγt_r Hγt_oe".
 
 
     iMod (heapUR_alloc_blocks _ (h_blocks h) with "Hh") as "[Hh _]". { set_solver. }
     rewrite right_id_L heap_from_blocks_h_blocks.
 
-    set (Π := tgt_link_left_constP _ _ _ _ _).
+    set (Π := tgt_link_left_constP _ _ _ _ _ _).
 
     iApply (sim_gen_expr_intro _ [] with "[Hh]"). { done. } { by iFrame. }
 
@@ -330,17 +333,14 @@ Section echo_getc.
     (* TODO: Awkward to do this here *)
     iApply sim_gen_expr_ctx. iIntros "#?".
 
-    iMod (mstate_var_alloc (m_state rec_trans)) as (γt_l) "Hγt_l".
-
-    set P := (λ (σ : spec rec_event Z void * Z),
-                γt_l ⤳@{(m_state rec_trans)} - ∗ γt_r ⤳ σ ∗
-                γt_oe ⤳ @None rec_ev ∗ γt_q ⤳ [None : seq_product_case])%I.
-    iDestruct (sim_getc _ Π _ P (getc_spec, 0) with "[$] [] [$] [//] [//]") as "H".
+    set PL := (λ (σ : spec rec_event Z void * Z),
+                γt_r ⤳ σ ∗ γt_oe ⤳ @None rec_ev ∗ γt_q ⤳ [None : seq_product_case])%I.
+    iDestruct (sim_getc _ Π _ PL (getc_spec, 0) with "[$] [] [$] [//] [//]") as "H".
     { by iApply (rec_fn_intro with "[$]"). }
     iMod ("H" with "[]") as "[% [HP #Hgetc]]".
 
-    { iIntros "!> %% [% [% [% [[Hγt_l [Hγt_r [Hγt_oe Hγt_q]]] [% HC]]]]]" => /=. subst.
-      iIntros (???) "Hγt_q' Hγt_r' Hγt_oe'".
+    { iIntros "!> %% [% [% [% [[Hγt_r [Hγt_oe Hγt_q]] [% HC]]]]]" => /=. subst.
+      iIntros (???) "Hγt_q' Hγt_l Hγt_r' Hγt_oe'".
 
       iDestruct (mstate_var_merge with "Hγt_r Hγt_r'") as "[<- Hγt_r]".
       iDestruct (mstate_var_merge with "Hγt_oe Hγt_oe'") as "[<- Hγt_oe]".
