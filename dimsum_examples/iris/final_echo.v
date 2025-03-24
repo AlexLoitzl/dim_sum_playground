@@ -509,7 +509,10 @@ Section echo_getc.
     (* Linking event to pass around *)
     iMod (mstate_var_alloc (option rec_ev)) as (γt_oe) "Hγt_oe".
 
-    iApply (sim_tgt_link_left_const_run γt_q γt_r γt_oe with "[$] [$] [$] [-]").
+    (* Target's rec module (Left linking case - echo) *)
+    iMod (mstate_var_alloc (m_state rec_trans)) as (γt_l) "Hγt_l".
+
+    iApply (sim_tgt_link_left_const_run γt_q γt_l γt_r γt_oe with "[$] [$] [$] [$] [-]").
     iIntros "Hγt_q Hγt_r Hγt_oe".
 
     iMod (heapUR_alloc_blocks _ (h_blocks h) with "Hh") as "[Hh _]". { set_solver. }
@@ -518,7 +521,7 @@ Section echo_getc.
     iApply (sim_gen_expr_intro _ [] with "[Hh]"). { done. } { by iFrame. }
 
     set (Π_s := sim_src_constP γκ γt (EV := rec_event) (m_t := m_t) (m_s := spec_trans rec_event Z)).
-    set (Π_t := tgt_link_left_constP _ _ _ _ _).
+    set (Π_t := tgt_link_left_constP _ _ _ _ _ _).
 
     iApply (sim_gen_expr_bind _ [ReturnExtCtx _] with "[-]") => /=.
 
@@ -532,7 +535,7 @@ Section echo_getc.
       iIntros (??) => /=.
       iDestruct 1 as (??) "[[Hγt_oe [Hγt_q Hγt_r]] [-> HC]]" => /=.
 
-      iIntros "%%% Hγt_q' Hγt_r' Hγt_oe'".
+      iIntros "%%% Hγt_q' Hγt_l Hγt_r' Hγt_oe'".
 
       iDestruct (mstate_var_merge with "Hγt_r Hγt_r'") as "[<- Hγt_r]".
       iDestruct (mstate_var_merge with "Hγt_oe Hγt_oe'") as "[<- Hγt_oe]".
@@ -543,21 +546,21 @@ Section echo_getc.
       iApply (sim_tgt_link_run_right with "[-]"). iApply "HC". iSplit!.
       iIntros (??). iDestruct 1 as (??) "[% HC]" => /=. simplify_eq.
       iIntros (??????). destruct!/=.
-      iApply (sim_tgt_link_left_const_recv γt_q γt_r γt_oe with "[$] [Hγt_r] [$] [-]"). 1: done.
+      iApply (sim_tgt_link_left_const_recv γt_q γt_l γt_r γt_oe with "[$] [Hγt_l] [Hγt_r] [$] [-]"). 1-2: done.
       iIntros "Hγt_q Hγt_r Hγt_oe".
       iApply "HC". iSplit!.
       iIntros (??). iDestruct 1 as (? ->) "HC" => /=.
-      iIntros "%%% Hγt_q' Hγt_r' Hγt_oe'".
+      iIntros "%%% Hγt_q' Hγt_l Hγt_r' Hγt_oe'".
       iDestruct (mstate_var_merge with "Hγt_r Hγt_r'") as "[<- Hγt_r]".
       iDestruct (mstate_var_merge with "Hγt_oe Hγt_oe'") as "[<- Hγt_oe]".
       iDestruct (mstate_var_merge with "Hγt_q Hγt_q'") as "[<- Hγt_q]". iIntros (?). simplify_eq.
-      iApply (sim_tgt_link_left_const_run γt_q γt_r γt_oe with "[$] [Hγt_r] [$] [-]"). 1: done.
+      iApply (sim_tgt_link_left_const_run γt_q γt_l γt_r γt_oe with "[$] [Hγt_l] [Hγt_r] [$] [-]"). 1-2: done.
       iIntros "Hγt_q Hγt_r Hγt_oe".
       iApply ("HC" with "[-]"). iSplit!. iFrame.
     }
     iSplit!.
     - iIntros "!> %% [% [% [% [% [% [Hγs [Hγt_oe [Hγt_q [Hγt_r [% HC]]]]]]]]]]" => /=.
-      subst. iIntros (???) "Hγt_q' Hγt_r' Hγt_oe'".
+      subst. iIntros (???) "Hγt_q' Hγt_l Hγt_r' Hγt_oe'".
 
       iDestruct (mstate_var_merge with "Hγt_r Hγt_r'") as "[<- Hγt_r]".
       iDestruct (mstate_var_merge with "Hγt_oe Hγt_oe'") as "[<- Hγt_oe]".
@@ -580,25 +583,25 @@ Section echo_getc.
       iApply "HC". iSplit!. iIntros (??). iDestruct 1 as (?? -> ->) "HC".
       iApply (sim_src_constP_next with "[Hγt] [Hγκ] [Hγs] [%] [-]"); [done..|].
       iIntros "Hγs". destruct!/=.
-      iApply (sim_tgt_link_left_const_recv γt_q γt_r γt_oe with "[$] [Hγt_r] [$] [-]"). 1: done.
+      iApply (sim_tgt_link_left_const_recv γt_q γt_l γt_r γt_oe with "[$] [Hγt_l] [Hγt_r] [$] [-]"). 1-2: done.
       iIntros "Hγt_q Hγt_r Hγt_oe".
       iApply ("HC" with "[-]"). iFrame. iSplit!.
       iIntros (??). iDestruct 1 as (? ->) "HC".
-      iIntros (???) "Hγt_q' Hγt_r' Hγt_oe'".
+      iIntros (???) "Hγt_q' Hγt_l Hγt_r' Hγt_oe'".
 
       iDestruct (mstate_var_merge with "Hγt_r Hγt_r'") as "[<- Hγt_r]".
       iDestruct (mstate_var_merge with "Hγt_oe Hγt_oe'") as "[<- Hγt_oe]".
       iDestruct (mstate_var_merge with "Hγt_q Hγt_q'") as "[<- Hγt_q]".
       iIntros (?). simplify_eq.
 
-      iApply (sim_tgt_link_left_const_run γt_q γt_r γt_oe with "[$] [Hγt_r] [$] [-]"). 1: done.
+      iApply (sim_tgt_link_left_const_run γt_q γt_l γt_r γt_oe with "[$] [Hγt_l] [Hγt_r] [$] [-]"). 1-2: done.
       iIntros "???".
 
       iApply "HC". iSplit!. iFrame.
     - iIntros (?) "[% [% [% [Hγs [% [Hγt_oe [Hγt_q Hγt_r]]]]]]]".
       iApply sim_tgt_rec_ReturnExt. iIntros (???) "#? ? !> %% [% [% ?]] /=".
       subst.
-      iIntros (???) "???".
+      iIntros (???) "????".
 
       iDestruct (mstate_var_merge with "Hγt_r [$]") as "[<- Hγt_r]".
       iDestruct (mstate_var_merge with "Hγt_oe [$]") as "[<- Hγt_oe]".

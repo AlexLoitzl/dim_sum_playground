@@ -155,6 +155,9 @@ Section echo_getc.
     (* Target's spec module (Right linking case - getc) *)
     iMod (mstate_var_alloc (m_state (spec_trans rec_event Z))) as (γt_r) "Hγt_r".
 
+    (* Target's rec module (Left linking case - echo) *)
+    iMod (mstate_var_alloc (m_state rec_trans)) as (γt_l) "Hγt_l".
+
     (* Target's right spec state*)
     iMod (mstate_var_alloc Z) as (γt_r_s) "Hγt_r_s".
     pose (HTgtSpec := SpecGS γt_r_s).
@@ -165,7 +168,7 @@ Section echo_getc.
     (* Linking event to pass around *)
     iMod (mstate_var_alloc (option rec_ev)) as (γt_oe) "Hγt_oe".
 
-    iApply (sim_tgt_link_left_const_run γt_q γt_r γt_oe with "[$] [$] [$] [-]").
+    iApply (sim_tgt_link_left_const_run γt_q γt_l γt_r γt_oe with "[$] [$] [$] [$] [-]").
     iIntros "Hγt_q Hγt_r Hγt_oe".
 
     iMod (heapUR_alloc_blocks _ (h_blocks h) with "Hh") as "[Hh _]". { set_solver. }
@@ -173,7 +176,7 @@ Section echo_getc.
 
     iApply (sim_gen_expr_intro _ [] with "[Hh]"). { done. } { by iFrame. }
 
-    set (Π := tgt_link_left_constP _ _ _ _ _).
+    set (Π := tgt_link_left_constP _ _ _ _ _ _).
 
     iApply (sim_gen_expr_bind _ [ReturnExtCtx _] with "[-]") => /=.
 
@@ -204,7 +207,7 @@ Section echo_getc.
 
       (* NOTE: Here I am throwing out way back in *)
       iIntros (??) "[% [% HΠ]]" => /=. subst.
-      iIntros (???) "Hγt_q' Hγt_r' Hγt_oe'".
+      iIntros (???) "Hγt_q' Hγt_l Hγt_r' Hγt_oe'".
 
       iDestruct (mstate_var_merge with "Hγt_r Hγt_r'") as "[<- Hγt_r]".
       iDestruct (mstate_var_merge with "Hγt_oe Hγt_oe'") as "[<- Hγt_oe]".
@@ -241,16 +244,16 @@ Section echo_getc.
       iIntros (??) "[% [% _]]" => /=. subst.
       iIntros (??????). destruct!/=.
 
-      iApply (sim_tgt_link_left_const_recv γt_q γt_r γt_oe with "[$] [Hγt_r] [$] [-]"). 1: done.
+      iApply (sim_tgt_link_left_const_recv γt_q γt_l γt_r γt_oe with "[$] [Hγt_l] [Hγt_r] [$] [-]"). 1-2: done.
       iIntros "Hγt_q Hγt_r Hγt_oe".
-      iApply sim_tgt_rec_Waiting_all_raw. iIntros (?) "!> %%% Hγt_q' Hγt_r' Hγt_oe'".
+      iApply sim_tgt_rec_Waiting_all_raw. iIntros (?) "!> %%% Hγt_q' Hγt_l Hγt_r' Hγt_oe'".
 
       iDestruct (mstate_var_merge with "Hγt_oe Hγt_oe'") as "[<- Hγt_oe]".
       iDestruct (mstate_var_merge with "Hγt_q Hγt_q'") as "[<- Hγt_q]".
       iDestruct (mstate_var_merge with "Hγt_r Hγt_r'") as "[<- Hγt_r]".
       iIntros (?). simplify_eq.
 
-      iApply (sim_tgt_link_left_const_run γt_q γt_r γt_oe with "[$] [$] [$] [-]").
+      iApply (sim_tgt_link_left_const_run γt_q γt_l γt_r γt_oe with "[$] [Hγt_l] [Hγt_r] [$] [-]"). 1-2: done.
       iIntros "Hγt_q Hγt_r Hγt_oe".
       (* NOTE - finally going back in *)
       iApply "HΠ". iSplit!. iFrame.
@@ -259,7 +262,7 @@ Section echo_getc.
       iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
 
       iApply sim_tgt_rec_Call_external;[by iApply (rec_fn_intro with "[$]")|].
-      iIntros (???) "_ ? !> %% [% [% HΠ]] %%% Hγt_q' Hγt_r' Hγt_oe'" => /=. subst.
+      iIntros (???) "_ ? !> %% [% [% HΠ]] %%% Hγt_q' Hγt_l Hγt_r' Hγt_oe'" => /=. subst.
 
       iDestruct (mstate_var_merge with "Hγt_oe Hγt_oe'") as "[<- Hγt_oe]".
       iDestruct (mstate_var_merge with "Hγt_q Hγt_q'") as "[<- Hγt_q]".
@@ -342,9 +345,10 @@ Section echo_getc.
       iIntros "Hγt Hγκ". iSplit!.
 
       iApply (@sim_tgt_constP_intro _ _ _ m_t (spec_trans rec_event Z) γt γs γκ with "Hγt Hγs Hγκ [-]"). iIntros "Hγs".
-      iApply (sim_tgt_link_left_const_recv γt_q γt_r γt_oe with "Hγt_q [Hγt_r] [Hγt_oe] [-]"); [done..|].
+
+      iApply (sim_tgt_link_left_const_recv γt_q γt_l γt_r γt_oe with "[$] [Hγt_l] [Hγt_r] [$] [-]"). 1-2: done.
       iIntros "Hγt_q Hγt_r Hγt_oe".
-      iApply sim_tgt_rec_Waiting_all_raw. iIntros (?) "!> %%% Hγt_q' Hγt_r' Hγt_oe'".
+      iApply sim_tgt_rec_Waiting_all_raw. iIntros (?) "!> %%% Hγt_q' Hγt_l Hγt_r' Hγt_oe'".
 
       iDestruct (mstate_var_merge with "Hγt_oe Hγt_oe'") as "[<- Hγt_oe]".
       iDestruct (mstate_var_merge with "Hγt_q Hγt_q'") as "[<- Hγt_q]".
@@ -353,7 +357,7 @@ Section echo_getc.
       iDestruct (mstate_var_merge with "Hγs_s Hγs_s'") as "[<- Hγs_s]".
       iIntros (?). simplify_eq.
 
-      iApply (sim_tgt_link_left_const_run γt_q γt_r γt_oe with "Hγt_q [Hγt_r] [Hγt_oe] [-]"); [done..|].
+      iApply (sim_tgt_link_left_const_run γt_q γt_l γt_r γt_oe with "Hγt_q [Hγt_l] [Hγt_r] [Hγt_oe] [-]"); [done..|].
       iIntros "Hγt_q Hγt_r Hγt_oe".
       iApply "HΠ" => /=. iSplit!. iFrame.
       iApply sim_tgt_rec_LetE. iModIntro => /=.
