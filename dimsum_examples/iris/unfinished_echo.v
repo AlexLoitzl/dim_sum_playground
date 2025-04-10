@@ -354,7 +354,7 @@ Section echo_getc.
                  γt_r ⤳ σ ∗ γt_oe ⤳ @None rec_ev ∗ γt_q ⤳ [None : seq_product_case])%I.
     iDestruct (sim_getc _ Π _ PL (getc_spec, 0) with "[$] [] [$] [//] [//]") as "H".
     { by iApply (rec_fn_intro with "[$]"). }
-    iMod ("H" with "[]") as "[%Pc [HPc [#Hgetc %]]]".
+    iMod ("H" with "[]") as "[%Pg [HPg [#Hgetc %]]]".
 
     { iIntros "!> %% [% [% [% [[Hγt_r [Hγt_oe Hγt_q]] [% HC]]]]]" => /=. subst.
       iIntros (???) "Hγt_q' Hγt_l Hγt_r' Hγt_oe'".
@@ -408,28 +408,30 @@ Section echo_getc.
       iApply "HC". iSplit!. iFrame.
     }
 
-    iDestruct (H1 with "HPc") as "[%Pc' [% [HPL [HPc' HPccombine]]]]".
+    iDestruct (H1 with "HPg") as "[%Pg' [% [HPL [HPg' HPgcombine]]]]".
 
     set PS := (λ (σ : spec rec_event Z void * Z), γs ⤳ σ ∗ ⌜σ.1 ≡ echo_getc_spec_body⌝)%I.
-    set PS' := (λ (σ : spec rec_event Z void * Z), PS σ ∗ (∃ σ', PL σ' ∗ Pc' σ'))%I.
+    set PS1 := (λ (σ : spec rec_event Z void * Z), PS σ ∗ (∃ σ', PL σ' ∗ Pg' σ'))%I.
 
-    iDestruct (sim_putc _ _ Π Π_s PS' σ with "[$] [] [$] [$Hγs $HPL $HPc' //] [//] [//]") as "H". 1: by iApply (rec_fn_intro with "[$]").
+    (* set PS' := (λ (σ : spec rec_event Z void * Z), PS σ ∗ (∃ Q σ', PL σ' ∗ Q σ' ∗ (PL σ' -∗ Q σ' -∗ P))%I. *)
+    iDestruct (sim_putc _ _ Π Π_s PS1 σ with "[$] [] [$] [$Hγs $HPL $HPg' //] [//] [//]") as "H". 1: by iApply (rec_fn_intro with "[$]").
 
     iMod ("H" with "[]") as "[%Pp [HPp [#Hputc %]]]".
 
     { admit. }
 
-    iDestruct (H2 with "HPp") as "[%Pp' [% [[HPS [% [HPL HPc']]] [HPp' HPpcombine]]]]".
-    iDestruct ("HPccombine" with "HPL HPc'") as "HPc".
+    iDestruct (H2 with "HPp") as "[%Pp' [% [[HPS [% [HPL HPg']]] [HPp' HPpcombine]]]]".
+    iDestruct ("HPgcombine" with "HPL HPg'") as "HPg".
 
     iApply sim_gen_expr_ctx. iIntros "#?".
 
-    iAssert (∀ Φ v, Pc v -∗ (∃ σ, PS σ ∗ Pp' σ) -∗ (∀ σ' : m_state (spec_trans rec_event Z), PS' σ' -∗ Pp' σ' -∗ Pp v) -∗
+    iAssert (∀ Φ v, Pg v -∗ (∃ σ, PS σ ∗ Pp' σ) -∗
+                    (∀ (σ' : m_state (spec_trans rec_event Z)) Pg',
+                        PS σ' -∗ Pp' σ' -∗ (∃ σ'', PL σ'' ∗ Pg' σ') -∗ Pp v) -∗
                 TGT Call (Val (ValFn "echo")) [] @ Π {{ Φ }})%I as "H".
-
     {
       iApply (ord_loeb with "[$] []").
-      iIntros "!>". iIntros "#IH % % HPc [% [HPS HPp']] HPp".
+      iIntros "!>". iIntros "#IH % % HPg [% [HPS HPp']] HPp".
 
       rewrite /echo_prog in Hin. simplify_map_eq.
       iApply (sim_tgt_rec_Call_internal); [ | by iApply (rec_fn_intro with "[$]") |]. { done. }
@@ -439,17 +441,20 @@ Section echo_getc.
       iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
 
       iApply "Hgetc".
-      iFrame. iSplit! => /=. iIntros (?) "[-> HPc]".
+      iFrame. iSplit! => /=. iIntros (?) "[-> HPg]".
 
       (* NOTE: GETC done - prepare for putc *)
 
       iApply sim_tgt_rec_LetE. iModIntro => /=.
       iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
 
-      iDestruct (H1 with "HPc") as "[%Pc_v [% [HPL [HPc_v #HPccombine]]]]".
+      iDestruct (H1 with "HPg") as "[%Pg_v [% [HPL [HPg_v #HPccombine]]]]".
       iApply "Hputc".
       iExists _.
-      iSplitL. { iApply ("HPp" with "[-HPp'] [$]"). iFrame.
+      iSplitL. { iApply ("HPp" with "[$] [HPp'] [HPL HPg_v]").
+                 iExact "HPp'".
+                 iFrame.
+                 iFrame.
       }
       iSplit!.
       iSplitR.
