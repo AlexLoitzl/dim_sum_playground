@@ -131,9 +131,10 @@ Section sim_getc.
   Definition getc_fn_spec (P : Z → iProp Σ) (es : list expr) (POST : (val → iProp Σ) → iProp Σ) : iProp Σ :=
     ∃ v, P v ∗ ⌜es = []⌝ ∗ POST (λ ret, ⌜ret = v⌝ ∗ P (v + 1))%I.
 
-  Definition splittable (P : Z → iProp Σ) (PL : m_state (spec_trans rec_event Z) → iProp Σ) :=
-    ∀ v, P v -∗
-    ∃ P' σ, PL σ ∗ P' σ ∗ □(∀ σ', PL σ' -∗ P' σ' -∗ P v).
+  Definition splittable (P : Z → iProp Σ) (PL : m_state (spec_trans rec_event Z) → iProp Σ) : iProp Σ :=
+    ∀ v,
+    P v -∗
+    ∃ σ, PL σ ∗ (PL σ -∗ P v).
 
   Lemma sim_getc fns Π_l Π_r (PL : m_state (spec_trans rec_event Z) → iProp Σ) (σi : (m_state (spec_trans rec_event Z))) :
     rec_fn_auth fns -∗
@@ -149,7 +150,7 @@ Section sim_getc.
     POST (ERReturn (ValNum v) h') _ σ_l ({{_ Π_l',
       ⌜Π_l' = Π_l⌝ ∗ PL σ_r'
     }})}})}})}}) -∗
-    |==> ∃ P, P 0 ∗ □ rec_fn_spec_hoare Tgt Π_l "getc" (getc_fn_spec P) ∗ ⌜splittable P PL⌝.
+    |==> ∃ P, P 0 ∗ □ rec_fn_spec_hoare Tgt Π_l "getc" (getc_fn_spec P) ∗ □ splittable P PL.
   Proof.
     iIntros "#? #? HPL %<-  #Hs".
 
@@ -188,11 +189,10 @@ Section sim_getc.
       iApply "HΦ". iFrame. iSplit!.
       iIntros (??) "[-> [-> ?]]" => /=.
       iApply "Hg". by iSplit!.
-    - iIntros (v) "[% [% [? ?]]]".
-      iExists (λ σ, ∃ Φg, spec_state v ∗ ⥥ₜ({{σ' Π, ⌜σ' = σ⌝ ∗ ⌜Π = Π_r⌝ ∗ TGT getc_spec @ Π {{Φg}}}}))%I, _.
+    - iIntros "!> % [% [% [? ?]]]".
       iFrame.
-      iIntros "!> % ? [% [? ?]]".
-      iExists _, _. iFrame.
+      iIntros "HPL".
+      iFrame.
   Qed.
 
 End sim_getc.
@@ -214,9 +214,15 @@ Section echo_getc.
   Definition putc_fn_spec (P : Z → iProp Σ) (es : list expr) (POST : (val → iProp Σ) → iProp Σ) : iProp Σ :=
     ∃ v, P v ∗ ⌜es = [Val v]⌝ ∗ POST (λ _, P (v + 1))%I.
 
+
+  Definition splittable' (P : Z → iProp Σ) (PL : Z → m_state (spec_trans rec_event Z) → iProp Σ) v' : iProp Σ :=
+    ∀ v,
+    P v -∗
+    ∃ σ, PL v' σ ∗ (∀ v'', PL v'' σ -∗ P v).
+
   Lemma sim_putc `{!specGS} γs fns Π_t Π_s (PL : m_state (spec_trans rec_event Z) → iProp Σ) (σi : (m_state (spec_trans rec_event Z))) :
     rec_fn_auth fns -∗
-    "getc" ↪ None -∗
+    "putc" ↪ None -∗
     γs ⤳@{Z} - -∗
     PL σi -∗
     ⌜σi.1 ≡ echo_getc_spec_body⌝ -∗
@@ -238,8 +244,49 @@ Section echo_getc.
       POST4 Tgt rec_event rec_trans ({{ σ_t3 Π_t',
         ⌜σ_t3 = σ_t2⌝ ∗ ⌜e = e'⌝ ∗ ⌜Π_t = Π_t'⌝ ∗ PL σ_s3
     }})}})}})}})}})}})}})}}) -∗
-    |==> ∃ P, P 0 ∗ □ rec_fn_spec_hoare Tgt Π_t "putc" (putc_fn_spec P) ∗ ⌜splittable P PL⌝.
-  Proof. Admitted.
+    |==> ∃ P, P 0 ∗ □ rec_fn_spec_hoare Tgt Π_t "putc" (putc_fn_spec P) ∗ □ splittable P PL.
+  Proof.
+    (* iIntros "#? #? Hγs HPL %<- #Hs". *)
+
+    (* set P := (λ (v : Z), ∃ σ Φg v', PL v' σ ∗ spec_state v ∗ *)
+    (*                        ⥥ₜ({{σ' Π, ⌜σ' = σ⌝ ∗ ⌜Π = Π_s⌝ ∗ SRC echo_getc_spec_body @ Π {{Φg}}}}))%I. *)
+
+    (* iExists P. *)
+    (* iModIntro. iSplit!. *)
+    (* - iExists _, (λ e, sim_post Tgt () Π_r e). *)
+    (*   iFrame. *)
+    (*   iIntros (??) "[-> [-> H]]" => /=. *)
+    (*   iApply (sim_gen_expr_intro with "[Hγ]") => /= //. *)
+    (* - iIntros "!> %% [% [[% [% [HPL [Hγ Hg]]]] [-> HΦ]]]". *)
+    (*   iApply (sim_tgt_rec_Call_external with "[$]"). *)
+    (*   iIntros (???) "#?Htoa !>". *)
+    (*   iIntros (? σr) "[-> [-> HΠr]]" => /=. subst. *)
+    (*   iApply "Hs" => /=. iFrame. iSplit!. *)
+    (*   iIntros (? Π'') "[-> [-> Hs']]" => /=. *)
+    (*   iApply "Hg". iSplit!. *)
+    (*   iApply sim_getc_spec. *)
+    (*   iIntros (??) "[% [% [% [-> Hg]]]]" => /=. *)
+    (*   iApply "Hs'" => /=. iSplit!. *)
+    (*   iIntros (? Πs') "[% [% Hs']]". simplify_eq. *)
+    (*   iApply "Hg". iFrame. iSplit!. *)
+    (*   iIntros (??) "[-> [? Hg]]" => /=. *)
+    (*   iApply "Hs'" => /=. iSplit!. *)
+    (*   iIntros (? Πr') "[-> Hs']". *)
+    (*   iApply sim_tgt_rec_Waiting_raw. *)
+    (*   iSplit. { iIntros. iModIntro. iApply "Hs'". iSplit!. iIntros (??) "[% [% ?]]". simplify_eq. } *)
+    (*   iIntros (???) "!>". iApply "Hs'" => /=. iSplit!. iIntros (??) "[% [% [% HQ]]]". simplify_eq. *)
+    (*   iApply "HΠr". iSplit!. iFrame. *)
+    (*   iApply "HΦ". iFrame. iSplit!. *)
+    (*   iIntros (??) "[-> [-> ?]]" => /=. *)
+    (*   iApply "Hg". by iSplit!. *)
+    (* Focus 3. *)
+    (* - iIntros "!> % [% [% [% [? ?]]]]". *)
+    (*   iExists _. *)
+    (*   iFrame. *)
+    (*   iIntros "HPL". *)
+    (*   iFrame. *)
+
+Admitted.
 
   Definition echo_getc_spec : spec rec_event Z void :=
     '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
@@ -354,7 +401,7 @@ Section echo_getc.
                  γt_r ⤳ σ ∗ γt_oe ⤳ @None rec_ev ∗ γt_q ⤳ [None : seq_product_case])%I.
     iDestruct (sim_getc _ Π _ PL (getc_spec, 0) with "[$] [] [$] [//] [//]") as "H".
     { by iApply (rec_fn_intro with "[$]"). }
-    iMod ("H" with "[]") as "[%Pg [HPg [#Hgetc %]]]".
+    iMod ("H" with "[]") as "[%Pg [HPg [#Hgetc #Hsplitg]]]".
 
     { iIntros "!> %% [% [% [% [[Hγt_r [Hγt_oe Hγt_q]] [% HC]]]]]" => /=. subst.
       iIntros (???) "Hγt_q' Hγt_l Hγt_r' Hγt_oe'".
@@ -408,30 +455,26 @@ Section echo_getc.
       iApply "HC". iSplit!. iFrame.
     }
 
-    iDestruct (H1 with "HPg") as "[%Pg' [% [HPL [HPg' HPgcombine]]]]".
+    iDestruct ("Hsplitg" with "HPg") as "[% [HPL HPg]]".
 
     set PS := (λ (σ : spec rec_event Z void * Z), γs ⤳ σ ∗ ⌜σ.1 ≡ echo_getc_spec_body⌝)%I.
-    set PS1 := (λ (σ : spec rec_event Z void * Z), PS σ ∗ (∃ σ', PL σ' ∗ Pg' σ'))%I.
 
-    (* set PS' := (λ (σ : spec rec_event Z void * Z), PS σ ∗ (∃ Q σ', PL σ' ∗ Q σ' ∗ (PL σ' -∗ Q σ' -∗ P))%I. *)
-    iDestruct (sim_putc _ _ Π Π_s PS1 σ with "[$] [] [$] [$Hγs $HPL $HPg' //] [//] [//]") as "H". 1: by iApply (rec_fn_intro with "[$]").
+    set PS1 := (λ (σ' : spec rec_event Z void * Z), PS σ' ∗ (∃ σ v, PL σ ∗ (PL σ -∗ Pg v)))%I.
+    (* iAssert (□ (∀ σ_g v g, *)
+    (*               PL σ_g -∗ (PL σ_g -∗ Pg v) -∗ PS σ -∗ γs_s ⤳@{Z}- -∗ *)
+    (*               |==> ∃ Pp, Pp 0 ∗ □ rec_fn_spec_hoare Tgt Π_t "putc" (putc_fn_spec Pp) ∗ □ splittable Pp (PS1)). *)
+    iDestruct (sim_putc _ _ Π Π_s PS1 σ with "[$] [] [$] [$Hγs $HPL $HPg//] [//] [//]") as "H". 1: by iApply (rec_fn_intro with "[$]").
 
-    iMod ("H" with "[]") as "[%Pp [HPp [#Hputc %]]]".
+    iMod ("H" with "[]") as "[%Pp [HPp [#Hputc #Hsplitp]]]".
 
     { admit. }
 
-    iDestruct (H2 with "HPp") as "[%Pp' [% [[HPS [% [HPL HPg']]] [HPp' HPpcombine]]]]".
-    iDestruct ("HPgcombine" with "HPL HPg'") as "HPg".
-
     iApply sim_gen_expr_ctx. iIntros "#?".
 
-    iAssert (∀ Φ v, Pg v -∗ (∃ σ, PS σ ∗ Pp' σ) -∗
-                    (∀ (σ' : m_state (spec_trans rec_event Z)) Pg',
-                        PS σ' -∗ Pp' σ' -∗ (∃ σ'', PL σ'' ∗ Pg' σ') -∗ Pp v) -∗
-                TGT Call (Val (ValFn "echo")) [] @ Π {{ Φ }})%I as "H".
+    iAssert (∀ Φ v, Pp v -∗ TGT Call (Val (ValFn "echo")) [] @ Π {{ Φ }})%I as "H".
     {
       iApply (ord_loeb with "[$] []").
-      iIntros "!>". iIntros "#IH % % HPg [% [HPS HPp']] HPp".
+      iIntros "!>". iIntros "#IH %% HPp".
 
       rewrite /echo_prog in Hin. simplify_map_eq.
       iApply (sim_tgt_rec_Call_internal); [ | by iApply (rec_fn_intro with "[$]") |]. { done. }
@@ -440,6 +483,9 @@ Section echo_getc.
       iIntros "% _ !>" => /=.
       iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
 
+      iDestruct ("Hsplitp" with "HPp") as "[% [[HPS [% [% [HPL HPg]]]] HPp]]".
+
+      iDestruct ("HPg" with "HPL") as "HPg".
       iApply "Hgetc".
       iFrame. iSplit! => /=. iIntros (?) "[-> HPg]".
 
@@ -448,23 +494,28 @@ Section echo_getc.
       iApply sim_tgt_rec_LetE. iModIntro => /=.
       iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
 
-      iDestruct (H1 with "HPg") as "[%Pg_v [% [HPL [HPg_v #HPccombine]]]]".
+      iDestruct ("Hsplitg" with "HPg") as "[% [HPL HPg]]".
+      iDestruct ("HPp" with "[$]") as "HPp".
       iApply "Hputc".
+      iFrame. iSplit!. admit.
+      iIntros (?) "?".
+      iApply sim_tgt_rec_LetE. iModIntro => /=.
+      by iApply "IH".
+      iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
+      iL
       iExists _.
       iSplitL. { iApply ("HPp" with "[$] [HPp'] [HPL HPg_v]").
                  iExact "HPp'".
-                 iFrame.
-                 iFrame.
+                 iFrame. iFrame.
       }
       iSplit!.
       iSplitR.
       iFrame. iSplit! => /=.
 
     }
+    admit.
 
-
-    rewrite H0.
-    iApply ("H" with "[$] [$HPp' $HPS //] [$]").
+    iApply ("H" with "[$]").
 
 
 
