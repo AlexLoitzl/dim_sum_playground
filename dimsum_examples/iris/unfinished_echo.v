@@ -203,7 +203,7 @@ End sim_getc.
 Section echo_getc.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
 
-  Definition echo_getc_spec_body : spec rec_event Z void :=
+  Definition echo_body_spec : spec rec_event Z void :=
     Spec.forever (v ← TGet;
     TPut (v + 1);;
     h ← TExist _;
@@ -213,51 +213,12 @@ Section echo_getc.
   Definition putc_fn_spec (P : Z → iProp Σ) (es : list expr) (POST : (val → iProp Σ) → iProp Σ) : iProp Σ :=
     ∃ v, P v ∗ ⌜es = [Val v]⌝ ∗ POST (λ _, P (v + 1))%I.
 
-  (* Lemma sim_putc_spec `{!specGS} Π Φ : *)
-  (*   switch Π ({{ κ σ1 POST, *)
-  (*     ∃ f es h, ⌜κ = Some (Incoming, ERCall f es h)⌝ ∗ *)
-  (*   POST Tgt _ _ ({{ σ' Π', *)
-  (*     ∃ v, ⌜f = "getc"⌝ ∗ ⌜es = []⌝ ∗ spec_state v ∗ ⌜σ' = σ1⌝ ∗ *)
-  (*   switch Π' (λ κ (σ : m_state (spec_trans rec_event Z)) POST, *)
-  (*     ⌜κ = Some (Outgoing, ERReturn (ValNum v) h)⌝ ∗ spec_state (v + 1) ∗ *)
-  (*   POST Tgt _ _ ({{σ' Π'', *)
-  (*     ⌜σ' = σ⌝ ∗ ⌜Π'' = Π⌝ ∗ TGT getc_spec @ Π {{ Φ }} *)
-  (*   }}))}})}}) -∗ *)
-  (*   TGT getc_spec @ Π {{ Φ }}. *)
-  (* Proof. *)
-  (*   iIntros "Hs". *)
-  (*   rewrite {2}/getc_spec unfold_forever /TReceive bind_bind -/getc_spec bind_bind. *)
-  (*   iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>". *)
-  (*   rewrite bind_bind. setoid_rewrite bind_ret_l. *)
-  (*   iApply (sim_gen_TVis with "[-]"). *)
-  (*   iIntros (v') "Hγ' !>". *)
-  (*   iIntros (??) "[% [% HΠ]]". *)
-  (*   subst. *)
-  (*   iApply "Hs" => /=. iSplit!. iIntros (??) => /=. *)
-  (*   iDestruct 1 as (???) "[Hγ [% Hs']]". subst. *)
-  (*   iApply (sim_gen_expr_intro _ tt with "[Hγ']"); simpl; [done..|]. rewrite bind_bind. *)
-  (*   iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>". rewrite bind_bind. *)
-  (*   iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>". rewrite bind_bind. *)
-  (*   iApply (sim_gen_TGet with "[-]"). *)
-  (*   iSplit. 1: done. *)
-  (*   iIntros "!>". rewrite bind_bind. *)
-  (*   iApply (sim_gen_TPut with "[Hγ]"). 1: done. *)
-  (*   iIntros "Hγ". iIntros "!>". *)
-  (*   iApply (sim_gen_TVis with "[-]"). iIntros (v'') "Hγ'". *)
-  (*   iDestruct (mstate_var_agree with "Hγ Hγ'") as "<-". *)
-  (*   iIntros "!> /=". *)
-  (*   iIntros (??) "[% [% HΠ']]" => /=. simplify_eq. *)
-  (*   iApply "Hs'". iSplit!. iFrame. *)
-  (*   iIntros (??) "[-> [-> HC]]". *)
-  (*   iApply "HΠ" => /=. by iFrame. *)
-  (* Qed. *)
-
   Lemma sim_echo_body (S: specGS) fns Π_t Π_s (PL : m_state (spec_trans rec_event Z) → iProp Σ) (σi : (m_state (spec_trans rec_event Z))) :
     rec_fn_auth fns -∗
     "putc" ↪ None -∗
     (S.(spec_state_name)) ⤳@{Z} - -∗
     PL σi -∗
-    ⌜σi.1 ≡ echo_getc_spec_body⌝ -∗
+    ⌜σi.1 ≡ echo_body_spec⌝ -∗
     ⌜σi.2 = 0⌝ -∗
     □ switch_external_fixed Π_t (spec_trans _ Z) Π_s ({{κ0 σ_t POST0,
         ∃ vs h σs, PL σs ∗ ⌜κ0 = Some (Outgoing, ERCall "putc" vs h)⌝ ∗
@@ -285,7 +246,7 @@ Section echo_getc.
 
 
     set P := (λ (v : Z), ∃ σ Φg, PL σ ∗ spec_state v ∗
-                           ⥥ₛ({{σ' Π, ⌜σ' = σ⌝ ∗ ⌜Π = Π_s⌝ ∗ SRC echo_getc_spec_body @ Π {{Φg}}}}))%I.
+                           ⥥ₛ({{σ' Π, ⌜σ' = σ⌝ ∗ ⌜Π = Π_s⌝ ∗ SRC echo_body_spec @ Π {{Φg}}}}))%I.
     iExists P.
     iModIntro. iSplit!.
     - iExists _, (λ e, sim_post Src () Π_s e).
@@ -299,7 +260,8 @@ Section echo_getc.
       iApply "Hs" => /=. iFrame. iSplit!.
       iIntros (? Π'') "[-> [-> Hs']]" => /=.
       iApply "Hg". iSplit!.
-      rewrite /echo_getc_spec_body unfold_forever bind_bind -/echo_getc_spec_body.
+
+      rewrite /echo_body_spec unfold_forever bind_bind -/echo_body_spec.
       iApply (sim_gen_TGet with "[-]"). iSplit. 1: done. rewrite bind_bind.
       iApply (sim_gen_TPut with "[$]"). iIntros "Hγ". rewrite bind_bind.
       iApply sim_src_TExist. rewrite bind_bind.
@@ -329,18 +291,63 @@ Section echo_getc.
       iFrame.
   Qed.
 
-  Definition echo_getc_spec : spec rec_event Z void :=
+  Definition echo_spec : spec rec_event Z void :=
     '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
     TAssume (f = "echo");;
     TAssume (vs = []);;
-    echo_getc_spec_body.
+    echo_body_spec.
 
   Let m_t := rec_link_trans {["echo"]} {["getc"]} rec_trans (spec_trans rec_event Z).
+
+  Definition overlapping (P Q RP RQ : Z → iProp Σ) : iProp Σ :=
+    (∀ v v', P v -∗ RQ v' ==∗ Q v' ∗ RP v) ∗ (∀ v v', Q v -∗ RP v' ==∗ P v' ∗ RQ v).
+
+  Lemma sim_echo Π (P Q RP RQ : Z → iProp Σ) v :
+    "echo" ↪ Some echo_rec -∗
+    □ rec_fn_spec_hoare Tgt Π "getc" (getc_fn_spec P) -∗
+    □ rec_fn_spec_hoare Tgt Π "putc" (putc_fn_spec Q) -∗
+    □ overlapping P Q RP RQ -∗
+    P v -∗
+    RQ v -∗
+    rec_fn_spec_hoare Tgt Π "echo" (λ es POST, ⌜es = []⌝).
+  Proof.
+    iIntros "#? #Hgetc #Hputc #[HRQ HRP] HP RQ %% ->".
+    iApply sim_gen_expr_ctx. iIntros "#?".
+    iAssert (∀ Φ v, P v -∗ RQ v -∗ TGT Call (Val (ValFn "echo")) [] @ Π {{ Φ }})%I as "H".
+    {
+      iApply (ord_loeb with "[$] []").
+      iIntros "!>". iIntros "#IH %% ? ?".
+
+      iApply (sim_tgt_rec_Call_internal with "[$]") => //.
+      iModIntro => /=.
+      iApply (sim_tgt_rec_AllocA); [done|].
+      iIntros "% _ !>" => /=.
+      iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
+
+      iApply "Hgetc".
+      iFrame. iSplit! => /=. iIntros (?) "[-> ?]".
+
+      iApply sim_tgt_rec_LetE. iModIntro => /=.
+      iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
+      iMod ("HRQ" with "[$] [$]") as "[? ?]".
+
+      iApply "Hputc".
+      iFrame. iSplit!.
+      iIntros (?) "?".
+      iApply sim_tgt_rec_LetE. iModIntro => /=.
+
+      iMod ("HRP" with "[$] [$]") as "[? ?]".
+
+      iApply ("IH" with "[$] [$]").
+    }
+
+    iApply ("H" with "[$] [$]").
+  Qed.
 
   Lemma echo_getc_sim :
     rec_state_interp (rec_init echo_prog) None -∗
     (MLFRun None, [], rec_init echo_prog, (getc_spec, 0)) ⪯{m_t,
-      spec_trans rec_event Z} (echo_getc_spec, 0).
+      spec_trans rec_event Z} (echo_spec, 0).
   Proof.
     iIntros "[#Hfns Hh] /=".
 
@@ -360,7 +367,7 @@ Section echo_getc.
     iApply (sim_tgt_constP_elim γt γs γκ with "[Hγs] [-]"); [done..|].
     iIntros "Hγs Hγt Hγκ".
     iApply (sim_gen_expr_intro (Λ := spec_mod_lang (H := HSrcSpec) _ _ ) _ tt with "[Hγs_s] [-]"); [simpl; done..|].
-    iEval (unfold echo_getc_spec). rewrite /TReceive bind_bind.
+    iEval (unfold echo_spec). rewrite /TReceive bind_bind.
     iApply (sim_src_TExist (H := HSrcSpec) (_, _, _)). rewrite bind_bind .
     setoid_rewrite bind_ret_l.
     iApply (sim_gen_TVis (H := HSrcSpec)). iIntros "% Hγs_s %% [-> [-> _ ]]".
@@ -527,42 +534,25 @@ Section echo_getc.
 
       iApply "HC". iSplit!. iFrame.
     }
+    iDestruct ("Hsplitp" with "[$]") as "[% [[? [% [Hγi' ?]]] ?]]".
+    iDestruct (mstate_var_merge with "Hγi Hγi'") as "[<- Hγi]".
+    iDestruct ("HPg" with "[$]") as "HPg".
 
-    iApply sim_gen_expr_ctx. iIntros "#?".
-    iAssert (∀ Φ v σ, Pp v -∗ γi ⤳ σ -∗ (PL σ -∗ Pg v) -∗ TGT Call (Val (ValFn "echo")) [] @ Π {{ Φ }})%I as "H".
-    {
-      iApply (ord_loeb with "[$] []").
-      iIntros "!>". iIntros "#IH %%% HPp Hγi HPg".
 
-      rewrite /echo_prog in Hin. simplify_map_eq.
-      iApply (sim_tgt_rec_Call_internal); [ | by iApply (rec_fn_intro with "[$]") |]. { done. }
-      iModIntro => /=.
-      iApply (sim_tgt_rec_AllocA); [done|].
-      iIntros "% _ !>" => /=.
-      iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
+    set Rg := (λ v, ∃ σ, (PL σ -∗ Pg v) ∗ γi ⤳ σ)%I.
+    set Rp := (λ v, ∃ σ, (PS1 σ -∗ Pp v) ∗ γs ⤳ σ ∗ γi ⤳@{m_state (spec_trans rec_event Z)} -)%I.
 
-      iDestruct ("Hsplitp" with "HPp") as "[% [[HPS [% [Hγi' HPL]]] HPp]]".
-
+    iApply (sim_echo _ Pg Pp Rg Rp with "[] Hgetc Hputc [] [$] [$]") => //. 1: by iApply (rec_fn_intro with "[$]").
+    iModIntro.
+    iSplitR.
+    - iIntros (??) "? [% [HPp [? ?]]]". iDestruct ("Hsplitg" with "[$]") as "[% [? ?]]". iFrame.
+      iMod (mstate_var_split γi σ3 with "[$]") as "[Hγ Hγ']". iModIntro.
+      iFrame.
+      iApply "HPp".
+      iFrame.
+    - iIntros (??) "? [% [HPg Hγi]]". iDestruct ("Hsplitp" with "[$]") as "[% [[? [% [Hγi' ?]]] ?]]".
       iDestruct (mstate_var_merge with "Hγi Hγi'") as "[<- Hγi]".
-      iDestruct ("HPg" with "HPL") as "HPg".
-      iApply "Hgetc".
-      iFrame. iSplit! => /=. iIntros (?) "[-> HPg]".
-
-      iApply sim_tgt_rec_LetE. iModIntro => /=.
-      iApply (sim_gen_expr_bind _ [LetECtx _ _] with "[-]") => /=.
-
-      iDestruct ("Hsplitg" with "HPg") as "[% [HPL HPg]]".
-      iMod (mstate_var_split γi σ3 with "[$]") as "[Hγi Hγi']".
-
-      iDestruct ("HPp" with "[$]") as "HPp".
-      iApply "Hputc".
-      iFrame. iSplit!.
-      iIntros (?) "?".
-      iApply sim_tgt_rec_LetE. iModIntro => /=.
-      iApply ("IH" with "[$] [$] [$]").
-      }
-
-    iApply ("H" with "[$] [$] [$]").
-  Qed.
-
+      iFrame.
+      by iApply "HPg".
+Qed.
 End echo_getc.
