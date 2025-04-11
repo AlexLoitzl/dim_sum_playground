@@ -526,7 +526,7 @@ Section echo_getc.
 
     iDestruct ("Hsplitg" with "HPg") as "[% [HPL HPg]]".
 
-    set PS := (λ (σ : spec rec_event Z void * Z), γs ⤳ σ ∗ ⌜σ.1 ≡ echo_getc_spec_body⌝)%I.
+    set PS := (λ (σ : spec rec_event Z void * Z), γs ⤳ σ)%I.
 
     iMod (mstate_var_alloc (m_state (spec_trans rec_event Z))) as (γi) "Hγi".
 
@@ -541,7 +541,7 @@ Section echo_getc.
     iMod ("H" with "[]") as "[%Pp [HPp [#Hputc #Hsplitp]]]".
 
     {
-      iIntros "!> %% [% [% [% [[[Hγs %] [% [Hγi [Hγt_r [Hγt_oe Hγt_q]]]]] [% HC]]]]]" => /=.
+      iIntros "!> %% [% [% [% [[Hγs [% [Hγi [Hγt_r [Hγt_oe Hγt_q]]]]] [% HC]]]]]" => /=.
       subst. iIntros (???) "Hγt_q' Hγt_l Hγt_r' Hγt_oe'".
 
       iDestruct (mstate_var_merge with "Hγt_r Hγt_r'") as "[<- Hγt_r]".
@@ -580,8 +580,7 @@ Section echo_getc.
       iIntros "???".
 
       iApply "HC". iSplit!. iFrame.
-
-      admit. }
+      }
 
     iApply sim_gen_expr_ctx. iIntros "#?".
 
@@ -621,6 +620,6 @@ Section echo_getc.
       }
 
     iApply ("H" with "[$] [$] [$]").
-Admitted.
+Qed.
 
 End echo_getc.
