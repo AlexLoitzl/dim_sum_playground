@@ -718,6 +718,37 @@ Section link.
     iApply ("Hsim" with "[$] [$] [$] [$]").
   Qed.
 
+  Lemma tgt_link_left_constP_elim_run γ_s γ_σ1 γ_σ2 γ_oe R (m1 m2 : mod_trans (io_event EV))
+    s (σ1' : m_state m1) (σ2 : m_state m2) Π κ:
+    γ_s ⤳ s -∗
+    γ_σ2 ⤳ σ2 -∗
+    γ_oe ⤳ (@None EV) -∗
+    (γ_s ⤳@{S} - -∗ γ_σ1 ⤳@{m_state m1} - -∗ γ_σ2 ⤳@{m_state m2} - -∗ γ_oe ⤳@{option EV} - -∗
+      tgt_link_run_leftP R Π s σ2 κ σ1') -∗
+    tgt_link_left_constP R Π γ_s γ_σ1 γ_σ2 γ_oe κ σ1'.
+  Proof.
+    iIntros "Hγ_s Hγ_σ2 Hγ_oe Hrecv" (???) "Hγ_s' Hγ_σ1 Hγ_σ2' Hγ_oe'".
+    iDestruct (mstate_var_merge with "Hγ_s Hγ_s'") as "[-> Hγ_s]".
+    iDestruct (mstate_var_merge with "Hγ_σ2 Hγ_σ2'") as "[-> Hγ_σ2]".
+    iDestruct (mstate_var_merge with "Hγ_oe Hγ_oe'") as "[<- Hγ_oe]".
+    iApply ("Hrecv" with "[$] [$] [$] [$]").
+  Qed.
+
+  Lemma tgt_link_left_constP_elim_recv γ_s γ_σ1 γ_σ2 γ_oe R (m1 m2 : mod_trans (io_event EV))
+    s (σ1' : m_state m1) (σ2 : m_state m2) Π e κ:
+    γ_s ⤳ s -∗
+    γ_σ2 ⤳ σ2 -∗
+    γ_oe ⤳ Some e -∗
+    (γ_s ⤳@{S} - -∗ γ_σ1 ⤳@{m_state m1} - -∗ γ_σ2 ⤳@{m_state m2} - -∗ γ_oe ⤳@{option EV} - -∗ tgt_link_recv_leftP R Π s σ2 e κ σ1') -∗
+    tgt_link_left_constP R Π γ_s γ_σ1 γ_σ2 γ_oe κ σ1'.
+  Proof.
+    iIntros "Hγ_s Hγ_σ2 Hγ_oe Hrecv" (???) "Hγ_s' Hγ_σ1 Hγ_σ2' Hγ_oe'".
+    iDestruct (mstate_var_merge with "Hγ_s Hγ_s'") as "[-> Hγ_s]".
+    iDestruct (mstate_var_merge with "Hγ_σ2 Hγ_σ2'") as "[-> Hγ_σ2]".
+    iDestruct (mstate_var_merge with "Hγ_oe Hγ_oe'") as "[<- Hγ_oe]".
+    iApply ("Hrecv" with "[$] [$] [$] [$]").
+  Qed.
+
   Definition tgt_link_run_rightP R {m1 m2 : mod_trans (io_event EV)}
     (Π : option (io_event EV) → link_case EV * S * m_state m1 * m_state m2 → iProp Σ)
     (s : S) (σ1 : m_state m1)
@@ -863,6 +894,36 @@ Section link.
     iApply sim_tgt_link_run_right. iSpecialize ("Hsim" with "[$] [$] [$]").
     iApply (sim_gen_wand with "Hsim"). iIntros (??) "Hsim".
     iApply ("Hsim" with "[$] [$] [$] [$]").
+  Qed.
+
+  Lemma tgt_link_right_constP_elim_run γ_s γ_σ1 γ_σ2 γ_oe (m1 m2 : mod_trans (io_event EV)) R
+    s (σ1 : m_state m1) (σ2' : m_state m2) Π κ:
+    γ_s ⤳ s -∗
+    γ_σ1 ⤳ σ1 -∗
+    γ_oe ⤳ (@None EV) -∗
+    (γ_s ⤳@{S} - -∗ γ_σ1 ⤳@{m_state m1} - -∗ γ_σ2 ⤳@{m_state m2} - -∗ γ_oe ⤳@{option EV} - -∗ tgt_link_run_rightP R Π s σ1 κ σ2') -∗
+    tgt_link_right_constP R Π γ_s γ_σ1 γ_σ2 γ_oe κ σ2'.
+  Proof.
+    iIntros "Hγ_s Hγ_σ1 Hγ_oe Hrecv" (???) "Hγ_s' Hγ_σ1' Hγ_σ2 Hγ_oe'".
+    iDestruct (mstate_var_merge with "Hγ_s Hγ_s'") as "[-> Hγ_s]".
+    iDestruct (mstate_var_merge with "Hγ_σ1 Hγ_σ1'") as "[-> Hγ_σ1]".
+    iDestruct (mstate_var_merge with "Hγ_oe Hγ_oe'") as "[<- Hγ_oe]".
+    iApply ("Hrecv" with "[$] [$] [$] [$]").
+  Qed.
+
+  Lemma tgt_link_right_constP_elim_recv γ_s γ_σ1 γ_σ2 γ_oe (m1 m2 : mod_trans (io_event EV)) R
+    s (σ1 : m_state m1) e (σ2' : m_state m2) Π κ:
+    γ_s ⤳ s -∗
+    γ_σ1 ⤳ σ1 -∗
+    γ_oe ⤳ Some e -∗
+    (γ_s ⤳@{S} - -∗ γ_σ1 ⤳@{m_state m1} - -∗ γ_σ2 ⤳@{m_state m2} - -∗ γ_oe ⤳@{option EV} - -∗ tgt_link_recv_rightP R Π s σ1 e κ σ2') -∗
+    tgt_link_right_constP R Π γ_s γ_σ1 γ_σ2 γ_oe κ σ2'.
+  Proof.
+    iIntros "Hγ_s Hγ_σ1 Hγ_oe Hrecv" (???) "Hγ_s' Hγ_σ1' Hγ_σ2 Hγ_oe'".
+    iDestruct (mstate_var_merge with "Hγ_s Hγ_s'") as "[-> Hγ_s]".
+    iDestruct (mstate_var_merge with "Hγ_σ1 Hγ_σ1'") as "[-> Hγ_σ1]".
+    iDestruct (mstate_var_merge with "Hγ_oe Hγ_oe'") as "[<- Hγ_oe]".
+    iApply ("Hrecv" with "[$] [$] [$] [$]").
   Qed.
 
 End link.

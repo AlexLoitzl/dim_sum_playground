@@ -344,66 +344,6 @@ Section echo_getc.
     iApply ("H" with "[$] [$]").
   Qed.
 
-  Lemma tgt_link_left_constP_run {EV S} {m1 m2 : mod_trans (io_event EV)} R Π γ_s γ_σ1 γ_σ2 γ_oe
-    (s : S) (σ2 : m_state m2) (σ1' : m_state m1) κ:
-    γ_s ⤳ s -∗
-    γ_σ2 ⤳ σ2 -∗
-    γ_oe ⤳ (@None EV) -∗
-    (γ_s ⤳@{S} - -∗ γ_σ1 ⤳@{m_state m1} - -∗ γ_σ2 ⤳@{m_state m2} - -∗ γ_oe ⤳@{option EV} - -∗ tgt_link_run_leftP R Π s σ2 κ σ1') -∗
-    tgt_link_left_constP R Π γ_s γ_σ1 γ_σ2 γ_oe κ σ1'.
-  Proof.
-    iIntros "Hγ_s Hγ_σ2 Hγ_oe Hrecv" (???) "Hγ_s' Hγ_σ1 Hγ_σ2' Hγ_oe'".
-    iDestruct (mstate_var_merge with "Hγ_s Hγ_s'") as "[-> Hγ_s]".
-    iDestruct (mstate_var_merge with "Hγ_σ2 Hγ_σ2'") as "[-> Hγ_σ2]".
-    iDestruct (mstate_var_merge with "Hγ_oe Hγ_oe'") as "[<- Hγ_oe]".
-    iApply ("Hrecv" with "[$] [$] [$] [$]").
-  Qed.
-
-  Lemma tgt_link_left_constP_recv {EV S} {m1 m2 : mod_trans (io_event EV)} R Π γ_s γ_σ1 γ_σ2 γ_oe
-    (s : S) (σ2 : m_state m2) e (σ1' : m_state m1) κ:
-    γ_s ⤳ s -∗
-    γ_σ2 ⤳ σ2 -∗
-    γ_oe ⤳ Some e -∗
-    (γ_s ⤳@{S} - -∗ γ_σ1 ⤳@{m_state m1} - -∗ γ_σ2 ⤳@{m_state m2} - -∗ γ_oe ⤳@{option EV} - -∗ tgt_link_recv_leftP R Π s σ2 e κ σ1') -∗
-    tgt_link_left_constP R Π γ_s γ_σ1 γ_σ2 γ_oe κ σ1'.
-  Proof.
-    iIntros "Hγ_s Hγ_σ2 Hγ_oe Hrecv" (???) "Hγ_s' Hγ_σ1 Hγ_σ2' Hγ_oe'".
-    iDestruct (mstate_var_merge with "Hγ_s Hγ_s'") as "[-> Hγ_s]".
-    iDestruct (mstate_var_merge with "Hγ_σ2 Hγ_σ2'") as "[-> Hγ_σ2]".
-    iDestruct (mstate_var_merge with "Hγ_oe Hγ_oe'") as "[<- Hγ_oe]".
-    iApply ("Hrecv" with "[$] [$] [$] [$]").
-  Qed.
-
-  Lemma tgt_link_right_constP_run {EV S} {m1 m2 : mod_trans (io_event EV)} R Π γ_s γ_σ1 γ_σ2 γ_oe
-    (s : S) (σ1 : m_state m1) (σ2' : m_state m2) κ:
-    γ_s ⤳ s -∗
-    γ_σ1 ⤳ σ1 -∗
-    γ_oe ⤳ (@None EV) -∗
-    (γ_s ⤳@{S} - -∗ γ_σ1 ⤳@{m_state m1} - -∗ γ_σ2 ⤳@{m_state m2} - -∗ γ_oe ⤳@{option EV} - -∗ tgt_link_run_rightP R Π s σ1 κ σ2') -∗
-    tgt_link_right_constP R Π γ_s γ_σ1 γ_σ2 γ_oe κ σ2'.
-  Proof.
-    iIntros "Hγ_s Hγ_σ1 Hγ_oe Hrecv" (???) "Hγ_s' Hγ_σ1' Hγ_σ2 Hγ_oe'".
-    iDestruct (mstate_var_merge with "Hγ_s Hγ_s'") as "[-> Hγ_s]".
-    iDestruct (mstate_var_merge with "Hγ_σ1 Hγ_σ1'") as "[-> Hγ_σ1]".
-    iDestruct (mstate_var_merge with "Hγ_oe Hγ_oe'") as "[<- Hγ_oe]".
-    iApply ("Hrecv" with "[$] [$] [$] [$]").
-  Qed.
-
-  Lemma tgt_link_right_constP_recv {EV S} {m1 m2 : mod_trans (io_event EV)} R Π γ_s γ_σ1 γ_σ2 γ_oe
-    (s : S) (σ1 : m_state m1) e (σ2' : m_state m2) κ:
-    γ_s ⤳ s -∗
-    γ_σ1 ⤳ σ1 -∗
-    γ_oe ⤳ Some e -∗
-    (γ_s ⤳@{S} - -∗ γ_σ1 ⤳@{m_state m1} - -∗ γ_σ2 ⤳@{m_state m2} - -∗ γ_oe ⤳@{option EV} - -∗ tgt_link_recv_rightP R Π s σ1 e κ σ2') -∗
-    tgt_link_right_constP R Π γ_s γ_σ1 γ_σ2 γ_oe κ σ2'.
-  Proof.
-    iIntros "Hγ_s Hγ_σ1 Hγ_oe Hrecv" (???) "Hγ_s' Hγ_σ1' Hγ_σ2 Hγ_oe'".
-    iDestruct (mstate_var_merge with "Hγ_s Hγ_s'") as "[-> Hγ_s]".
-    iDestruct (mstate_var_merge with "Hγ_σ1 Hγ_σ1'") as "[-> Hγ_σ1]".
-    iDestruct (mstate_var_merge with "Hγ_oe Hγ_oe'") as "[<- Hγ_oe]".
-    iApply ("Hrecv" with "[$] [$] [$] [$]").
-  Qed.
-
   Lemma echo_getc_sim :
     rec_state_interp (rec_init echo_prog) None -∗
     (MLFRun None, [], rec_init echo_prog, (getc_spec, 0)) ⪯{m_t,
@@ -492,7 +432,7 @@ Section echo_getc.
     {
       iIntros "!> %% [% [% [% [[Hγt_r [Hγt_oe Hγt_q]] [% HC]]]]]" => /=. subst.
 
-      iApply (tgt_link_left_constP_run with "[$] [Hγt_r] [$]"). 1: done.
+      iApply (tgt_link_left_constP_elim_run with "[$] [Hγt_r] [$]"). 1: done.
       iIntros "Hγt_q Hγt_l Hγt_r Hγt_oe".
 
       iIntros (??????).
@@ -502,7 +442,7 @@ Section echo_getc.
       iIntros "Hγt_q Hγt_l Hγt_oe".
       iApply "HC". iSplit!.
       iIntros (??) "[% [-> HC]]"=> /=.
-      iApply (tgt_link_right_constP_recv with "[Hγt_q] [Hγt_l] [$] [-]"). 1-2: done.
+      iApply (tgt_link_right_constP_elim_recv with "[Hγt_q] [Hγt_l] [$] [-]"). 1-2: done.
 
       iIntros "Hγt_q Hγt_l Hγt_r Hγt_oe" (?). simplify_eq.
 
@@ -511,7 +451,7 @@ Section echo_getc.
       iApply "HC" => /=. iSplit!.
       iIntros (??) "[% [-> HC]]". simpl.
 
-      iApply (tgt_link_right_constP_run with "[Hγt_q] [Hγt_l] [$] [-]"). 1-2: done.
+      iApply (tgt_link_right_constP_elim_run with "[Hγt_q] [Hγt_l] [$] [-]"). 1-2: done.
       iIntros "Hγt_q Hγt_l Hγt_r Hγt_oe".
 
       iIntros (??????).
@@ -522,7 +462,7 @@ Section echo_getc.
       iApply "HC". iSplit!.
       iIntros (??) "[% [-> HC]]" => /=.
 
-      iApply (tgt_link_left_constP_recv with "[Hγt_q] [Hγt_r] [$] [-]"). 1-2: done.
+      iApply (tgt_link_left_constP_elim_recv with "[Hγt_q] [Hγt_r] [$] [-]"). 1-2: done.
       iIntros "Hγt_q Hγt_l Hγt_r Hγt_oe".
 
       iIntros (?). simplify_eq.
@@ -546,7 +486,7 @@ Section echo_getc.
       iIntros "!> %% [% [% [% [[Hγs [% [Hγi [Hγt_r [Hγt_oe Hγt_q]]]]] [% HC]]]]]" => /=.
       subst.
 
-      iApply (tgt_link_left_constP_run with "[$] [Hγt_r] [$]"). 1: done.
+      iApply (tgt_link_left_constP_elim_run with "[$] [Hγt_r] [$]"). 1: done.
       iIntros "Hγt_q Hγt_l Hγt_r Hγt_oe".
 
       iIntros (??????). destruct!/=. rewrite bool_decide_false //.
@@ -572,7 +512,7 @@ Section echo_getc.
       iApply ("HC" with "[-]"). iFrame. iSplit!.
       iIntros (??). iDestruct 1 as (? ->) "HC".
 
-      iApply (tgt_link_left_constP_recv with "[Hγt_q] [Hγt_r] [$] [-]"). 1-2: done.
+      iApply (tgt_link_left_constP_elim_recv with "[Hγt_q] [Hγt_r] [$] [-]"). 1-2: done.
       iIntros "Hγt_q Hγt_l Hγt_r Hγt_oe" (?). simplify_eq.
 
       iApply (sim_tgt_link_left_const_run γt_q γt_l γt_r γt_oe with "[$] [Hγt_l] [Hγt_r] [$] [-]"). 1-2: done.
