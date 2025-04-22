@@ -378,7 +378,6 @@ Section Mutual.
     pose (HpingSpec := SpecGS γtl_s).
     pose (HpongSpec := SpecGS γtr_s).
     iMod (mstate_var_split γtl_s 0 with "[$]") as "[Hγtl_s Hγtl_s']".
-    (* iMod (mstate_var_split γtr_s 0 with "[$]") as "[Hγtr_s Hγtr_s']". *)
 
     iApply (sim_gen_expr_intro (Λ := spec_mod_lang (H := HpingSpec) _ _ )_ tt with "[Hγtl_s]") => //=.
 
@@ -386,93 +385,84 @@ Section Mutual.
 
     set Π := (tgt_link_left_constP _ _ _ _ _ _).
 
-
     iAssert (∀ Φ (σ : m_state (spec_trans rec_event ())) (q : list seq_product_case) (v : Z), γs ⤳ σ -∗ γs_s ⤳ - -∗ γt_q ⤳ q -∗ γt_r ⤳ (pong_spec, v) -∗
                         γt_oe ⤳ Some (ERCall "ping" [ValNum v] h) -∗ γtr_s ⤳ - -∗ γtl_s ⤳ v -∗
-                    TGT ping_spec @ Π {{ Φ }})%I as "H".
+                    sim_gen_expr (Λ := spec_mod_lang (H := HpingSpec) _ _ ) Tgt Π ping_spec Φ)%I as "H".
     {
       iApply (ord_loeb with "[$] []").
       iIntros "!>". iIntros "#IH % % % % Hγs Hγs_s Hγt_q Hγt_r Hγt_oe Hγtr_s Hγtl_s".
-      admit. }
 
-    (* iEval (rewrite /ping_spec unfold_forever -/ping_spec /ping_spec_body bind_bind bind_bind). *)
+      iEval (rewrite /ping_spec unfold_forever -/ping_spec /ping_spec_body bind_bind bind_bind).
 
-    (* iApply (sim_tgt_TExist (H := HpingSpec) with "[-]"). iIntros ([[??]?]) "!>". rewrite bind_bind. *)
-    (* iApply (sim_gen_TVis (H := HpingSpec) with "[-]"). iIntros (v1) "Hγtl_s !>". *)
-    (* iIntros (??) "/= [% [% _]]". simplify_eq. *)
+      iApply (sim_tgt_TExist (H := HpingSpec) with "[-]"). iIntros ([[??]?]) "!>". rewrite bind_bind.
+      iApply (sim_gen_TVis (H := HpingSpec) with "[-]"). iIntros (v1) "Hγtl_s' !>".
+      iIntros (??) "/= [% [% _]]". simplify_eq.
 
-    (* iApply (tgt_link_left_constP_elim_recv with "Hγt_q [Hγt_r] [$] [-]") => //. *)
-    (* iIntros "Hγt_q Hγt_l Hγt_r Hγt_oe /= %". simplify_eq. *)
+      iApply (tgt_link_left_constP_elim_recv with "Hγt_q [Hγt_r] [$] [-]") => //.
+      iIntros "Hγt_q Hγt_l Hγt_r Hγt_oe /= %". simplify_eq.
 
-    (* iApply (sim_tgt_link_left_const_run γt_q γt_l with "[$] [Hγt_l] [Hγt_r] [$] [-]") => //. *)
-    (* iIntros "Hγt_q Hγt_r Hγt_oe". *)
+      iApply (sim_tgt_link_left_const_run γt_q γt_l with "[$] [Hγt_l] [Hγt_r] [$] [-]") => //.
+      iIntros "Hγt_q Hγt_r Hγt_oe".
 
-    (* iApply (sim_gen_expr_intro (Λ := spec_mod_lang (H := HpingSpec) _ _ )_ tt with "[Hγtl_s]") => //=. *)
+      iApply (sim_gen_expr_intro (Λ := spec_mod_lang (H := HpingSpec) _ _ )_ tt with "[Hγtl_s']") => //=.
 
-    (* setoid_rewrite bind_ret_l. rewrite bind_bind. *)
-    (* iApply (sim_tgt_TAssume (H := HpingSpec) with "[-]"); [done|]. iIntros "!>". rewrite bind_bind. *)
-    (* iApply (sim_gen_TGet (H := HpingSpec) with "[-]"). iSplit => //. iModIntro. rewrite bind_bind. *)
-    (* iApply (sim_tgt_TAssume (H := HpingSpec) with "[-]"); [done|]. iIntros "!>". rewrite bind_bind. *)
-    (* iApply (sim_gen_TPut (H := HpingSpec) with "[Hγtl_s']"); [done|]. iIntros "Hγtl_s !>". *)
-    (* iApply (sim_gen_TVis (H := HpingSpec) with "[-]"). iIntros (v2) "Hγtl_s' !>". *)
+      setoid_rewrite bind_ret_l. rewrite bind_bind.
+      iApply (sim_tgt_TAssume (H := HpingSpec) with "[-]"); [done|]. iIntros "!>". rewrite bind_bind.
+      iApply (sim_gen_TGet (H := HpingSpec) with "[-]"). iSplit => //. iModIntro. rewrite bind_bind.
+      iApply (sim_tgt_TAssume (H := HpingSpec) with "[-]"); [done|]. iIntros "!>". rewrite bind_bind.
+      iApply (sim_gen_TPut (H := HpingSpec) with "[Hγtl_s]"); [done|]. iIntros "Hγtl_s !>".
+      iApply (sim_gen_TVis (H := HpingSpec) with "[-]"). iIntros (v2) "Hγtl_s' !>".
 
-    (* iIntros (??) "/= [% [% _]]". simplify_eq. *)
+      iIntros (??) "/= [% [% _]]". simplify_eq.
 
-    (* iApply (tgt_link_left_constP_elim_run with "Hγt_q [Hγt_r] [$] [-]") => //. *)
-    (* iIntros "Hγt_q Hγt_l Hγt_r Hγt_oe /= %%%%%%". *)
-    (* destruct!/=. rewrite bool_decide_false //. rewrite bool_decide_true //. *)
+      iApply (tgt_link_left_constP_elim_run with "Hγt_q [Hγt_r] [$] [-]") => //.
+      iIntros "Hγt_q Hγt_l Hγt_r Hγt_oe /= %%%%%%".
+      destruct!/=. rewrite bool_decide_false //. rewrite bool_decide_true //.
 
-    (* iDestruct (mstate_var_agree with "Hγtl_s Hγtl_s'") as "<-". *)
+      iDestruct (mstate_var_agree with "Hγtl_s Hγtl_s'") as "<-".
 
-    (* iApply (sim_tgt_link_right_const_recv γt_q γt_l γt_r γt_oe with "[$] [Hγt_l] [Hγt_r] [$] [-]");[done..|]. *)
-    (* iIntros "Hγt_q Hγt_l Hγt_oe". *)
+      iApply (sim_tgt_link_right_const_recv γt_q γt_l γt_r γt_oe with "[$] [Hγt_l] [Hγt_r] [$] [-]");[done..|].
+      iIntros "Hγt_q Hγt_l Hγt_oe".
 
-    (* iApply (sim_gen_expr_intro (Λ := spec_mod_lang (H := HpongSpec) _ _ )_ tt with "[Hγtr_s]") => //=. *)
+      iMod (mstate_var_split γtr_s v with "[$]") as "[Hγtr_s Hγtr_s']".
 
-    (* iEval (rewrite /pong_spec unfold_forever -/pong_spec /pong_spec_body bind_bind bind_bind). *)
+      iApply (sim_gen_expr_intro (Λ := spec_mod_lang (H := HpongSpec) _ _ )_ tt with "[Hγtr_s]") => //=.
 
-    (* iApply (sim_tgt_TExist (H := HpongSpec) with "[-]"). iIntros ([[??]?]) "!>". rewrite bind_bind. *)
-    (* iApply (sim_gen_TVis (H := HpongSpec) with "[-]"). iIntros (v3) "Hγtr_s !>". *)
-    (* iIntros (??) "/= [% [% _]]". simplify_eq. *)
+      iEval (rewrite /pong_spec unfold_forever -/pong_spec /pong_spec_body bind_bind bind_bind).
 
-    (* iApply (tgt_link_right_constP_elim_recv with "Hγt_q [Hγt_l] [$] [-]") => //. *)
-    (* iIntros "Hγt_q Hγt_l Hγt_r Hγt_oe /= %". simplify_eq. *)
+      iApply (sim_tgt_TExist (H := HpongSpec) with "[-]"). iIntros ([[??]?]) "!>". rewrite bind_bind.
+      iApply (sim_gen_TVis (H := HpongSpec) with "[-]"). iIntros (v3) "Hγtr_s !>".
+      iIntros (??) "/= [% [% _]]". simplify_eq.
 
-    (* iApply (sim_tgt_link_right_const_run γt_q γt_l with "[$] [Hγt_l] [Hγt_r] [$] [-]") => //. *)
-    (* iIntros "Hγt_q Hγt_l Hγt_oe". *)
+      iApply (tgt_link_right_constP_elim_recv with "Hγt_q [Hγt_l] [$] [-]") => //.
+      iIntros "Hγt_q Hγt_l Hγt_r Hγt_oe /= %". simplify_eq.
 
-    (* iApply (sim_gen_expr_intro (Λ := spec_mod_lang (H := HpongSpec) _ _ ) _ tt with "[Hγtr_s]") => //=. *)
-    (* setoid_rewrite bind_ret_l. rewrite bind_bind. *)
-    (* iApply (sim_tgt_TAssume (H := HpongSpec) with "[-]"); [done|]. iIntros "!>". rewrite bind_bind. *)
-    (* iApply (sim_gen_TGet (H := HpongSpec) with "[-]"). iSplit => //. iModIntro. rewrite bind_bind. *)
-    (* iApply (sim_tgt_TAssume (H := HpongSpec) with "[-]"); [done|]. iIntros "!>". rewrite bind_bind. *)
-    (* iApply (sim_gen_TPut (H := HpongSpec) with "[Hγtr_s']"); [done|]. iIntros "Hγtr_s !>". *)
-    (* iApply (sim_gen_TVis (H := HpongSpec) with "[-]"). iIntros (v4) "Hγtr_s' !>". *)
+      iApply (sim_tgt_link_right_const_run γt_q γt_l with "[$] [Hγt_l] [Hγt_r] [$] [-]") => //.
+      iIntros "Hγt_q Hγt_l Hγt_oe".
 
-    (* iIntros (??) "/= [% [% _]]". simplify_eq. *)
+      iApply (sim_gen_expr_intro (Λ := spec_mod_lang (H := HpongSpec) _ _ ) _ tt with "[Hγtr_s]") => //=.
+      setoid_rewrite bind_ret_l. rewrite bind_bind.
+      iApply (sim_tgt_TAssume (H := HpongSpec) with "[-]"); [done|]. iIntros "!>". rewrite bind_bind.
+      iApply (sim_gen_TGet (H := HpongSpec) with "[-]"). iSplit => //. iModIntro. rewrite bind_bind.
+      iApply (sim_tgt_TAssume (H := HpongSpec) with "[-]"); [done|]. iIntros "!>". rewrite bind_bind.
+      iApply (sim_gen_TPut (H := HpongSpec) with "[Hγtr_s']"); [done|]. iIntros "Hγtr_s !>".
+      iApply (sim_gen_TVis (H := HpongSpec) with "[-]"). iIntros (v4) "Hγtr_s' !>".
 
-    (* iApply (tgt_link_right_constP_elim_run with "Hγt_q [Hγt_l] [$] [-]") => //. *)
-    (* iIntros "Hγt_q Hγt_l Hγt_r Hγt_oe /= %%%%%%". *)
-    (* destruct!/=. rewrite bool_decide_true //. *)
+      iIntros (??) "/= [% [% _]]". simplify_eq.
 
-    (* iDestruct (mstate_var_merge with "Hγtr_s Hγtr_s'") as "[<- Hγtr_s]". *)
+      iApply (tgt_link_right_constP_elim_run with "Hγt_q [Hγt_l] [$] [-]") => //.
+      iIntros "Hγt_q Hγt_l Hγt_r Hγt_oe /= %%%%%%".
+      destruct!/=. rewrite bool_decide_true //.
 
-    (* iApply (sim_tgt_link_left_const_recv γt_q γt_l γt_r γt_oe with "[$] [Hγt_l] [Hγt_r] [$] [-]");[done..|]. *)
-    (* iIntros "Hγt_q Hγt_r Hγt_oe". *)
+      iDestruct (mstate_var_merge with "Hγtr_s Hγtr_s'") as "[<- Hγtr_s]".
 
-    (* iApply (sim_gen_expr_intro (Λ := spec_mod_lang (H := HpingSpec) _ _ )_ tt with "[Hγtl_s]") => //=. *)
-    iDestruct ("H" $! _ σ _ 0%Z with "[$] [$] [$] [Hγt_r] [$] [$] [Hγtl_s']") as "Hdone". 1-2: done.
+      iApply (sim_tgt_link_left_const_recv γt_q γt_l γt_r γt_oe with "[$] [Hγt_l] [Hγt_r] [$] [-]");[done..|].
+      iIntros "Hγt_q Hγt_r Hγt_oe".
 
-    iClear "H".
-    Set Printing All.
-    rewrite sim_gen_expr_unfold.
-    unfold sim_gen_expr.
-    Set Printin
+      iApply (sim_gen_expr_intro (Λ := spec_mod_lang (H := HpingSpec) _ _ )_ tt with "[Hγtl_s]") => //=.
+      iApply ("IH" $! _ σ0 _ (v + 1) with "Hγs [Hγs_s] Hγt_q Hγt_r Hγt_oe Hγtr_s Hγtl_s'") => //. iApply "Hγs_s". }
 
-    iApply sim_gen_expr_stop. iApply "Hdone".
-    { done. Set Printing Coercions.  Set Printing All.  }
-    iApply "Hγt_r".
-
+      by iApply ("H" $! _ σ _ 0%Z with "[$] [$] [$] [Hγt_r] [$] [$] [Hγtl_s']").
 Qed.
 
 End Mutual.
