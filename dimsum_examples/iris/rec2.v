@@ -30,6 +30,33 @@ Definition rec_fn_spec_hoare `{!dimsumGS Σ} `{!recGS Σ} (ts : tgt_src) (Π : o
   (f : string) (pre : list expr → ((val → iProp Σ) → iProp Σ) → iProp Σ) : iProp Σ :=
   rec_fn_spec ts Π f (λ es Φ, pre es (λ POST, (∀ v', POST v' -∗ Φ v')))%I.
 
+Definition rec_hoare `{!dimsumGS Σ} `{!recGS Σ} {A : Type} (ts : tgt_src) (Π : option rec_event → _ → iProp Σ)
+  (f : string) (pre : list expr → (A → iProp Σ) → iProp Σ) (post : A → val → iProp Σ) : iProp Σ :=
+  (∀ es Φ, pre es (λ a, ∀ v, post a v -∗ Φ (Val v)) -∗ TGT Call (Val (ValFn f)) es @ Π {{ Φ }}).
+
+
+(* TODO: Can we make a notation like the following work? *)
+Notation "'{{[' a .. b , 'ARGS' args ; ret , P ] } } f @ ts ; Π {{[ x .. y , 'RET' retv ; reta , Q ] } }" :=
+  (∀ Φ,
+     (∀ a, .. (∀ b, let ret reta := (∀ x, .. (∀ y, Q -∗ Φ retv) .. ) in P -∗ WP{ts} Call (Val (ValFn f)) args @ Π {{ Φ }}) .. ))%I
+    (at level 20, a closed binder, b closed binder, x closed binder, y closed binder, ret closed binder, reta closed binder) : bi_scope.
+
+Section echo.
+  Context `{!dimsumGS Σ} `{!recGS Σ}.
+
+  Lemma sim_echo0 Π :
+    ⊢ rec_hoare Tgt Π "echo" (λ es RET, ⌜es = []⌝ ∗
+         rec_hoare Tgt Π "getc"
+           (λ es RET, ⌜es = []⌝ ∗ RET tt)
+           (λ _ v, rec_hoare Tgt Π "putc"
+                     (λ es RET, ⌜es = [Val v]⌝ ∗ RET tt)
+                     (λ _ v, RET tt)))
+      (λ _ v, True).
+  Proof. Abort.
+  (* Lemma sim_echo Π : *)
+    (* {{[ a, ARGS [] ; _ , ret tt ] } } "echo" @ Tgt; Π {{[ v, RET v; '(), True ] } }. *)
+End echo.
+
 Section fn_spec.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
   Lemma rec_fn_spec_ctx ts Π f C :
