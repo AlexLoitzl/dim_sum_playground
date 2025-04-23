@@ -67,7 +67,7 @@ Proof. intros x y Hxy. rewrite /CoreCancelable. by setoid_rewrite Hxy. Qed.
 
 Lemma core_cancelable x `{!CoreCancelable x} y z : ✓(x ⋅ y) → x ⋅ y ≡ x ⋅ z → y ⋅? pcore x ≡ z ⋅? pcore x.
 Proof. rewrite !equiv_dist cmra_valid_validN. intros. by apply (core_cancelableN x). Qed.
-Lemma discrete_core_cancelable x `{CmraDiscrete A}:
+Lemma discrete_core_cancelable x `{!CmraDiscrete A}:
   (∀ y z, ✓(x ⋅ y) → x ⋅ y ≡ x ⋅ z → y ⋅? pcore x ≡ z ⋅? pcore x) → CoreCancelable x.
 Proof. intros ????. rewrite -!discrete_iff -cmra_discrete_valid_iff. auto. Qed.
 
@@ -141,10 +141,13 @@ Global Instance core_cancelable_Some {A : cmra} (a : A) :
 Proof.
   intros Hirr ? n [b|] [c|] ? EQ; inversion_clear EQ => /=.
   - rewrite ?Some_op_opM. constructor. by apply (core_cancelableN a).
-  - destruct (Hirr b); [|eauto using dist_le with lia].
-    by eapply (cmra_validN_op_l 0 a b), (cmra_validN_le n); last lia.
-  - destruct (Hirr c); [|symmetry; eauto using dist_le with lia].
-    by eapply (cmra_validN_le n); last lia.
+  - destruct (Hirr b).
+    + eapply (cmra_validN_op_l 0 a b), (cmra_validN_le n) => //.
+      apply SIdx.le_0_l.
+    + apply: dist_le; [done|]. apply SIdx.le_0_l.
+  - destruct (Hirr c).
+    + by eapply (cmra_validN_le n); last apply SIdx.le_0_l.
+    + symmetry. apply: dist_le; [done|]. apply SIdx.le_0_l.
   - done.
 Qed.
 
