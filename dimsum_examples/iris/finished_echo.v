@@ -299,6 +299,7 @@ Section echo_getc.
 
   Let m_t := rec_link_trans {["echo"]} {["getc"]} rec_trans (spec_trans rec_event Z).
 
+  (* TODO: Magic Wand? - cyclic? inductively defined? *)
   Definition overlapping (P Q RP RQ : Z → iProp Σ) : iProp Σ :=
     (∀ v v', P v -∗ RQ v' ==∗ Q v' ∗ RP v) ∗ (∀ v v', Q v -∗ RP v' ==∗ P v' ∗ RQ v).
 
