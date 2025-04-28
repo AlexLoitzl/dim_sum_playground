@@ -1,4 +1,4 @@
-From dimsum.examples Require Import rec_to_asm2 rec_heap_inj.
+From dimsum.examples Require Import rec_to_asm2 rec_heap_bij2.
 From dimsum.core.iris Require Import weak_embed sat.
 
 Set Default Proof Using "Type".
@@ -37,7 +37,7 @@ Definition r2av_proj_a (inj inja : gmap prov Z) (injb : gmap prov loc) (X : gset
 
 (** [r2av_residual] is what is left in the middle heap after the
 small injections are converted to large injection. *)
-Definition r2av_residual {Σ} `{!satG Σ heap_injUR} `{!satG Σ rec_to_asmUR} (γa γb : sat_name _) (l : loc) : iProp Σ :=
+Definition r2av_residual {Σ} `{!satG Σ heap_bijUR} `{!satG Σ rec_to_asmUR} (γa γb : sat_name _) (l : loc) : iProp Σ :=
   ∃ b, ⌜l.2 = 0⌝ ∗ ⌈l.1 ↦∗hi b @ sat γb⌉ ∗ ⌈l.1 ↦∗h b @ sat γa⌉.
 
 (** *** Lookup lemmas *)
@@ -281,16 +281,16 @@ Proof.
 Qed.
 
 Section vertical.
-Context {Σ} `{!satG Σ heap_injUR} `{!satG Σ rec_to_asmUR}.
+Context {Σ} `{!satG Σ heap_bijUR} `{!satG Σ rec_to_asmUR}.
 
 (** Combine the value relation. *)
 Lemma r2av_combine_val inja' injb' γa γb γ vi vm vs:
   r2a_f2i_trader (sat γ) (sat γa) -∗
   ⌈r2a_shared_auth inja' @ sat γa⌉ -∗
-  ⌈heap_inj_shared_auth injb' @ sat γb⌉ -∗
+  ⌈heap_bij_shared_auth injb' @ sat γb⌉ -∗
   ⌈[∗ map] ps↦li0 ∈ r2av_combine inja' injb', r2a_shared ps li0 @ sat γ⌉ -∗
   ⌈r2a_val_rel vm vi @ sat γa⌉ -∗
-  ⌈val_in_inj vm vs @ sat γb⌉ -∗
+  ⌈val_in_bij vm vs @ sat γb⌉ -∗
   ⌈r2a_val_rel vs vi @ sat γ⌉.
 Proof.
   iIntros "Ht Ha Hb H Hva Hvb".
@@ -300,30 +300,30 @@ Proof.
   - iDestruct "Hva" as (??) "Hla".
     iDestruct "Hvb" as (??) "Hlb". subst => /=.
     iDestruct (r2a_shared_lookup with "Ha [$]") as %?.
-    iDestruct (heap_inj_shared_lookup with "Hb [$]") as %?.
+    iDestruct (heap_bij_shared_lookup with "Hb [$]") as %?.
     rewrite weak_embed_big_sepM.
     iDestruct (big_sepM_lookup with "[$]") as "?".
     { apply r2av_combine_lookup_Some. by split!. }
-    rewrite /loc_in_inj weak_embed_exist.
+    rewrite /loc_in_bij weak_embed_exist.
     iExists _. iFrame. by rewrite Z.add_assoc.
 Qed.
 
 Lemma r2av_combine_val_list inja' injb' γa γb γ vi vm vs:
   r2a_f2i_trader (sat γ) (sat γa) -∗
   ⌈r2a_shared_auth inja' @ sat γa⌉ -∗
-  ⌈heap_inj_shared_auth injb' @ sat γb⌉ -∗
+  ⌈heap_bij_shared_auth injb' @ sat γb⌉ -∗
   ⌈[∗ map] ps↦li0 ∈ r2av_combine inja' injb', r2a_shared ps li0 @ sat γ⌉ -∗
   ⌈[∗ list] v1;v2∈vm;vi, r2a_val_rel v1 v2 @ sat γa⌉ -∗
-  ⌈[∗ list] v1;v2∈vm;vs, val_in_inj v1 v2 @ sat γb⌉ -∗
+  ⌈[∗ list] v1;v2∈vm;vs, val_in_bij v1 v2 @ sat γb⌉ -∗
   ⌈[∗ list] v1;v2∈vs;vi, r2a_val_rel v1 v2 @ sat γ⌉.
 Proof.
   iIntros "#? Haa Hab ? Him Hms".
   iInduction vm as [|] "IH" forall (vi vs). {
     iDestruct (big_sepL2_nil_inv_l (PROP:=uPred rec_to_asmUR) with "Him") as %->.
-    iDestruct (big_sepL2_nil_inv_l (PROP:=uPred heap_injUR) with "Hms") as %->.
+    iDestruct (big_sepL2_nil_inv_l (PROP:=uPred heap_bijUR) with "Hms") as %->.
     simpl. by iPureIntro.
   }
-  iDestruct (big_sepL2_cons_inv_l (PROP:=uPred heap_injUR) with "Hms") as (?? ->) "[??]".
+  iDestruct (big_sepL2_cons_inv_l (PROP:=uPred heap_bijUR) with "Hms") as (?? ->) "[??]".
   iDestruct (big_sepL2_cons_inv_l (PROP:=uPred rec_to_asmUR) with "Him") as (?? ->) "[??]".
   simpl.
   iDestruct (r2av_combine_val with "[$] Haa Hab [$] [$] [$]") as "#?".
@@ -333,19 +333,19 @@ Qed.
 Lemma r2av_combine_val_map `{Countable K} inja' injb' γa γb γ (vi vm vs : gmap K _):
   r2a_f2i_trader (sat γ) (sat γa) -∗
   ⌈r2a_shared_auth inja' @ sat γa⌉ -∗
-  ⌈heap_inj_shared_auth injb' @ sat γb⌉ -∗
+  ⌈heap_bij_shared_auth injb' @ sat γb⌉ -∗
   ⌈[∗ map] ps↦li0 ∈ r2av_combine inja' injb', r2a_shared ps li0 @ sat γ⌉ -∗
   ⌈[∗ map] v1;v2∈vi;vm, r2a_val_rel v2 v1 @ sat γa⌉ -∗
-  ⌈[∗ map] v1;v2∈vm;vs, val_in_inj v1 v2 @ sat γb⌉ -∗
+  ⌈[∗ map] v1;v2∈vm;vs, val_in_bij v1 v2 @ sat γb⌉ -∗
   ⌈[∗ map] v1;v2∈vi;vs, r2a_val_rel v2 v1 @ sat γ⌉.
 Proof.
   iIntros "#? Haa Hab ? Him Hms".
   iInduction vm as [|] "IH" using map_ind forall (vi vs). {
     iDestruct (big_sepM2_empty_l (PROP:=uPred rec_to_asmUR) with "Him") as %->.
-    iDestruct (big_sepM2_empty_r (PROP:=uPred heap_injUR) with "Hms") as %->.
+    iDestruct (big_sepM2_empty_r (PROP:=uPred heap_bijUR) with "Hms") as %->.
     by rewrite big_sepM2_empty.
   }
-  iDestruct (big_sepM2_delete_l (PROP:=uPred heap_injUR) with "Hms") as (??) "[??]".
+  iDestruct (big_sepM2_delete_l (PROP:=uPred heap_bijUR) with "Hms") as (??) "[??]".
   { apply lookup_insert. }
   iDestruct (big_sepM2_delete_r (PROP:=uPred rec_to_asmUR) with "Him") as (??) "[??]".
   { apply lookup_insert. }
@@ -361,11 +361,11 @@ Qed.
 Lemma r2av_split_val inja' injb' γa γb γ vi vs:
   r2a_f2i_trader (sat γ) (sat γa) -∗
   ⌈[∗ map] ps↦li0 ∈ inja', r2a_shared ps li0 @ sat γa⌉ -∗
-  ⌈[∗ map] ps↦li0 ∈ injb', heap_inj_shared ps li0 @ sat γb⌉ -∗
+  ⌈[∗ map] ps↦li0 ∈ injb', heap_bij_shared ps li0 @ sat γb⌉ -∗
   ⌈r2a_shared_auth (r2av_combine inja' injb') @ sat γ⌉ -∗
 
   ⌈r2a_val_rel vs vi @ sat γ⌉ -∗
-  ∃ vm, ⌈r2a_val_rel vm vi @ sat γa⌉ ∗ ⌈val_in_inj vm vs @ sat γb⌉.
+  ∃ vm, ⌈r2a_val_rel vm vi @ sat γa⌉ ∗ ⌈val_in_bij vm vs @ sat γb⌉.
 Proof.
   iIntros "? Ha Hb H Hv".
   destruct vs => /=; rewrite ?weak_embed_pure //; iDestruct!.
@@ -375,20 +375,20 @@ Proof.
   - iDestruct "Hv" as (li ?) "Hl".
     iDestruct (r2a_shared_lookup with "H [$]") as %[lm[li'[?[??]]]]%r2av_combine_lookup_Some.
     iDestruct (big_sepM_lookup (PROP:=uPred rec_to_asmUR) with "Ha") as "?"; [done|].
-    iDestruct (big_sepM_lookup (PROP:=uPred heap_injUR) with "Hb") as "?"; [done|].
+    iDestruct (big_sepM_lookup (PROP:=uPred heap_bijUR) with "Hb") as "?"; [done|].
     subst. iExists (ValLoc (lm +ₗ l.2)) => /=. iFrame. iSplit; [|done].
-    unfold loc_in_inj. simpl. iFrame. by rewrite Z.add_assoc.
+    unfold loc_in_bij. simpl. iFrame. by rewrite Z.add_assoc.
 Qed.
 
 Lemma r2av_split_val_list inja' injb' γa γb γ vis vss:
   r2a_f2i_trader (sat γ) (sat γa) -∗
   ⌈[∗ map] ps↦li0 ∈ inja', r2a_shared ps li0 @ sat γa⌉ -∗
-  ⌈[∗ map] ps↦li0 ∈ injb', heap_inj_shared ps li0 @ sat γb⌉ -∗
+  ⌈[∗ map] ps↦li0 ∈ injb', heap_bij_shared ps li0 @ sat γb⌉ -∗
   ⌈r2a_shared_auth (r2av_combine inja' injb') @ sat γ⌉ -∗
 
   ⌈[∗ list] vi;vs∈vss;vis, r2a_val_rel vi vs @ sat γ⌉ -∗
   ∃ vms, ⌈[∗ list] vi;vm∈vms;vis, r2a_val_rel vi vm @ sat γa⌉ ∗
-         ⌈[∗ list] vm;vs∈vms;vss, val_in_inj vm vs @ sat γb⌉.
+         ⌈[∗ list] vm;vs∈vms;vss, val_in_bij vm vs @ sat γb⌉.
 Proof.
   iIntros "#? Ha Hb H Hv".
   iInduction vis as [|] "IH" forall (vss). {
@@ -404,12 +404,12 @@ Qed.
 Lemma r2av_split_val_map {A} `{Countable A} inja' injb' γa γb γ (vis vss : gmap A _):
   r2a_f2i_trader (sat γ) (sat γa) -∗
   ⌈[∗ map] ps↦li0 ∈ inja', r2a_shared ps li0 @ sat γa⌉ -∗
-  ⌈[∗ map] ps↦li0 ∈ injb', heap_inj_shared ps li0 @ sat γb⌉ -∗
+  ⌈[∗ map] ps↦li0 ∈ injb', heap_bij_shared ps li0 @ sat γb⌉ -∗
   ⌈r2a_shared_auth (r2av_combine inja' injb') @ sat γ⌉ -∗
 
   ⌈[∗ map] vi;vs∈vis;vss, r2a_val_rel vs vi @ sat γ⌉ -∗
   ∃ vms, ⌈[∗ map] vi;vm∈vis;vms, r2a_val_rel vm vi @ sat γa⌉ ∗
-         ⌈[∗ map] vm;vs∈vms;vss, val_in_inj vm vs @ sat γb⌉.
+         ⌈[∗ map] vm;vs∈vms;vss, val_in_bij vm vs @ sat γb⌉.
 Proof.
   iIntros "#? Ha Hb H Hv".
   iInduction vis as [|] "IH" using map_ind forall (vss). {
@@ -424,7 +424,7 @@ Proof.
   iDestruct ("IH" with "[$] [$] [$] [$]") as (vms) "[??]".
   iExists (<[_:=_]>vms). iSplit.
   - by iApply (big_sepM2_insert_2 (PROP:=uPred rec_to_asmUR)); [done|].
-  - by iApply (big_sepM2_insert_2 (PROP:=uPred heap_injUR)); [done|].
+  - by iApply (big_sepM2_insert_2 (PROP:=uPred heap_bijUR)); [done|].
 Qed.
 
 (** Allocate the residual for the new provs in the middle heap. *)
@@ -433,13 +433,13 @@ Lemma r2av_alloc_residual (m : gmap prov loc) hm γa γb:
   (∀ i j k, (fst <$> m) !! i = Some k → (fst <$> m) !! j = Some k → i = j) →
   (∀ i k, m !! i = Some k → k.2 = 0%Z) →
   (filter is_ProvStatic (map_img (SA:=gset _) (fst <$> m)) = ∅) →
-  ⌈{sat γa}⌉ -∗ ⌈{sat (M:=heap_injUR) γb}⌉ -∗
+  ⌈{sat γa}⌉ -∗ ⌈{sat γb}⌉ -∗
   ⌈r2a_heapUR_inv hm @ sat γa⌉ -∗
-  ⌈heap_inj_inv_i hm @ sat γb⌉ ==∗
+  ⌈heap_bij_inv_i hm @ sat γb⌉ ==∗
   ∃ hm', ([∗ map] li0 ∈ m, r2av_residual γa γb li0) ∗
   ⌈{sat γa}⌉ ∗ ⌈{sat γb}⌉ ∗
   ⌈r2a_heapUR_inv hm' @ sat γa⌉ ∗
-  ⌈heap_inj_inv_i hm' @ sat γb⌉ ∗
+  ⌈heap_bij_inv_i hm' @ sat γb⌉ ∗
   ⌜h_static_provs hm' = h_static_provs hm⌝.
 Proof.
   iIntros (? Hinj Hm0 Hs) "?? Hinva Hinvb".
@@ -530,15 +530,15 @@ Lemma r2av_shared_from_ab inja' injb' γa γb γ ha hb hm:
   heapUR_trader (sat γ) (sat γb) r2a_heap own_heap_s -∗
   ⌈r2a_memUR_inv ha @ sat γa⌉ -∗
   ⌈r2a_heapUR_inv hm @ sat γa⌉ -∗
-  ⌈heap_inj_inv_i hm @ sat γb⌉ -∗
-  ⌈heap_inj_inv_s hb @ sat γb⌉ -∗
+  ⌈heap_bij_inv_i hm @ sat γb⌉ -∗
+  ⌈heap_bij_inv_s hb @ sat γb⌉ -∗
   ⌈r2a_shared_auth inja' @ sat γa⌉ -∗
-  ⌈heap_inj_shared_auth injb' @ sat γb⌉ -∗
+  ⌈heap_bij_shared_auth injb' @ sat γb⌉ -∗
   ⌈[∗ map] ps↦li0 ∈ r2av_combine inja' injb', r2a_shared ps li0 @ sat γ⌉ -∗
 
   (** interesting part starts here *)
   ⌈r2a_in_inj_inv (r2av_core_a inja' injb') [] @ sat γa⌉ -∗
-  ⌈heap_in_inj_inv (r2av_core_b inja' injb') [] @ sat γb⌉ ==∗⌈sat γ⌉
+  ⌈heap_in_bij_inv (r2av_core_b inja' injb') [] @ sat γb⌉ ==∗⌈sat γ⌉
   (⌈r2a_in_inj_inv (r2av_combine inja' injb') [] @ sat γ⌉ ∗
   ([∗ map] ps↦li0 ∈ r2av_core_b inja' injb', r2av_residual γa γb li0)) ∗
   (** interesting part ends here *)
@@ -547,12 +547,12 @@ Lemma r2av_shared_from_ab inja' injb' γa γb γ ha hb hm:
   heapUR_trader (sat γ) (sat γb) r2a_heap own_heap_s ∗
   ⌈r2a_memUR_inv ha @ sat γa⌉ ∗
   ⌈r2a_heapUR_inv hm @ sat γa⌉ ∗
-  ⌈heap_inj_inv_i hm @ sat γb⌉ ∗
-  ⌈heap_inj_inv_s hb @ sat γb⌉ ∗
+  ⌈heap_bij_inv_i hm @ sat γb⌉ ∗
+  ⌈heap_bij_inv_s hb @ sat γb⌉ ∗
   ⌈r2a_shared_auth inja' @ sat γa⌉ ∗
-  ⌈heap_inj_shared_auth injb' @ sat γb⌉.
+  ⌈heap_bij_shared_auth injb' @ sat γb⌉.
 Proof.
-  iIntros "#????????? #? ? ?". rewrite /heap_in_inj_inv /r2a_in_inj_inv.
+  iIntros "#????????? #? ? ?". rewrite /heap_in_bij_inv /r2a_in_inj_inv.
   have Hempty : ∀ k, k ∈ [] ↔ False by set_solver.
   setoid_rewrite Hempty. setoid_rewrite bi.False_or.
   iEval (rewrite r2av_combine_to_b big_sepM_fmap).
@@ -570,7 +570,7 @@ Proof.
   iMod (heapUR_trade_block with "Htb [$] [$]") as "[? [??]]".
   iMod (memUR_trade_ptsto_big with "Hta [$] [$]") as "[? [??]]".
   iDestruct (heapUR_lookup_block (PROP:=uPred rec_to_asmUR) with "Hma [$]") as %?.
-  iDestruct (heapUR_lookup_block (PROP:=uPred heap_injUR) with "Hmb [$]") as %?.
+  iDestruct (heapUR_lookup_block (PROP:=uPred heap_bijUR) with "Hmb [$]") as %?.
   simplify_eq.
   iDestruct (r2av_combine_val_map with "[$] Hsha Hshb [$] Hva Hvb") as "#?". iFrame.
   iModIntro. erewrite lookup_total_correct => //. rewrite Heq0 Z.add_0_r. iFrame.
@@ -585,10 +585,10 @@ Lemma r2av_shared_to_ab inja' injb' γa γb γ ha hb hm:
   heapUR_trader (sat γb) (sat γ) own_heap_s r2a_heap -∗
   ⌈r2a_memUR_inv ha @ sat γ⌉ -∗
   ⌈r2a_heapUR_inv hm @ sat γa⌉ -∗
-  ⌈heap_inj_inv_i hm @ sat γb⌉ -∗
+  ⌈heap_bij_inv_i hm @ sat γb⌉ -∗
   ⌈r2a_heapUR_inv hb @ sat γ⌉ -∗
   ⌈[∗ map] ps↦li0 ∈ inja', r2a_shared ps li0 @ sat γa⌉ -∗
-  ⌈[∗ map] ps↦li0 ∈ injb', heap_inj_shared ps li0 @ sat γb⌉ -∗
+  ⌈[∗ map] ps↦li0 ∈ injb', heap_bij_shared ps li0 @ sat γb⌉ -∗
   ⌈r2a_shared_auth (r2av_combine inja' injb') @ sat γ⌉ -∗
 
   (** interesting part starts here *)
@@ -596,7 +596,7 @@ Lemma r2av_shared_to_ab inja' injb' γa γb γ ha hb hm:
   ([∗ map] ps↦li0 ∈ r2av_core_b inja' injb', r2av_residual γa γb li0) ==∗
   ∃ hm',
   (⌈r2a_in_inj_inv (r2av_core_a inja' injb') [] @ sat γa⌉ ∗
-  ⌈heap_in_inj_inv (r2av_core_b inja' injb') [] @ sat γb⌉) ∗
+  ⌈heap_in_bij_inv (r2av_core_b inja' injb') [] @ sat γb⌉) ∗
   (** interesting part ends here *)
 
   ⌈{sat γa}⌉ ∗ ⌈{sat γb}⌉ ∗
@@ -604,12 +604,12 @@ Lemma r2av_shared_to_ab inja' injb' γa γb γ ha hb hm:
   heapUR_trader (sat γb) (sat γ) own_heap_s r2a_heap ∗
   ⌈r2a_memUR_inv ha @ sat γ⌉ ∗
   ⌈r2a_heapUR_inv hm' @ sat γa⌉ ∗
-  ⌈heap_inj_inv_i hm' @ sat γb⌉ ∗
+  ⌈heap_bij_inv_i hm' @ sat γb⌉ ∗
   ⌈r2a_heapUR_inv hb @ sat γ⌉ ∗
   ⌈r2a_shared_auth (r2av_combine inja' injb') @ sat γ⌉ ∗ ⌜h_static_provs hm' = h_static_provs hm⌝.
 Proof.
   iIntros "#?????????#Hsa#Hsb???".
-  rewrite /heap_in_inj_inv /r2a_in_inj_inv.
+  rewrite /heap_in_bij_inv /r2a_in_inj_inv.
   have Hempty : ∀ k, k ∈ [] ↔ False by set_solver.
   setoid_rewrite Hempty. setoid_rewrite bi.False_or.
   rewrite {2}r2av_combine_to_b big_sepM_fmap.
@@ -642,12 +642,12 @@ Qed.
 End vertical.
 
 Lemma r2a_bij_vertical m moinit hinit `{!VisNoAng m.(m_trans)} ins f2i :
-  trefines (rec_to_asm ins f2i moinit hinit (rec_heap_inj hinit m))
+  trefines (rec_to_asm ins f2i moinit hinit (rec_heap_bij hinit m))
            (rec_to_asm ins f2i moinit hinit m).
 Proof.
   unshelve apply: mod_prepost_combine_bi.
-  set (Σ := #[satΣ heap_injUR; satΣ rec_to_asmUR]).
-  have ? : satG Σ heap_injUR by apply _.
+  set (Σ := #[satΣ heap_bijUR; satΣ rec_to_asmUR]).
+  have ? : satG Σ heap_bijUR by apply _.
   have ? : satG Σ rec_to_asmUR by apply _.
   clearbody Σ.
   eexists Σ, _, _, _ => γa γb γ.
@@ -662,9 +662,9 @@ Proof.
           ⌜h_static_provs hm = statics⌝ ∗
           ⌈[∗ map] ps↦li0∈inj, r2a_shared ps li0 @ sat γ⌉ ∗
           ⌈r2a_shared_auth inja @ sat γa⌉ ∗
-          ⌈heap_inj_shared_auth injb @ sat γb⌉ ∗
+          ⌈heap_bij_shared_auth injb @ sat γb⌉ ∗
           ⌈r2a_in_inj_inv (inja ∖ r2av_core_a inja injb) [] @ sat γa⌉ ∗
-          ⌈heap_in_inj_inv (injb ∖ r2av_core_b inja injb) [] @ sat γb⌉ ∗
+          ⌈heap_in_bij_inv (injb ∖ r2av_core_b inja injb) [] @ sat γb⌉ ∗
           ([∗ map] ps↦li0 ∈ r2av_core_b inja injb, r2av_residual γa γb li0) ∗
           ⌈r2a_heapUR_inv hm @ sat γa⌉ ∗
           ⌈heapUR_inv own_heap_i hm @ sat γb⌉ ∗
@@ -674,17 +674,17 @@ Proof.
           requirement that the statics stay the same. (It is not used
           in this proof.) *)
           ⌈r2a_statics statics @ sat γa⌉ ∗
-          ⌈heap_inj_statics statics @ sat γb⌉ ∗
+          ⌈heap_bij_statics statics @ sat γb⌉ ∗
           ⌈r2a_statics statics @ sat γ⌉
         else
           ⌜inj = r2av_combine inja injb⌝ ∗
           ⌈[∗ map] ps↦li0∈inja, r2a_shared ps li0 @ sat γa⌉ ∗
-          ⌈[∗ map] ps↦li0∈injb, heap_inj_shared ps li0 @ sat γb⌉ ∗
+          ⌈[∗ map] ps↦li0∈injb, heap_bij_shared ps li0 @ sat γb⌉ ∗
           ⌈r2a_shared_auth inj @ sat γ⌉ ∗
           memUR_trader (sat γ) (sat γa) r2a_mem r2a_mem ∗
           heapUR_trader (sat γ) (sat γb) r2a_heap own_heap_s ∗
           ⌈r2a_statics statics @ sat γa⌉ ∗
-          ⌈heap_inj_statics statics @ sat γb⌉ ∗
+          ⌈heap_bij_statics statics @ sat γb⌉ ∗
           ⌈r2a_statics statics @ sat γ⌉
           )%I. }
   split_and!.
@@ -703,7 +703,7 @@ Proof.
         [apply map_disjoint_difference_r'|].
       rewrite !right_id. iModIntro. iSplit; [iAccu|]. by iApply Hent.
     } {
-      apply: satisfiable_bmono; [apply heap_inj_init|].
+      apply: satisfiable_bmono; [apply heap_bij_init|].
       iIntros "(? & ? & Hinvi & Hinvs)".
       iMod (heapUR_alloc_blocks _ (hinit ∪ staticbs) with "Hinvi") as "[Hinvi Hbs]"; [set_solver|].
       iMod (heapUR_alloc_blocks with "Hinvs") as "[Hinvs $]"; [set_solver|].
@@ -713,7 +713,7 @@ Proof.
     }
     iIntros "Hγa Hγb Hγ (?&?&?&Hinvi&?&?) (?&?&?&?&?)".
     iModIntro. iFrame "#∗". iFrame "#".
-    iExists ∅. rewrite /heap_in_inj_inv /r2a_in_inj_inv !big_sepM_empty. iSplit!.
+    iExists ∅. rewrite /heap_in_bij_inv /r2a_in_inj_inv !big_sepM_empty. iSplit!.
     { iApply (r2a_f2i_trader_init with "Hf2i_full [$]"). } {
       rewrite h_static_provs_heap_from_blocks dom_union_L dom_difference_L.
       rewrite (comm (R:=(=)) (∪)) difference_union_L.
@@ -738,7 +738,7 @@ Proof.
       rewrite elem_of_disjoint.
       iIntros (?[??]%elem_of_dom[??]%elem_of_dom).
       iDestruct (r2a_in_inj_inv_borrow with "Hinj") as (??) "(?&Hp&?&?)"; [apply not_elem_of_nil|done|].
-      iDestruct (heap_in_inj_inv_borrow with "Hinjb") as (???) "(?&?&?&?)"; [apply not_elem_of_nil|done|].
+      iDestruct (heap_in_bij_inv_borrow with "Hinjb") as (???) "(?&?&?&?)"; [apply not_elem_of_nil|done|].
       iApply bupd_plainly.
       iApply (weak_embed_bupd_intro (sat γb) with "[$]").
       iMod (heapUR_trade_block with "[$] [$] Hp") as "[? [??]]".
@@ -755,7 +755,7 @@ Proof.
 
     (** Update the small injections  *)
     iApply (weak_embed_bupd_intro (sat γb) with "[$]").
-    iMod (heap_inj_shared_alloc_big _ injb' with "Hshb") as "[? #Hshbbig]".
+    iMod (heap_bij_shared_alloc_big _ injb' with "Hshb") as "[? #Hshbbig]".
     { apply r2av_proj_b_subseteq. }
     iIntros "!> Hγb".
 
@@ -783,7 +783,7 @@ Proof.
     iMod (r2av_shared_to_ab with "[$] Hγa Hγb Hta Htb [$] [$] [$] [$] [$] [$] [$] [$] [$]") as (?) "([??] & ? & ? & ? & ? & ? & ? & ? & ? & ? & %Heqm')".
 
     iDestruct (r2a_in_inj_inv_combine with "Hinja [$]") as "Hinja".
-    iDestruct (heap_in_inj_inv_combine with "Hinjb [$]") as "Hinjb".
+    iDestruct (heap_in_bij_inv_combine with "Hinjb [$]") as "Hinjb".
     erewrite r2av_recombine_a => //. erewrite r2av_recombine_b => //.
     2: set_solver.
 
@@ -814,15 +814,15 @@ Proof.
     + done.
   - move => /= ??? e ???????. apply pp_to_all_forall => ? r Hppex.
     iIntros "??? [[[? Hinvma] [Hinvha Hva]] Hr] [[Hinvb Hvb] ?] (%inja & %injb & %inj & %statics & % & #? & % & ? & ? & Hsh & Hta & Htb & Hsa & Hsb & #Hs)".
-    iDestruct (big_sepL2_length (PROP:=uPred heap_injUR) with "[$]") as %?.
+    iDestruct (big_sepL2_length (PROP:=uPred heap_bijUR) with "[$]") as %?.
     rewrite heap_of_event_event_set_vals_heap vals_of_event_event_set_vals_heap //.
     iDestruct "Hinvha" as "(Hinvha & [%inja' [Hsha Hinja]] & Hsa1)".
     iDestruct "Hinvb" as "(Hinvib & Hinvsb & [%injb' [Hshb Hinjb]] & Hsb1 & Hsb2)".
     iDestruct (r2a_statics_agree with "Hsa Hsa1") as %?.
-    iDestruct (heap_inj_statics_eq with "Hsb1 Hsb2") as %Heq.
-    iDestruct (heap_inj_statics_eq with "Hsb Hsb1") as %?.
+    iDestruct (heap_bij_statics_eq with "Hsb1 Hsb2") as %Heq.
+    iDestruct (heap_bij_statics_eq with "Hsb Hsb1") as %?.
     iDestruct (r2a_shared_lookup_big with "Hsha [$]") as %?.
-    iDestruct (heap_inj_shared_lookup_big with "Hshb [$]") as %?. subst.
+    iDestruct (heap_bij_shared_lookup_big with "Hshb [$]") as %?. subst.
 
     (** Update the large injection *)
     iApply (weak_embed_bupd_intro (sat γ) with "[$]").
@@ -832,7 +832,7 @@ Proof.
 
     (** Split the small invariants *)
     iDestruct (r2a_in_inj_inv_split (r2av_core_a inja' injb') with "Hinja") as "[? Hinja]"; [apply r2av_core_a_subseteq|].
-    iDestruct (heap_in_inj_inv_split (r2av_core_b inja' injb') with "Hinjb") as "[? Hinjb]"; [apply r2av_core_b_subseteq|].
+    iDestruct (heap_in_bij_inv_split (r2av_core_b inja' injb') with "Hinjb") as "[? Hinjb]"; [apply r2av_core_b_subseteq|].
 
     (** Combine the small invariants to get the large invariant. *)
     iApply (weak_embed_bupd_intro (sat γ) with "[$]").
@@ -859,6 +859,6 @@ Proof.
 Qed.
 
 Lemma r2a_bij_vertical_N m moinit hinit `{!VisNoAng m.(m_trans)} ins f2i n:
-  trefines (rec_to_asm ins f2i moinit hinit (rec_heap_inj_N n hinit m))
+  trefines (rec_to_asm ins f2i moinit hinit (rec_heap_bij_N n hinit m))
            (rec_to_asm ins f2i moinit hinit m).
 Proof. elim: n => //= ??. etrans; [by apply: r2a_bij_vertical|eauto]. Qed.
