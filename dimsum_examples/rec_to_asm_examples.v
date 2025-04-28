@@ -1,5 +1,5 @@
 From dimsum.core Require Export proof_techniques.
-From dimsum.examples Require Import rec asm rec_to_asm.
+From dimsum.examples Require Import rec asm rec_to_asm2.
 
 Local Open Scope Z_scope.
 
@@ -151,7 +151,9 @@ Proof.
     iMod (r2a_mem_alloc with "[$]") as (?) "[? Hp]"; [done|done|].
     iDestruct "Hp" as "[[% ?] _]" => /=. rewrite Z.add_0_l.
     iMod (r2a_mem_update with "[$] [$]") as "[? ?]". simplify_map_eq'.
-    iMod (r2a_heap_alloc _ (heap_fresh ∅ h) 1 with "[$]") as "[??]". { apply heap_fresh_is_fresh. }
+    iMod (r2a_heap_alloc _ (heap_fresh ∅ h) 1 with "[$]") as "[?[Hd Hb]]". { apply heap_fresh_is_fresh. }
+    rewrite big_sepM_kmap_intro big_sepM_zero_block /=.
+    iDestruct "Hb" as "[? _]".
     iMod (r2a_heap_update with "[$] [$]") as "[? ?]".
     iModIntro. iFrame "∗#". iSplit; [|iSplit; [|iDestruct "Hf2i" as "-#Hf2i"; iAccu]].
     - rewrite !r2a_args_cons ?r2a_args_nil; [|done..].
@@ -165,7 +167,9 @@ Proof.
   move: Hr => [? Hm]; simplify_map_eq'.
   tstep_i => ??. simplify_map_eq'.
   iSatStart. iIntros!.
-  iDestruct select (r2a_mem_constant _ _) as "Hret".
+  iDestruct select (_ ↦m _)%I as "Hret".
+  iDestruct select (_ ⤚h _)%I as "Hdom".
+  iDestruct select (_ ↦h _)%I as "Hh".
   iDestruct (r2a_mem_lookup with "[$] [$]") as %?.
   iSatStop.
   tstep_i; simplify_map_eq'. simplify_map_list. simplify_map_eq'. split!.
@@ -180,9 +184,12 @@ Proof.
   1: { iSatMonoBupd.
        iMod (r2a_mem_delete 1 with "[$] [Hret]") as "?"; [done|..].
        { iSplitL; [|done]. iExists _. iFrame. }
-       iMod (r2a_heap_free _ (heap_fresh ∅ h) with "[$] [$]") as "?"; first done.
-       iModIntro. iFrame. simplify_map_eq'.
-       by rewrite Z.sub_add.
+       iMod (r2a_heap_free _ (heap_fresh ∅ h) with "[$] [Hdom Hh]") as "?"; first done.
+       - (* TODO: Is there a better proof here? *)
+         iSplitL "Hdom"; last first.
+         + rewrite big_sepM_kmap_intro. iApply big_sepM_insert; [|iFrame; by iApply big_sepM_empty]. done.
+         + by have -> : dom (zero_block 1) = dom (<[0%nat + 0:=1]> ∅ :> gmap _ _).
+       - iModIntro. iFrame. simplify_map_eq'. by rewrite Z.sub_add.
   }
   1: { unfold r2a_regs_ret; split!; simplify_map_eq' => //; by simplify_map_list. }
   1: { by simplify_map_list. }

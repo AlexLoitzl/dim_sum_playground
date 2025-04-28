@@ -3,11 +3,11 @@ From iris.algebra Require Import agree gset.
 From dimsum.core Require Export proof_techniques prepost.
 From dimsum.core Require Import link.
 From dimsum.core Require Import axioms.
+From dimsum.core Require Import weak_embed.
 From dimsum.examples Require Import rec asm.
+From dimsum.examples Require Export heapUR memUR.
 
 Local Open Scope Z_scope.
-
-(** * THIS FILE IS OBSOLETE! USE rec_to_asm2 INSTEAD! *)
 
 (** * rec_to_asm *)
 
@@ -28,198 +28,78 @@ Definition r2a_regs_ret (rs rsold : gmap string Z) (av : Z) : Prop :=
   rs !!! "R0" = av ∧
   map_preserved saved_registers rsold rs.
 
-(** * Mapping of provenances *)
-Inductive rec_to_asm_elem :=
-| R2AShared (a : Z) | R2AConstant (h : gmap Z val).
-
-Definition r2a_rh_shared (rh : gmap prov rec_to_asm_elem) : gmap prov Z :=
-  omap (λ k, if k is R2AShared a then Some a else None) rh.
-
-Definition r2a_rh_constant (rh : gmap prov rec_to_asm_elem) : gmap prov (gmap Z val) :=
-  omap (λ k, if k is R2AConstant b then Some b else None) rh.
-
-Lemma r2a_ih_shared_Some h p a :
-  r2a_rh_shared h !! p = Some a ↔ h !! p = Some (R2AShared a).
-Proof.
-  rewrite /r2a_rh_shared lookup_omap_Some. split.
-  - move => [?[??]]. case_match; naive_solver.
-  - move => ?. split!.
-Qed.
-
-Lemma r2a_rh_shared_None h p :
-  r2a_rh_shared h !! p = None ↔ ¬ ∃ a, h !! p = Some (R2AShared a).
-Proof. rewrite eq_None_not_Some /is_Some. setoid_rewrite r2a_ih_shared_Some. naive_solver. Qed.
-
-Lemma r2a_rh_shared_empty:
-  r2a_rh_shared ∅ = ∅.
-Proof. by rewrite /r2a_rh_shared omap_empty. Qed.
-
-Lemma r2a_rh_shared_union rh1 rh2:
-  rh1 ##ₘ rh2 →
-  r2a_rh_shared (rh1 ∪ rh2) = r2a_rh_shared rh1 ∪ r2a_rh_shared rh2.
-Proof. apply map_omap_union. Qed.
-
-Lemma r2a_rh_shared_fmap rh:
-  r2a_rh_shared (R2AShared <$> rh) = rh.
-Proof.
-  apply map_eq => ?. apply option_eq => ?.
-  rewrite r2a_ih_shared_Some lookup_fmap fmap_Some.
-  naive_solver.
-Qed.
-
-Lemma r2a_rh_shared_fmap_l rh:
-  R2AShared <$> r2a_rh_shared rh ⊆ rh.
-Proof.
-  apply map_subseteq_spec => ??.
-  rewrite lookup_fmap fmap_Some. move => [? [/r2a_ih_shared_Some??]].
-  naive_solver.
-Qed.
-
-Lemma r2a_rh_shared_fmap_constant rh:
-  r2a_rh_shared (R2AConstant <$> rh) = ∅.
-Proof.
-  apply map_eq => ?. apply option_eq => ?. rewrite r2a_ih_shared_Some lookup_fmap fmap_Some. naive_solver.
-Qed.
-
-Lemma r2a_rh_shared_insert i h rh:
-  r2a_rh_shared (<[i := R2AShared h]> rh) = <[i := h]> (r2a_rh_shared rh).
-Proof.
-  apply map_eq => ?. apply option_eq => ?. rewrite !r2a_ih_shared_Some.
-  rewrite !lookup_insert_Some !r2a_ih_shared_Some. naive_solver.
-Qed.
-
-Lemma r2a_rh_shared_insert_const i h rh:
-  (∀ x, rh !! i ≠ Some (R2AShared x)) →
-  r2a_rh_shared (<[i := R2AConstant h]> rh) = r2a_rh_shared rh.
-Proof.
-  move => ?.
-  apply map_eq => ?. apply option_eq => ?. rewrite !r2a_ih_shared_Some.
-  rewrite lookup_insert_Some. naive_solver.
-Qed.
-
-Lemma r2a_rh_shared_delete i rh:
-  r2a_rh_shared (delete i rh) = delete i (r2a_rh_shared rh).
-Proof.
-  apply map_eq => ?. apply option_eq => ?.
-  by rewrite !r2a_ih_shared_Some !lookup_delete_Some !r2a_ih_shared_Some.
-Qed.
-
-Lemma r2a_rh_constant_Some h p a :
-  r2a_rh_constant h !! p = Some a ↔ h !! p = Some (R2AConstant a).
-Proof.
-  rewrite /r2a_rh_constant lookup_omap_Some. split.
-  - move => [?[??]]. case_match; naive_solver.
-  - move => ?. split!.
-Qed.
-
-Lemma r2a_rh_constant_None h p :
-  r2a_rh_constant h !! p = None ↔ ¬ ∃ a, h !! p = Some (R2AConstant a).
-Proof. rewrite eq_None_not_Some /is_Some. setoid_rewrite r2a_rh_constant_Some. naive_solver. Qed.
-
-Lemma r2a_rh_constant_empty:
-  r2a_rh_constant ∅ = ∅.
-Proof. by rewrite /r2a_rh_constant omap_empty. Qed.
-
-Lemma r2a_rh_constant_union rh1 rh2:
-  rh1 ##ₘ rh2 →
-  r2a_rh_constant (rh1 ∪ rh2) = r2a_rh_constant rh1 ∪ r2a_rh_constant rh2.
-Proof. apply map_omap_union. Qed.
-
-Lemma r2a_rh_constant_fmap rh :
-  r2a_rh_constant (R2AConstant <$> rh) = rh.
-Proof.
-  apply map_eq => ?. apply option_eq => ?.
-  rewrite r2a_rh_constant_Some lookup_fmap fmap_Some.
-  naive_solver.
-Qed.
-
-Lemma r2a_rh_constant_fmap_l rh:
-  R2AConstant <$> r2a_rh_constant rh ⊆ rh.
-Proof.
-  apply map_subseteq_spec => ??.
-  rewrite lookup_fmap fmap_Some. move => [? [/r2a_rh_constant_Some??]].
-  naive_solver.
-Qed.
-
-Lemma r2a_rh_constant_fmap_shared rh:
-  r2a_rh_constant (R2AShared <$> rh) = ∅.
-Proof.
-  apply map_eq => ?. apply option_eq => ?. rewrite r2a_rh_constant_Some lookup_fmap fmap_Some. naive_solver.
-Qed.
-
-Lemma r2a_rh_constant_delete i rh:
-  r2a_rh_constant (delete i rh) = delete i (r2a_rh_constant rh).
-Proof.
-  apply map_eq => ?. apply option_eq => ?.
-  by rewrite !r2a_rh_constant_Some !lookup_delete_Some !r2a_rh_constant_Some.
-Qed.
-
-Lemma r2a_rh_constant_insert i h rh:
-  r2a_rh_constant (<[i := R2AConstant h]> rh) = <[i := h]> (r2a_rh_constant rh).
-Proof.
-  apply map_eq => ?. apply option_eq => ?. rewrite !r2a_rh_constant_Some.
-  rewrite !lookup_insert_Some !r2a_rh_constant_Some. naive_solver.
-Qed.
-
-Lemma r2a_rh_constant_insert_shared i a rh:
-  (∀ x, rh !! i ≠ Some (R2AConstant x)) →
-  r2a_rh_constant (<[i := R2AShared a]> rh) = r2a_rh_constant rh.
-Proof.
-  move => ?.
-  apply map_eq => ?. apply option_eq => ?. rewrite !r2a_rh_constant_Some.
-  rewrite lookup_insert_Some. naive_solver.
-Qed.
-
-Lemma r2a_rh_shared_constant_disj rh:
-  R2AShared <$> (r2a_rh_shared rh) ##ₘ R2AConstant <$> (r2a_rh_constant rh).
-Proof.
-  apply map_disjoint_spec => ???. rewrite !lookup_fmap !fmap_Some.
-  setoid_rewrite r2a_ih_shared_Some. setoid_rewrite r2a_rh_constant_Some. naive_solver.
-Qed.
-
-Lemma r2a_rh_shared_constant rh :
-  (R2AShared <$> (r2a_rh_shared rh)) ∪ (R2AConstant <$> (r2a_rh_constant rh)) = rh.
-Proof.
-  apply map_eq => ?. apply option_eq => e.
-  rewrite !lookup_union_Some. 2: { apply r2a_rh_shared_constant_disj. }
-  rewrite !lookup_fmap !fmap_Some.
-  setoid_rewrite r2a_ih_shared_Some. setoid_rewrite r2a_rh_constant_Some.
-  split; destruct e; naive_solver.
-Qed.
-
-(** * Ghost state *)
-(** ** Ghost state definitions *)
-Canonical Structure rec_to_asm_elemO := leibnizO rec_to_asm_elem.
-
+(** * Camera definition *)
 Definition rec_to_asmUR : ucmra :=
-  prodUR (prodUR (prodUR
-   (optionO (agree (gset prov)))
-   (gmap_viewUR prov (agreeR rec_to_asm_elemO)))
-   (gmap_viewUR Z (agreeR (optionO ZO))))
-   (optionUR (agreeR (leibnizO (gmap string Z)))).
+  prodUR (optionO (agree (gset prov)))
+ (prodUR (gmap_viewUR prov (agreeR Z))
+ (prodUR (optionUR (agreeR (leibnizO (gmap string Z))))
+ (prodUR heapUR
+    (memUR)))).
 
 Global Instance rec_to_asmUR_shrink : Shrink rec_to_asmUR.
 Proof. solve_shrink. Qed.
 
-Definition r2a_heap_inj (r : (gmap_viewUR prov (agreeR rec_to_asm_elemO))) : rec_to_asmUR := (None, r, ε, ε).
-Definition r2a_mem_inj (r : (gmap_viewUR Z (agreeR $ optionO ZO))) : rec_to_asmUR := (None, ε, r, ε).
-Definition r2a_f2i_inj (f2i : gmap string Z) : rec_to_asmUR := (None, ε, ε, Some (to_agree (f2i : leibnizO (gmap string Z)))).
-Definition r2a_statics_inj (r : agree (gset prov)) : rec_to_asmUR := (Some r, ε, ε, ε).
+Global Instance rec_to_asmUR_discrete : CmraDiscrete rec_to_asmUR.
+Proof. apply _. Qed.
 
-Definition r2a_heap_auth (h : gmap prov rec_to_asm_elemO) : uPred rec_to_asmUR :=
-  uPred_ownM (r2a_heap_inj (gmap_view_auth (DfracOwn 1) (to_agree <$> h))).
-Definition r2a_heap_shared (p : prov) (a : Z) : uPred rec_to_asmUR :=
-  uPred_ownM (r2a_heap_inj (gmap_view_frag p DfracDiscarded (to_agree $ R2AShared a))).
-Definition r2a_heap_constant (p : prov) (b : gmap Z val) : uPred rec_to_asmUR :=
-  uPred_ownM (r2a_heap_inj (gmap_view_frag p (DfracOwn 1) (to_agree $ R2AConstant b))).
+Program Definition r2a_heap : BiOwn (uPredI rec_to_asmUR) heapUR := {|
+  bi_own r := uPred_ownM (None, (ε, (ε, (r, ε))))
+|}.
+Next Obligation.
+  move => /= ?. etrans; [apply uPred.ownM_valid|]. iPureIntro.
+  by move => [_ [_ [_ []]]].
+Qed.
+Next Obligation. move => ??/=. by rewrite -!uPred.ownM_op -!pair_op_2 -pair_op_1. Qed.
+Next Obligation.
+  move => ???/=. apply uPred.bupd_ownM_update.
+  by repeat (apply prod_update; [done|] => /=).
+Qed.
+Next Obligation. solve_proper. Qed.
 
-Definition r2a_mem_auth (amem : gmap Z (option Z)) : uPred rec_to_asmUR :=
-  uPred_ownM (r2a_mem_inj (gmap_view_auth (DfracOwn 1) (to_agree <$> amem))).
-Definition r2a_mem_constant (a : Z) (v : option Z) : uPred rec_to_asmUR :=
-  uPred_ownM (r2a_mem_inj (gmap_view_frag a (DfracOwn 1) (to_agree v))).
+Program Definition r2a_mem : BiOwn (uPredI rec_to_asmUR) memUR := {|
+  bi_own r := uPred_ownM (None, (ε, (ε, (ε, r))))
+|}.
+Next Obligation.
+  move => /= ?. etrans; [apply uPred.ownM_valid|]. iPureIntro.
+  by move => [_ [_ [_ []]]].
+Qed.
+Next Obligation. move => ??/=. by rewrite -!uPred.ownM_op -!pair_op_2 -?pair_op_1. Qed.
+Next Obligation.
+  move => ???/=. apply uPred.bupd_ownM_update.
+  by repeat (apply prod_update; [done|] => /=).
+Qed.
+Next Obligation. solve_proper. Qed.
 
-Definition r2a_mem_map (m : gmap Z (option Z)) : uPred rec_to_asmUR :=
-  ([∗ map] a↦v ∈ m, r2a_mem_constant a v).
+Definition r2a_shared_inj (r : (gmap_viewUR prov (agreeR Z))) : rec_to_asmUR
+  := (None, (r, ε)).
+Definition r2a_f2i_inj (f2i : gmap string Z) : rec_to_asmUR := (None, (ε, (Some (to_agree (f2i : leibnizO (gmap string Z))), ε))).
+Definition r2a_statics_inj (r : agree (gset prov)) : rec_to_asmUR := (Some r, ε).
+
+Notation r2a_heapUR_inv := (heapUR_inv r2a_heap).
+Notation r2a_memUR_inv := (memUR_inv r2a_mem).
+
+Notation "l '↦h' dq v" := (heapUR_ptsto r2a_heap l dq v)
+  (at level 20, dq custom dfrac,format "l  ↦h dq  v") : bi_scope.
+Notation "p '↦∗h' dq b" := (heapUR_block r2a_heap p dq b)
+  (at level 20, dq custom dfrac at level 1, format "p  '↦∗h' dq  b") : bi_scope.
+Notation "p '⤚h' dq d" := (heapUR_dom r2a_heap p dq d)
+  (at level 20, dq custom dfrac at level 1, format "p  '⤚h' dq  d") : bi_scope.
+Notation "a '↦m' dq v" := (memUR_ptsto r2a_mem a dq v)
+  (at level 20, dq custom dfrac, format "a  ↦m dq  v") : bi_scope.
+
+
+Definition r2a_shared_auth_raw (ps : gmap prov Z) : uPred (rec_to_asmUR) :=
+  uPred_ownM (r2a_shared_inj $ gmap_view_auth (DfracOwn 1) (to_agree <$> ps)).
+Definition r2a_shared (p : prov) (a : Z) : uPred rec_to_asmUR :=
+  uPred_ownM (r2a_shared_inj (gmap_view_frag p DfracDiscarded (to_agree $ a))).
+Definition r2a_shared_auth (ps : gmap prov Z) : uPred (rec_to_asmUR) :=
+  r2a_shared_auth_raw ps ∗ [∗ map] p↦a∈ps, r2a_shared p a.
+
+Notation r2a_mem_map m := ([∗ map] a↦v ∈ m, a ↦m v)%I.
+(* Definition r2a_mem_map (m : gmap Z (option Z)) : uPred rec_to_asmUR := *)
+
+Definition r2a_mem_uninit (a : Z) (len : Z) : uPred rec_to_asmUR :=
+  [∗ list] a ∈ seqZ a len, ∃ v, a ↦m (Some v).
 
 Definition r2a_f2i_full (f2i : gmap string Z) : uPred rec_to_asmUR :=
   uPred_ownM (r2a_f2i_inj f2i).
@@ -243,358 +123,122 @@ Lemma r2a_statics_agree ps1 ps2 :
 Proof.
   apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id. rewrite -uPred.ownM_op.
   etrans; [apply uPred.ownM_valid|]. iPureIntro.
-  move => [/= [/= [/=]]]. rewrite -Some_op Some_valid to_agree_op_valid => ??.
+  move => [/=]. rewrite -Some_op Some_valid to_agree_op_valid => ??.
   by fold_leibniz.
 Qed.
 
-Lemma r2a_mem_constant_excl a v1 v2 :
-  r2a_mem_constant a v1 -∗
-  r2a_mem_constant a v2 -∗
-  False.
-Proof.
-  apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id. rewrite -uPred.ownM_op.
-  etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [[?/=/gmap_view_frag_op_valid[??]]?].
-  naive_solver.
-Qed.
-
-Lemma r2a_mem_map_constant_excl m1 a v :
-  r2a_mem_map m1 -∗
-  r2a_mem_constant a v -∗
-  ⌜m1 !! a = None⌝.
-Proof.
-  iIntros "Hmem Hc".
-  destruct (m1 !! a) eqn:? => //.
-  iDestruct (big_sepM_lookup with "[$]") as "?"; [done|].
-  iDestruct (r2a_mem_constant_excl with "[$] [$]") as %[].
-Qed.
-
-Lemma r2a_mem_map_excl m1 m2 :
-  r2a_mem_map m1 -∗
-  r2a_mem_map m2 -∗
-  ⌜m1 ##ₘ m2⌝.
-Proof.
-  iIntros "Hm1 Hm2". rewrite map_disjoint_alt. iIntros (i).
-  destruct (m1 !! i) eqn:?; [|iPureIntro; naive_solver].
-  destruct (m2 !! i) eqn:?; [|iPureIntro; naive_solver].
-  iDestruct (big_sepM_lookup with "[$]") as "?"; [done|].
-  iDestruct (big_sepM_lookup with "[$]") as "?"; [done|].
-  iDestruct (r2a_mem_constant_excl with "[$] [$]") as %[].
-Qed.
-
-Lemma r2a_mem_map_union m1 m2 :
-  m1 ##ₘ m2 →
-  r2a_mem_map (m1 ∪ m2) ⊣⊢ r2a_mem_map m1 ∗ r2a_mem_map m2.
-Proof. apply big_sepM_union. Qed.
-
-Lemma r2a_heap_alloc' rh p b:
-  rh !! p = None →
-  r2a_heap_auth rh ⊢ |==> r2a_heap_auth (<[p := R2AConstant b]> rh) ∗ r2a_heap_constant p b.
-Proof.
-  move => ?.
-  rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
-  apply prod_update; [|done]. apply prod_update; [|done].
-  apply prod_update; [done|]. rewrite fmap_insert.
-  apply gmap_view_alloc; [|done..]. by rewrite lookup_fmap fmap_None.
-Qed.
-
-Lemma r2a_heap_alloc_big' rh rh' :
-  (R2AConstant <$> rh') ##ₘ rh →
-  r2a_heap_auth rh ⊢ |==> r2a_heap_auth ((R2AConstant <$> rh') ∪ rh) ∗ [∗ map] p↦a∈rh', r2a_heap_constant p a.
-Proof.
-  iIntros (?) "Hh".
-  iInduction rh' as [|p a rh' ?] "IH" using map_ind;
-    rewrite ->?fmap_empty, ?fmap_insert in *; decompose_map_disjoint.
-  { rewrite left_id big_sepM_empty. by iFrame. }
-  iMod ("IH" with "[//] [$]") as "[??]". rewrite -insert_union_l.
-  iMod (r2a_heap_alloc' with "[$]") as "[$ ?]".
-  { apply lookup_union_None. split!. rewrite lookup_fmap. by apply fmap_None. }
-  rewrite big_sepM_insert //. by iFrame.
-Qed.
-
-Lemma r2a_heap_to_shared' p h rh a:
-  r2a_heap_auth rh ∗ r2a_heap_constant p h ⊢ |==> r2a_heap_auth (<[p := R2AShared a]> rh) ∗ r2a_heap_shared p a.
-Proof.
-  rewrite -!uPred.ownM_op. apply uPred.bupd_ownM_update. rewrite -!pair_op_1.
-  apply prod_update; [|done]. apply prod_update; [|done]. apply prod_update; [done|].
-  etrans.
-  - by apply (gmap_view_replace _ _ _ (to_agree (R2AShared a))).
-  - apply cmra_update_op; [by rewrite fmap_insert|].
-    apply gmap_view_frag_persist.
-Qed.
-
-Lemma r2a_heap_alloc_shared' rh p a:
-  rh !! p = None →
-  r2a_heap_auth rh ⊢ |==> r2a_heap_auth (<[p := R2AShared a]> rh) ∗ r2a_heap_shared p a.
-Proof.
-  iIntros (?) "?".
-  iMod (r2a_heap_alloc' _ _ ∅ with "[$]"); [done|].
-  iMod (r2a_heap_to_shared' with "[$]"). iModIntro. by rewrite insert_insert.
-Qed.
-
-Lemma r2a_heap_alloc_shared_big' rh rh' :
-  (R2AShared <$> rh') ##ₘ rh →
-  r2a_heap_auth rh ⊢ |==> r2a_heap_auth ((R2AShared <$> rh') ∪ rh) ∗ [∗ map] p↦a∈rh', r2a_heap_shared p a.
-Proof.
-  iIntros (?) "Hh".
-  iInduction rh' as [|p a rh' ?] "IH" using map_ind;
-    rewrite ->?fmap_empty, ?fmap_insert in *; decompose_map_disjoint.
-  { rewrite left_id big_sepM_empty. by iFrame. }
-  iMod ("IH" with "[//] [$]") as "[??]". rewrite -insert_union_l.
-  iMod (r2a_heap_alloc_shared' with "[$]") as "[$ ?]".
-  { apply lookup_union_None. split!. rewrite lookup_fmap. by apply fmap_None. }
-  rewrite big_sepM_insert //. by iFrame.
-Qed.
-
-Lemma r2a_heap_update' p h h' rh :
-  r2a_heap_auth rh ∗ r2a_heap_constant p h ⊢ |==> r2a_heap_auth (<[p := R2AConstant h']> rh) ∗ r2a_heap_constant p h'.
-Proof.
-  rewrite -!uPred.ownM_op. apply uPred.bupd_ownM_update. rewrite -!pair_op_1.
-  apply prod_update; [|done]. apply prod_update; [|done]. apply prod_update; [done|].
-  rewrite fmap_insert. by apply gmap_view_replace.
-Qed.
-
-Lemma r2a_heap_free' h p h' :
-  r2a_heap_auth h ∗ r2a_heap_constant p h' ⊢ |==> r2a_heap_auth (delete p h).
-Proof.
-  rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update. rewrite -pair_op_1.
-  apply prod_update; [|done]. apply prod_update; [|done]. apply prod_update; [done|].
-  rewrite fmap_delete. by apply gmap_view_delete.
-Qed.
-
-Lemma r2a_heap_free_big' h m :
-  r2a_heap_auth h -∗
-  ([∗ map] p↦a ∈m, r2a_heap_constant p a) ==∗
-  r2a_heap_auth (h ∖ (R2AConstant <$> m)).
-Proof.
-  iIntros "Hauth Hm".
-  iInduction m as [|a v m' ?] "IH" using map_ind. { iModIntro. by rewrite fmap_empty right_id_L. }
-  rewrite big_sepM_insert //. iDestruct "Hm" as "[? Hm]".
-  iMod ("IH" with "[$] [$]"). iMod (r2a_heap_free' with "[$]"). iModIntro.
-  rewrite fmap_insert. by rewrite -delete_difference.
-Qed.
-
-Lemma r2a_heap_lookup' h p h' :
-  r2a_heap_auth h -∗
-  r2a_heap_constant p h' -∗
-  ⌜h !! p = Some (R2AConstant h')⌝.
-Proof.
-  apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id. rewrite -uPred.ownM_op.
-  etrans; [apply uPred.ownM_valid|]. iPureIntro.
-  move => [[[_ /(gmap_view_both_dfrac_valid_discrete_total _ _ _)+] _] _].
-  move => [? [_ [_ [/lookup_fmap_Some[?[??]] [? +]]]]]. subst.
-  move => /to_agree_included_L. naive_solver.
-Qed.
-
-Lemma r2a_heap_shared_lookup' h p a :
-  r2a_heap_auth h -∗
-  r2a_heap_shared p a -∗
-  ⌜h !! p = Some (R2AShared a)⌝.
-Proof.
-  apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id. rewrite -uPred.ownM_op.
-  etrans; [apply uPred.ownM_valid|]. iPureIntro.
-  move => [[[_ /(gmap_view_both_dfrac_valid_discrete_total _ _ _)+] _]_].
-  move => [? [_ [_ [/lookup_fmap_Some[?[??]] [? +]]]]]. subst.
-  move => /to_agree_included_L. naive_solver.
-Qed.
-
-Lemma r2a_heap_lookup_big' m h :
-  r2a_heap_auth h -∗
-  ([∗ map] p↦b∈m, r2a_heap_constant p b) -∗
-  ⌜m ⊆ r2a_rh_constant h⌝.
-Proof.
-  iIntros "Ha Hm".
-  iInduction m as [|a v m' ?] "IH" using map_ind. { iPureIntro. apply map_empty_subseteq. }
-  rewrite big_sepM_insert //. iDestruct "Hm" as "[Hv Hm]".
-  iDestruct (r2a_heap_lookup' with "[$] [$]") as %?.
-  iDestruct ("IH" with "[$] [$]") as %?. iPureIntro.
-  apply insert_subseteq_l; [|done]. by apply r2a_rh_constant_Some.
-Qed.
-
-Lemma r2a_heap_shared_lookup_big' m h :
-  r2a_heap_auth h -∗
-  ([∗ map] p↦a∈m, r2a_heap_shared p a) -∗
-  ⌜m ⊆ r2a_rh_shared h⌝.
-Proof.
-  iIntros "Ha Hm".
-  iInduction m as [|a v m' ?] "IH" using map_ind. { iPureIntro. apply map_empty_subseteq. }
-  rewrite big_sepM_insert //. iDestruct "Hm" as "[Hv Hm]".
-  iDestruct (r2a_heap_shared_lookup' with "[$] [$]") as %?.
-  iDestruct ("IH" with "[$] [$]") as %?. iPureIntro.
-  apply insert_subseteq_l; [|done]. by apply r2a_ih_shared_Some.
-Qed.
-
-Lemma r2a_heap_shared_ag p a1 a2 :
-  r2a_heap_shared p a1 -∗
-  r2a_heap_shared p a2 -∗
+Lemma r2a_shared_agree p a1 a2 :
+  r2a_shared p a1 -∗
+  r2a_shared p a2 -∗
   ⌜a1 = a2⌝.
 Proof.
   apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id. rewrite -uPred.ownM_op.
   etrans; [apply uPred.ownM_valid|]. iPureIntro.
-  move => [[[/=_ /gmap_view_frag_op_valid[?/to_agree_op_valid ?]] ?]?].
-  naive_solver.
+  move => [/= _ [/= ]]. move => /gmap_view_frag_op_valid [_ /to_agree_op_inv_L ->].
+  done.
 Qed.
 
-Lemma r2a_heap_shared_ag_big ps p a :
-  ([∗ map] p↦z∈ps, r2a_heap_shared p z) -∗
-  r2a_heap_shared p a -∗
+Lemma r2a_shared_agree_big ps p a :
+  ([∗ map] p↦z∈ps, r2a_shared p z) -∗
+  r2a_shared p a -∗
   ⌜a = default a (ps !! p)⌝.
 Proof.
   iIntros "Hps Hp".
   destruct (ps !! p) as [z'|] eqn:Hp => //=.
   iDestruct (big_sepM_lookup with "Hps") as "?"; [done|].
   iAssert ⌜z' = a⌝%I as %?; [|done].
-  by iApply (r2a_heap_shared_ag with "[$]").
+  by iApply (r2a_shared_agree with "[$]").
 Qed.
 
-Lemma r2a_mem_alloc' a v amem :
-  amem !! a = None →
-  r2a_mem_auth amem ⊢ |==> r2a_mem_auth (<[a := v]> amem) ∗ r2a_mem_constant a v.
+Lemma r2a_shared_alloc_raw p a inj :
+  inj !! p = None →
+  r2a_shared_auth_raw inj ⊢ |==>
+  r2a_shared_auth_raw (<[p := a]>inj) ∗ r2a_shared p a.
 Proof.
-  move => ?.
-  rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
-  rewrite -!pair_op_1. rewrite -!pair_op_2.
-  apply prod_update; [|done]. apply prod_update; [done|]. rewrite fmap_insert.
-  apply gmap_view_alloc; [|done..]. by rewrite lookup_fmap fmap_None.
+  move => ?. rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
+  apply prod_update; [done|] => /=. apply prod_update; [|done] => /=.
+  rewrite fmap_insert. apply gmap_view_alloc => //.
+  by rewrite lookup_fmap fmap_None.
 Qed.
 
-Lemma r2a_mem_alloc_big' mem mem' :
-  mem' ##ₘ mem →
-  r2a_mem_auth mem ⊢ |==> r2a_mem_auth (mem' ∪ mem) ∗ r2a_mem_map mem'.
+Lemma r2a_shared_alloc p a inj :
+  inj !! p = None →
+  r2a_shared_auth inj ⊢ |==>
+  r2a_shared_auth (<[p := a]>inj) ∗ r2a_shared p a.
 Proof.
-  iIntros (?) "Hmem". rewrite /r2a_mem_map.
-  iInduction mem' as [|a v mem' ?] "IH" using map_ind; decompose_map_disjoint.
-  { rewrite left_id big_sepM_empty. by iFrame. }
-  iMod ("IH" with "[//] [$]") as "[??]". rewrite -insert_union_l.
-  iMod (r2a_mem_alloc' a with "[$]") as "[$ ?]". { by apply lookup_union_None. }
-  rewrite big_sepM_insert //. by iFrame.
+  iIntros (?) "[??]". iMod (r2a_shared_alloc_raw with "[$]") as "[$ #$]"; [done|].
+  iModIntro. by iApply big_sepM_insert_2.
 Qed.
 
-Lemma r2a_mem_update' v' a v amem :
-  r2a_mem_auth amem ∗ r2a_mem_constant a v ⊢ |==> r2a_mem_auth (<[a := v']> amem) ∗ r2a_mem_constant a v'.
+Lemma r2a_shared_lookup_raw p a inj  :
+  r2a_shared_auth_raw inj -∗
+  r2a_shared p a -∗
+  ⌜inj !! p = Some a⌝.
 Proof.
-  rewrite -!uPred.ownM_op. apply uPred.bupd_ownM_update.
-  rewrite -!pair_op_1. rewrite -!pair_op_2.
-  apply prod_update; [|done]. apply prod_update; [done|]. rewrite fmap_insert.
-  by apply gmap_view_replace.
-Qed.
-
-Lemma r2a_mem_delete' a v amem :
-  r2a_mem_auth amem ∗ r2a_mem_constant a v ⊢ |==> r2a_mem_auth (delete a amem).
-Proof.
-  rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
-  rewrite -!pair_op_1. rewrite -!pair_op_2.
-  apply prod_update; [|done]. apply prod_update; [done|]. rewrite fmap_delete.
-  by apply gmap_view_delete.
-Qed.
-
-Lemma r2a_mem_delete_big' m amem :
-  r2a_mem_auth amem -∗ r2a_mem_map m ==∗ r2a_mem_auth (amem ∖ m).
-Proof.
-  iIntros "Hauth Hm".
-  iInduction m as [|a v m' ?] "IH" using map_ind. { iModIntro. by rewrite right_id_L. }
-  rewrite /r2a_mem_map big_sepM_insert //. iDestruct "Hm" as "[? Hm]".
-  iMod ("IH" with "[$] [$]"). iMod (r2a_mem_delete' with "[$]"). iModIntro.
-  by rewrite -delete_difference.
-Qed.
-
-Lemma r2a_mem_lookup' a v amem :
-  r2a_mem_auth amem -∗
-  r2a_mem_constant a v -∗
-  ⌜amem !! a = Some v⌝.
-Proof.
-  apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id -uPred.ownM_op.
-  etrans; [apply uPred.ownM_valid|]. iPureIntro.
-  move => [[_ /(gmap_view_both_dfrac_valid_discrete_total _ _ _)+]_].
+  apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id.
+  rewrite -uPred.ownM_op. etrans; [apply uPred.ownM_valid|].
+  iPureIntro. rewrite -pair_op => -[_ ]/=. setoid_rewrite <-pair_op.
+  move => [/(gmap_view_both_dfrac_valid_discrete_total _ _ _)+ _].
   move => [? [_ [_ [/lookup_fmap_Some[?[??]] [? +]]]]]. subst.
   move => /to_agree_included_L. naive_solver.
 Qed.
 
-Lemma r2a_mem_lookup_big' m mem :
-  r2a_mem_auth mem -∗
-  r2a_mem_map m -∗
-  ⌜m ⊆ mem⌝.
+Lemma r2a_shared_lookup p a inj  :
+  r2a_shared_auth inj -∗
+  r2a_shared p a -∗
+  ⌜inj !! p = Some a⌝.
+Proof. iIntros "[? _]". by iApply r2a_shared_lookup_raw. Qed.
+
+Lemma r2a_shared_lookup_big inj' inj  :
+  r2a_shared_auth inj -∗
+  ([∗map] p↦a∈inj', r2a_shared p a) -∗
+  ⌜inj' ⊆ inj⌝.
 Proof.
-  iIntros "Ha Hm". rewrite /r2a_mem_map.
-  iInduction m as [|a v m' ?] "IH" using map_ind. { iPureIntro. apply map_empty_subseteq. }
-  rewrite big_sepM_insert //. iDestruct "Hm" as "[Hv Hm]".
-  iDestruct (r2a_mem_lookup' with "[$] [$]") as %?.
-  iDestruct ("IH" with "[$] [$]") as %?. iPureIntro.
-  by apply insert_subseteq_l.
+  iIntros "Ha Hl". iInduction inj' as [|] "IH" using map_ind.
+  { iPureIntro. apply map_empty_subseteq. }
+  iDestruct (big_sepM_insert with "Hl") as "[??]"; [done|].
+  iDestruct ("IH" with "[$] [$]") as %?.
+  iDestruct (r2a_shared_lookup with "Ha [$]") as %?.
+  iPureIntro. by apply insert_subseteq_l.
 Qed.
 
-Lemma r2a_mem_update_all mem mem' mo :
-  mo ⊆ mem →
-  mo ⊆ mem' →
-  r2a_mem_auth mem' -∗
-  r2a_mem_map (mem' ∖ mo) ==∗
-  r2a_mem_auth mem ∗ r2a_mem_map (mem ∖ mo).
+Lemma r2a_shared_alloc_big_raw inj inj' :
+  inj ⊆ inj' →
+  r2a_shared_auth inj ⊢ |==>
+  r2a_shared_auth inj'.
 Proof.
-  iIntros (Hsub ?) "Hmem Hconst".
-  iMod (r2a_mem_delete_big' with "[$] [$]").
-  iMod (r2a_mem_alloc_big' with "[$]") as "[? $]".
-  { apply map_disjoint_spec => ???. rewrite !lookup_difference_Some lookup_difference_None /is_Some.
-    move => ??. destruct!. } iModIntro.
-  rewrite map_difference_id // map_union_comm ?map_difference_union //. apply map_disjoint_difference_l'.
+  iIntros (Hsub) "?". rewrite -(map_difference_union inj inj') //.
+  have Hdisj : (inj ##ₘ inj' ∖ inj) by apply map_disjoint_difference_r'.
+  rewrite map_union_comm //.
+  iInduction (inj' ∖ inj) as [|] "IH" using map_ind forall (Hdisj).
+  { by rewrite left_id_L. }
+  move: Hdisj => /map_disjoint_insert_r[??].
+  iMod ("IH" with "[%] [$]") as "?"; [done|].
+  rewrite -insert_union_l.
+  iMod (r2a_shared_alloc with "[$]") as "[$ _]". 2: done.
+  by apply lookup_union_None.
 Qed.
 
-Lemma r2a_heap_update_all rhs rhc rh hob :
-  hob ⊆ r2a_rh_constant rh →
-  hob ⊆ rhc →
-  r2a_rh_shared rh ⊆ rhs →
-  dom rhs ## dom rhc →
-  r2a_heap_auth rh -∗
-  ([∗ map] p↦a∈r2a_rh_shared rh, r2a_heap_shared p a) -∗
-  ([∗ map] p↦a∈r2a_rh_constant rh ∖ hob, r2a_heap_constant p a) ==∗
-  r2a_heap_auth ((R2AShared <$> rhs) ∪ (R2AConstant <$> rhc)) ∗
-  ([∗ map] p↦a∈rhs, r2a_heap_shared p a) ∗
-  ([∗ map] p↦a∈rhc ∖ hob, r2a_heap_constant p a).
+Lemma r2a_shared_alloc_big inj inj' :
+  inj ⊆ inj' →
+  r2a_shared_auth inj ⊢ |==>
+  r2a_shared_auth inj' ∗ [∗ map] p↦a∈inj', r2a_shared p a.
 Proof.
-  iIntros (Hsub1 Hsub2 Hsh Hdisj) "Hauth #Hsh Hconst".
-  iMod (r2a_heap_free_big' with "[$] [$]") as "?".
-  iMod (r2a_heap_alloc_shared_big' _ (rhs ∖ r2a_rh_shared rh) with "[$]") as "[??]".
-  { apply map_disjoint_spec => ? x y.
-    rewrite lookup_fmap fmap_Some !lookup_difference_Some lookup_fmap fmap_None lookup_difference_None.
-    setoid_rewrite lookup_difference_Some. unfold is_Some.
-    setoid_rewrite r2a_rh_constant_None.
-    setoid_rewrite r2a_rh_shared_None.
-    move => ??. destruct!.
-    - destruct y; naive_solver.
-    - have ? := lookup_weaken _ _ _ _ ltac:(done) Hsub2.
-      apply: Hdisj; by apply elem_of_dom.
-  }
-  have -> : ((R2AShared <$> rhs ∖ r2a_rh_shared rh) ∪ rh ∖ (R2AConstant <$> r2a_rh_constant rh ∖ hob)) =
-             (R2AShared <$> rhs) ∪ (R2AConstant <$> hob). {
-    rewrite - {2}(r2a_rh_shared_constant rh).
-    rewrite map_difference_union_distr assoc. f_equal.
-    - rewrite (map_difference_disj_id _ (R2AConstant <$> _)).
-      2: { rewrite map_difference_fmap. apply: map_disjoint_weaken_r; [apply r2a_rh_shared_constant_disj|].
-           by apply map_subseteq_difference_l. }
-      rewrite -map_fmap_union map_union_comm ?map_difference_union //.
-      apply map_disjoint_difference_l'.
-    - rewrite map_difference_fmap. apply map_difference_id. by apply map_fmap_mono.
-  }
-  iMod (r2a_heap_alloc_big' with "[$]") as "[? $]".
-  { apply map_disjoint_spec => ???.
-    rewrite lookup_union_Some_raw !lookup_fmap !fmap_Some !fmap_None.
-    setoid_rewrite lookup_difference_Some.
-    move => ??. destruct!.
-    apply: Hdisj; by apply elem_of_dom.
-  } iModIntro.
-  iAssert ([∗ map] p↦a ∈ rhs, r2a_heap_shared p a)%I as "#Hsh'". {
-    rewrite - {3} (map_difference_union (r2a_rh_shared rh) rhs) //.
-    by iApply big_sepM_union_2.
-  } iFrame "Hsh'".
-  have -> : ((R2AConstant <$> rhc ∖ hob) ∪ ((R2AShared <$> rhs) ∪ (R2AConstant <$> hob))) =
-             ((R2AShared <$> rhs) ∪ (R2AConstant <$> rhc)). {
-    rewrite assoc_L (map_union_comm _ (R2AShared <$> _)). 2: {
-      rewrite map_difference_fmap. apply: map_disjoint_weaken_l; [|by apply map_subseteq_difference_l].
-      apply map_disjoint_dom_2. by rewrite !dom_fmap_L.
-    }
-    rewrite -assoc. f_equal. rewrite -map_fmap_union. rewrite map_union_comm ?map_difference_union //.
-    apply map_disjoint_difference_l'.
-  }
-  done.
+  iIntros (Hsub) "?".
+  iMod (r2a_shared_alloc_big_raw with "[$]") as "[? ?]"; [done|].
+  iModIntro. iSplit!. iFrame.
 Qed.
+
+Lemma r2a_shared_auth_shared inj :
+  r2a_shared_auth inj ⊢ [∗ map] p↦a∈inj, r2a_shared p a.
+Proof. iIntros "[? $]". Qed.
+
+Global Typeclasses Opaque r2a_shared_auth.
+
+Lemma r2a_mem_map_union m1 m2 :
+  m1 ##ₘ m2 →
+  r2a_mem_map (m1 ∪ m2) ⊣⊢ r2a_mem_map m1 ∗ r2a_mem_map m2.
+Proof. apply big_sepM_union. Qed.
 
 Lemma r2a_f2i_full_agree f2i1 f2i2 :
   r2a_f2i_full f2i1 -∗
@@ -602,9 +246,14 @@ Lemma r2a_f2i_full_agree f2i1 f2i2 :
   ⌜f2i1 = f2i2⌝.
 Proof.
   apply bi.wand_intro_r. apply bi.wand_intro_r. rewrite left_id. rewrite -uPred.ownM_op.
-  etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [/=[??]].
+  etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [/=? [/=? [/=+ ?]]].
   rewrite -Some_op. move => /Some_valid/to_agree_op_valid. done.
 Qed.
+
+Lemma r2a_f2i_incl_to_full f2i ins :
+ r2a_f2i_incl f2i ins -∗
+ ∃ f2i_full, ⌜r2a_f2i_full f2i_full ⊢ r2a_f2i_incl f2i ins⌝ ∗ r2a_f2i_full f2i_full.
+Proof. iIntros "[% [% [% $]]]". iPureIntro. iIntros "?". iExists _. by iFrame. Qed.
 
 Lemma r2a_f2i_incl_in_ins f i f2i ins :
   i ∈ ins →
@@ -720,7 +369,50 @@ Global Instance r2a_f2i_incl_pers f2i ins :
   Persistent (r2a_f2i_incl f2i ins).
 Proof. apply _. Qed.
 
-Global Typeclasses Opaque r2a_f2i_incl r2a_f2i_full.
+(** Trader for r2a_f2i *)
+(* TODO: Make this its own UR like memUR? Not sure, if this would be useful. *)
+Section trader.
+  Context {PROP : bi}.
+  Context (W1 : BiWeakEmbed (uPredI rec_to_asmUR) PROP) (W2 : BiWeakEmbed (uPredI rec_to_asmUR) PROP).
+  Context `{!BiAffine PROP}.
+
+  Definition r2a_f2i_trader : PROP := ∃ f2i, ⌈r2a_f2i_full f2i @ W1⌉ ∗ ⌈r2a_f2i_full f2i @ W2⌉.
+  Global Instance r2a_f2i_trader_pers : Persistent r2a_f2i_trader.
+  Proof using. apply _. Qed.
+
+  Lemma r2a_f2i_trade_full f2i :
+    r2a_f2i_trader -∗
+    ⌈r2a_f2i_full f2i @ W1⌉ -∗
+    ⌈r2a_f2i_full f2i @ W2⌉.
+  Proof using BiAffine0.
+    iIntros "[% [??]] ?".
+    by iDestruct (r2a_f2i_full_agree with "[$] [$]") as %->.
+  Qed.
+
+  Lemma r2a_f2i_trade_incl f2i ins :
+    r2a_f2i_trader -∗
+    ⌈r2a_f2i_incl f2i ins @ W1⌉ -∗
+    ⌈r2a_f2i_incl f2i ins @ W2⌉.
+  Proof using BiAffine0.
+    iIntros "[% [??]] [% [% [% ?]]]".
+    iDestruct (r2a_f2i_full_agree with "[$] [$]") as %->.
+    iExists _. by iFrame.
+  Qed.
+
+  Lemma r2a_f2i_trader_init f2i :
+    ⌈r2a_f2i_full f2i @ W1⌉ -∗
+    ⌈r2a_f2i_full f2i @ W2⌉ -∗
+    r2a_f2i_trader.
+  Proof using. iIntros "Hl Hr". iExists _. by iSplitL "Hl". Qed.
+
+End trader.
+
+Lemma r2a_f2i_trader_switch {PROP : bi} (W1 : BiWeakEmbed (uPredI rec_to_asmUR) PROP) (W2 : BiWeakEmbed (uPredI rec_to_asmUR) PROP):
+  r2a_f2i_trader W1 W2 -∗ r2a_f2i_trader W2 W1.
+Proof. iIntros "[% [??]]". iExists _. iFrame. Qed.
+
+Global Typeclasses Opaque r2a_f2i_trader r2a_f2i_incl r2a_f2i_full.
+Global Opaque r2a_f2i_trader.
 
 (** ** f2i_fns_ins_wf *)
 Definition f2i_fns_ins_wf (f2i : gmap string Z) (fns : gset string) (ins : gset Z) : Prop :=
@@ -787,46 +479,237 @@ Lemma f2i_fns_ins_wf_in_ins_pure f2i fns ins f i :
   f ∈ fns.
 Proof. unfold f2i_fns_ins_wf, map_Forall. naive_solver. Qed.
 
-(** * invariants *)
+(** * r2a_in_inj *)
 Definition r2a_val_rel (iv : val) (av : Z) : uPred rec_to_asmUR :=
   match iv with
   | ValNum z => ⌜av = z⌝
   | ValBool b => ⌜av = bool_to_Z b⌝
   | ValFn f => r2a_f2i_incl {[ f := av ]} ∅
-  | ValLoc l => ∃ z, ⌜av = (z + l.2)%Z⌝ ∗ r2a_heap_shared l.1 z
+  | ValLoc l => ∃ z, ⌜av = (z + l.2)%Z⌝ ∗ r2a_shared l.1 z
   end.
 
 Global Instance r2a_val_rel_pers iv av : Persistent (r2a_val_rel iv av).
 Proof. destruct iv; apply _. Qed.
 
+Definition r2a_in_inj_inv (inj : gmap prov Z) (rem : list prov) :
+  uPred rec_to_asmUR :=
+    [∗ map] p↦a∈inj, ⌜p ∈ rem⌝ ∨
+      ∃ bi bs, p ↦∗h bs ∗ r2a_mem_map (Some <$> kmap (Z.add a) bi) ∗
+      [∗ map]o↦av;v∈bi;bs, r2a_val_rel v av.
+
+Definition r2a_in_inj (rem : list prov) : uPred rec_to_asmUR :=
+  ∃ inj, r2a_shared_auth inj ∗ r2a_in_inj_inv inj rem.
+
+Lemma r2a_in_inj_inv_borrow p a rem inj :
+  p ∉ rem →
+  inj !! p = Some a →
+  r2a_in_inj_inv inj rem -∗
+  ∃ bi bs, r2a_in_inj_inv inj (p::rem) ∗
+  p ↦∗h bs ∗ r2a_mem_map (Some <$> kmap (Z.add a) bi) ∗ [∗ map]o↦av;v∈bi;bs, r2a_val_rel v av.
+Proof.
+  iIntros (??) "Hinj".
+  iDestruct (big_sepM_lookup_acc_impl with "Hinj") as "[[%|[% [% $]]] Hinj]";[done..|].
+  iSplit!. iApply "Hinj". 2: by iLeft; iPureIntro; set_solver.
+  iIntros "!>" (????) "[%|$]". by iLeft; iPureIntro; set_solver.
+Qed.
+
+Lemma r2a_in_inj_inv_split inj' inj :
+  inj' ⊆ inj →
+  r2a_in_inj_inv inj [] ⊣⊢
+  r2a_in_inj_inv inj' [] ∗ r2a_in_inj_inv (inj ∖ inj') [].
+Proof.
+  move => ?. rewrite /r2a_in_inj_inv -big_sepM_union ?map_difference_union//.
+  apply map_disjoint_difference_r'.
+Qed.
+
+Lemma r2a_in_inj_inv_combine inj' inj :
+  r2a_in_inj_inv inj [] -∗
+  r2a_in_inj_inv inj' [] -∗
+  r2a_in_inj_inv (inj ∪ inj') [].
+Proof. apply: big_sepM_union_2. Qed.
+
+Lemma r2a_in_inj_inv_return i p bi bs a rem inj :
+  rem !! i = Some p →
+  inj !! p = Some a →
+  r2a_in_inj_inv inj rem -∗
+  p ↦∗h bs -∗
+  r2a_mem_map (Some <$> kmap (Z.add a) bi) -∗
+  ([∗ map]o↦av;v∈bi;bs, r2a_val_rel v av) -∗
+  r2a_in_inj_inv inj (delete i rem).
+Proof.
+  iIntros (??) "Hinj Hs Hi Hvs".
+  iDestruct (big_sepM_lookup_acc_impl with "Hinj") as "[Hprev Hinj]";
+    [done|].
+  iApply "Hinj".
+  - iIntros "!>" (????) "[%Hin|$]". iLeft. iPureIntro.
+    rewrite delete_take_drop. erewrite <-take_drop_middle in Hin; [|done].
+    set_solver.
+  - iRight. by iFrame.
+Qed.
+
+Lemma r2a_in_inj_inv_return0 p bi bs a rem inj :
+  inj !! p = Some a →
+  r2a_in_inj_inv inj (p :: rem) -∗
+  p ↦∗h bs -∗
+  r2a_mem_map (Some <$> kmap (Z.add a) bi) -∗
+  ([∗ map]o↦av;v∈bi;bs, r2a_val_rel v av) -∗
+  r2a_in_inj_inv inj rem.
+Proof. iIntros (?) "???". by iApply (r2a_in_inj_inv_return 0 with "[$] [$]"). Qed.
+
+
+Lemma r2a_in_inj_init :
+  r2a_shared_auth ∅ -∗ r2a_in_inj [].
+Proof. iIntros "$". by iApply big_sepM_empty. Qed.
+
+Lemma r2a_in_inj_borrow p a rem :
+  p ∉ rem →
+  r2a_in_inj rem -∗
+  r2a_shared p a -∗
+  ∃ bi bs, r2a_in_inj (p :: rem) ∗
+  p ↦∗h bs ∗ r2a_mem_map (Some <$> kmap (Z.add a) bi) ∗ ([∗ map]o↦av;v∈bi;bs, r2a_val_rel v av).
+Proof.
+  iIntros (?) "[%inj [? Hinj]] Hsh".
+  iDestruct (r2a_shared_lookup with "[$] [$]") as %?.
+  iDestruct (r2a_in_inj_inv_borrow with "[$]") as (??) "[$ $]" => //.
+Qed.
+
+Lemma r2a_in_inj_return i p bi bs a rem :
+  rem !! i = Some p →
+  r2a_in_inj rem -∗
+  r2a_shared p a -∗
+  p ↦∗h bs -∗
+  r2a_mem_map (Some <$> kmap (Z.add a) bi) -∗
+  ([∗ map]o↦av;v∈bi;bs, r2a_val_rel v av) -∗
+  r2a_in_inj (delete i rem).
+Proof.
+  iIntros (?) "[%inj [? Hinj]] Hsh Hs Hi Hvs".
+  iDestruct (r2a_shared_lookup with "[$] [$]") as %?.
+  iExists _. iFrame. by iApply (r2a_in_inj_inv_return with "[$] [$] [$]").
+Qed.
+
+Lemma r2a_in_inj_return0 p bi bs a rem :
+  r2a_in_inj (p :: rem) -∗
+  r2a_shared p a -∗
+  p ↦∗h bs -∗
+  r2a_mem_map (Some <$> kmap (Z.add a) bi) -∗
+  ([∗ map]o↦av;v∈bi;bs, r2a_val_rel v av) -∗
+  r2a_in_inj rem.
+Proof. iIntros "????". by iApply (r2a_in_inj_return 0 with "[$] [$] [$] [$]"). Qed.
+
+Lemma r2a_in_inj_lookup h mem l a v rem:
+  h_heap h !! l = Some v →
+  l.1 ∉ rem →
+  r2a_heapUR_inv h -∗
+  r2a_memUR_inv mem -∗
+  r2a_in_inj rem -∗
+  r2a_shared l.1 a -∗
+  ∃ av, ⌜mem !! (a + l.2)%Z = Some (Some av)⌝ ∗ r2a_val_rel v av.
+Proof.
+  iIntros (??) "Hinvh Hinvm Hinj ?".
+  iDestruct (r2a_in_inj_borrow with "[$] [$]") as (bi bs) "[?[?[??]]]"; [done|].
+  iDestruct (heapUR_lookup_block1 with "[$] [$]") as %?; [done|].
+  iDestruct (big_sepM2_lookup_r with "[$]") as (?) "[% ?]"; [done|].
+  iDestruct (big_sepM_lookup with "[$]") as "?". {
+    apply lookup_fmap_Some. split!.
+    apply/lookup_kmap_Some. by split!. }
+  iDestruct (memUR_lookup with "Hinvm [$]") as %?.
+  iExists _. iSplit; [done|]. done.
+Qed.
+
+Lemma r2a_in_inj_update h mem l a v av rem:
+  l.1 ∉ rem →
+  heap_alive h l →
+  r2a_heapUR_inv h -∗
+  r2a_memUR_inv mem -∗
+  r2a_in_inj rem -∗
+  r2a_shared l.1 a -∗
+  r2a_val_rel v av ==∗
+  r2a_heapUR_inv (heap_update h l v) ∗
+  r2a_memUR_inv (<[a + l.2:=Some av]>mem) ∗
+  r2a_in_inj rem.
+Proof.
+  iIntros (? [? Ha]) "Hinvh Hinvm Hinj #? Hv".
+  iDestruct (r2a_in_inj_borrow with "[$] [$]") as (bi bs) "[?[?[??]]]"; [done|].
+  iDestruct (heapUR_lookup_block with "Hinvh [$]") as %<-.
+  iDestruct (big_sepM2_lookup_r with "[$]") as (??) "#_".
+  { move: Ha. by rewrite h_block_lookup2. }
+  iDestruct (big_sepM_insert_acc with "[$]") as "[? Hc]". {
+    apply lookup_fmap_Some. split!.
+    apply/lookup_kmap_Some. by split!. }
+  iMod (heapUR_update_in_block with "[$] [$]") as "[$ ?]"; [eexists _; done|].
+  iMod (memUR_update with "[$] [$]") as "[$ Hm]" => /=.
+  iSpecialize ("Hc" with "Hm").
+  rewrite -fmap_insert -kmap_insert.
+  iModIntro.
+  iApply (r2a_in_inj_return0 with "[$] [$] [$] [$]").
+  by iApply (big_sepM2_insert_2 with "[Hv] [$]").
+Qed.
+
+Lemma r2a_in_inj_share p a rem bi bs :
+  p ∉ rem →
+  r2a_in_inj rem -∗
+  p ↦∗h bs -∗
+  r2a_mem_map (Some <$> kmap (Z.add a) bi) -∗
+  ([∗ map]o↦av;v∈bi;bs, r2a_val_rel v av)  ==∗
+  r2a_in_inj rem ∗
+  r2a_shared p a.
+Proof.
+  iIntros (?) "[%inj[??]] ???".
+  destruct (inj !! p) eqn:?. {
+    iDestruct (r2a_in_inj_inv_borrow with "[$]") as (??) "[?[??]]"; [done..|].
+    iDestruct (heapUR_block_excl with "[$] [$]") as %[]. }
+  iMod (r2a_shared_alloc with "[$]") as "[? #$]"; [done|]. iModIntro.
+  iExists _. iFrame.
+  iApply big_sepM_insert; [done|]. iFrame. iRight. by iFrame.
+Qed.
+
+Lemma r2a_in_inj_free h l a rem n:
+  l.1 ∉ rem →
+  l.2 = 0%Z →
+  heap_range h l n →
+  r2a_heapUR_inv h -∗
+  r2a_shared l.1 a -∗
+  r2a_in_inj rem ==∗
+  r2a_in_inj rem ∗
+  r2a_heapUR_inv (heap_free h l) ∗
+  r2a_mem_uninit a n.
+Proof.
+  iIntros (? Hl ?) "Hinvh #? Hinj".
+  iDestruct (r2a_in_inj_borrow with "[$] [$]") as (??) "[? [? [Hm ?]]]"; [done|].
+  iDestruct (heapUR_lookup_block with "Hinvh [$]") as %<-.
+  iMod (heapUR_free with "[$] [$]") as "[$ ?]".
+  iDestruct (big_sepM2_dom with "[$]") as %Hdom.
+  iModIntro.
+  iSplitR "Hm".
+  - iApply (r2a_in_inj_return0 _ ∅ with "[$] [$] [$]"). 2: by iApply big_sepM2_empty.
+    rewrite kmap_empty fmap_empty. by iApply big_sepM_empty.
+  - rewrite /r2a_mem_uninit -(fmap_add_seqZ0 a) big_sepL_fmap.
+    rewrite -(big_sepM_zero_block _ (λ n _, ∃ x, _)%I).
+    rewrite big_sepM_fmap big_sepM_kmap_intro.
+    iApply (big_sepM_impl_strong' with "Hm").
+    iIntros "!>" (??) "Hb". iIntros (Hz%elem_of_dom_2).
+    erewrite <-heap_range_dom_h_block1, <-Hdom in Hz; [|done..].
+    move: Hz => /elem_of_dom[? ->].
+    iExists _. iFrame.
+Qed.
+
+
+(** * invariants *)
 Definition GUARD_PAGE_SIZE : Z := 4096.
 
 (* gp is lower end of guard page *)
 Definition r2a_guard_page (gp : Z) : uPred rec_to_asmUR :=
   r2a_mem_map (map_seqZ gp (replicate (locked Z.to_nat GUARD_PAGE_SIZE) None)).
 
-Definition r2a_mem_uninit (a : Z) (len : Z) : uPred rec_to_asmUR :=
-  [∗ list] a ∈ seqZ a len, ∃ v, r2a_mem_constant a (Some v).
-
 Definition r2a_mem_stack (sp : Z) (ssz : N) : uPred rec_to_asmUR :=
   r2a_guard_page (sp - Z.of_N ssz - GUARD_PAGE_SIZE) ∗
   r2a_mem_uninit (sp - Z.of_N ssz) (Z.of_N ssz).
 
 Definition r2a_mem_inv (sp : Z) (ssz : N) (mem : gmap Z (option Z)) : uPred rec_to_asmUR :=
-  r2a_mem_stack sp ssz ∗ r2a_mem_auth mem.
-
-Definition r2a_heap_shared_agree (h : gmap loc val) (rh : gmap prov rec_to_asm_elem) : uPred rec_to_asmUR :=
-  [∗ map] l↦v∈h,
-    if rh !! l.1 is Some (R2AShared a) then
-      ∃ av, r2a_val_rel v av ∗ r2a_mem_constant (a + l.2) (Some av)
-    else
-      True.
+  r2a_mem_stack sp ssz ∗ r2a_memUR_inv mem.
 
 Definition r2a_heap_inv (h : heap_state) : uPred rec_to_asmUR :=
-  ∃ rh, ⌜dom rh ⊆ h_provs h⌝ ∗ ⌜heap_preserved (r2a_rh_constant rh) h⌝ ∗
-         ([∗ map] p↦a ∈ r2a_rh_shared rh, r2a_heap_shared p a) ∗
-         r2a_heap_shared_agree (h_heap h) rh ∗ r2a_heap_auth rh ∗
-         r2a_statics (h_static_provs h).
+  r2a_heapUR_inv h ∗ r2a_in_inj [] ∗ r2a_statics (h_static_provs h).
 
 Definition r2a_args (o : nat) (vs : list val) (rs : gmap string Z) : uPred rec_to_asmUR :=
   ([∗ list] i↦v∈vs, ∃ r,
@@ -851,10 +734,10 @@ Lemma r2a_mem_uninit_alt1 a l :
 Proof.
   iIntros (Hl) "Hm". rewrite - {1}(Z2Nat.id l) //.
   iInduction (Z.to_nat l) as [|l'] "IH" forall (a).
-  { iExists []. iSplit!. by rewrite /r2a_mem_map big_sepM_empty. }
+  { iExists []. iSplit!. }
   rewrite /r2a_mem_uninit Nat2Z.inj_succ seqZ_cons ?Z.pred_succ /=; [|lia].
   iDestruct "Hm" as "[[%v ?] ?]". iDestruct ("IH" with "[$]") as (vs ?) "Hm".
-  iExists (v :: vs) => /=. iSplit!. rewrite /r2a_mem_map big_sepM_insert; [by iFrame|].
+  iExists (v :: vs) => /=. iSplit!. rewrite big_sepM_insert; [by iFrame|].
   apply lookup_map_seqZ_None. lia.
 Qed.
 
@@ -864,27 +747,45 @@ Lemma r2a_mem_uninit_alt2 a vs :
 Proof.
   iIntros "Hvs". iInduction vs as [|v vs] "IH" forall (a); csimpl.
   { rewrite /r2a_mem_uninit /=. done. }
-  rewrite /r2a_mem_map big_sepM_insert; [|apply lookup_map_seqZ_None; lia].
+  rewrite big_sepM_insert; [|apply lookup_map_seqZ_None; lia].
   iDestruct "Hvs" as "[??]". iDestruct ("IH" with "[$]") as "?".
   rewrite /r2a_mem_uninit /= Nat2Z.inj_succ (seqZ_cons a) ?Z.pred_succ /=; [|lia]. by iFrame.
 Qed.
 
-Lemma r2a_heap_shared_agree_union h1 h2 rh:
-  h1 ##ₘ h2 →
-  r2a_heap_shared_agree (h1 ∪ h2) rh ⊣⊢ r2a_heap_shared_agree h1 rh ∗ r2a_heap_shared_agree h2 rh.
-Proof. apply big_sepM_union. Qed.
+Section trader.
+  Context {PROP : bi}.
+  Context (W1 : BiWeakEmbed (uPredI rec_to_asmUR) PROP) (W2 : BiWeakEmbed (uPredI rec_to_asmUR) PROP).
+  Context `{!BiBUpd PROP} `{!BiAffine PROP} `{!BiWeakEmbedBUpd W1} `{!BiWeakEmbedBUpd W2}.
 
-Lemma r2a_heap_shared_agree_impl h1 h2 rh1 rh2:
-  (∀ l v a, h2 !! l = Some v → rh2 !! l.1 = Some (R2AShared a) →
-            h1 !! l = Some v ∧ rh1 !! l.1 = Some (R2AShared a)) →
-  r2a_heap_shared_agree h1 rh1 -∗
-  r2a_heap_shared_agree h2 rh2.
-Proof.
-  iIntros (Himpl) "Hag".
-  iApply (big_sepM_impl_strong' with "[$]").
-  iIntros "!>" (k ?) "H1". iIntros (?). destruct (rh2 !! k.1) as [[]|] eqn:? => //.
-  have [??]:= Himpl _ _ _ ltac:(done) ltac:(done). by simplify_map_eq.
-Qed.
+  Lemma r2a_mem_uninit_trade a len mem :
+    memUR_trader W1 W2 r2a_mem r2a_mem -∗
+    ⌈memUR_inv r2a_mem mem @ W2⌉ -∗
+    ⌈r2a_mem_uninit a len @ W2⌉ ==∗⌈W1⌉
+    memUR_trader W1 W2 r2a_mem r2a_mem ∗
+    ⌈memUR_inv r2a_mem mem @ W2⌉ ∗
+    ⌈r2a_mem_uninit a len @ W1⌉.
+  Proof using BiAffine0 BiWeakEmbedBUpd0 BiWeakEmbedBUpd1.
+    iIntros "Ht Hinv Hl".
+    rewrite /r2a_mem_uninit !weak_embed_big_sepL.
+    iMod (big_sepL_impl_weak_bupd_frame with "Hl [] [-]") as "[$ ?]". 2: iAccu. 2: by iFrame.
+    iIntros "!>" (???) "[??] [% ?]".
+    by iMod (memUR_trade_ptsto with "[$] [$] [$]") as "[$ [$ $]]".
+  Qed.
+
+  Lemma r2a_mem_stack_trade sp ssz mem :
+    memUR_trader W1 W2 r2a_mem r2a_mem -∗
+    ⌈memUR_inv r2a_mem mem @ W2⌉ -∗
+    ⌈r2a_mem_stack sp ssz @ W2⌉ ==∗⌈W1⌉
+    memUR_trader W1 W2 r2a_mem r2a_mem ∗
+    ⌈memUR_inv r2a_mem mem @ W2⌉ ∗
+    ⌈r2a_mem_stack sp ssz @ W1⌉.
+  Proof using BiAffine0 BiWeakEmbedBUpd0 BiWeakEmbedBUpd1.
+    iIntros "Ht Hinv [? Huninit]".
+    iMod (memUR_trade_ptsto_big with "[$] [$] [$]") as "[? [? $]]".
+    iMod (r2a_mem_uninit_trade with "[$] [$] [$]") as "?".
+    by iModIntro.
+  Qed.
+End trader.
 
 Lemma r2a_guard_page_lookup a sp ssz mem :
   sp - Z.of_N ssz - GUARD_PAGE_SIZE ≤ a < sp - Z.of_N ssz →
@@ -892,18 +793,18 @@ Lemma r2a_guard_page_lookup a sp ssz mem :
   ⌜mem !! a = Some None⌝.
 Proof.
   iIntros (?) "((Hgp&?)&Hauth)". rewrite /r2a_guard_page.
-  iDestruct (r2a_mem_lookup_big' with "[$] [$]") as %Hsub.
+  iDestruct (memUR_lookup_big with "[$] [$]") as %Hsub.
   iPureIntro. apply: lookup_weaken; [|done]. apply lookup_map_seqZ_Some. split; [lia|].
   apply lookup_replicate. split!. unlock. lia.
 Qed.
 
 Lemma r2a_mem_lookup a v mem sp ssz:
   r2a_mem_inv sp ssz mem -∗
-  r2a_mem_constant a v -∗
+  a ↦m v -∗
   ⌜mem !! a = Some v⌝.
 Proof.
   iIntros "((?&?)&Hauth) Hconst".
-  by iDestruct (r2a_mem_lookup' with "Hauth Hconst") as %?.
+  by iDestruct (memUR_lookup with "Hauth Hconst") as %?.
 Qed.
 
 Lemma r2a_mem_lookup_big sp ssz m mem :
@@ -912,12 +813,12 @@ Lemma r2a_mem_lookup_big sp ssz m mem :
   ⌜m ⊆ mem⌝.
 Proof.
   iIntros "((?&?)&Hauth) Hconst".
-  by iDestruct (r2a_mem_lookup_big' with "Hauth Hconst") as %?.
+  by iDestruct (memUR_lookup_big with "Hauth Hconst") as %?.
 Qed.
 
 Lemma r2a_mem_range a v mem sp ssz:
   r2a_mem_inv sp ssz mem -∗
-  r2a_mem_constant a (Some v) -∗
+  a ↦m (Some v) -∗
   ⌜¬ (sp - Z.of_N ssz ≤ a < sp)⌝.
 Proof.
   iIntros "Hinv Hconst" (?).
@@ -927,7 +828,7 @@ Proof.
   iDestruct "Hinv" as "((?&Hsp)&?)".
   iDestruct (big_sepL_lookup _ _ (Z.to_nat (a - (sp - Z.of_N ssz))) a with "Hsp") as (?) "?".
   - apply lookup_seqZ. lia.
-  - iDestruct (r2a_mem_constant_excl with "[$] [$]") as %[].
+  - iDestruct (memUR_ptsto_excl with "[$] [$]") as %[].
 Qed.
 
 Lemma r2a_mem_exists n sp ssz mem :
@@ -940,7 +841,7 @@ Proof.
   - iDestruct "Hinv" as "((?&Hsp)&?)".
     iDestruct (big_sepL_lookup _ _ (Z.to_nat (Z.of_N ssz - n)) (sp - n) with "Hsp") as (?) "?".
     * apply lookup_seqZ. lia.
-    * iDestruct (r2a_mem_lookup' with "[$] [$]") as %?. iSplit!.
+    * iDestruct (memUR_lookup with "[$] [$]") as %?. iSplit!.
   - iDestruct (r2a_guard_page_lookup (sp - n) with "[$]") as %?.
     + lia.
     + iSplit!.
@@ -970,13 +871,13 @@ Qed.
 
 Lemma r2a_mem_update v' a v mem sp ssz:
   r2a_mem_inv sp ssz mem -∗
-  r2a_mem_constant a v ==∗
-  r2a_mem_inv sp ssz (<[a := Some v']> mem) ∗ r2a_mem_constant a (Some v').
+  a ↦m v ==∗
+  r2a_mem_inv sp ssz (<[a := Some v']> mem) ∗ a ↦m (Some v').
 Proof.
   iDestruct 1 as "((?&?)&Hauth)".
   iIntros "Hconst".
-  iDestruct (r2a_mem_lookup' with "[$] [$]") as %?.
-  iMod (r2a_mem_update' with "[$]") as "[? $]". iModIntro.
+  iDestruct (memUR_lookup with "[$] [$]") as %?.
+  iMod (memUR_update with "[$] [$]") as "[? $]". iModIntro.
   by iFrame.
 Qed.
 
@@ -987,8 +888,8 @@ Lemma r2a_mem_update_big sp ssz mem mo mo' :
   r2a_mem_map mo' ∗ r2a_mem_inv sp ssz (mo' ∪ mem).
 Proof.
   iIntros (Hdom) "[$ Hmem] Hconst".
-  iMod (r2a_mem_delete_big' with "[$] [$]").
-  iMod (r2a_mem_alloc_big' with "[$]") as "[? $]".
+  iMod (memUR_free_big with "[$] [$]").
+  iMod (memUR_alloc_big with "[$]") as "[? $]".
   { apply map_disjoint_spec => ???. rewrite !lookup_difference_Some -not_elem_of_dom Hdom not_elem_of_dom.  naive_solver. }
   iModIntro.
   by rewrite (map_difference_eq_dom_L _ mo mo') // -map_difference_union_r.
@@ -1017,7 +918,7 @@ Lemma r2a_mem_delete_big adrs mem sp sp' ssz:
   Forall (λ a, sp ≤ a < sp') adrs →
   length adrs = Z.to_nat (sp' - sp) →
   r2a_mem_inv sp ssz mem -∗
-  ([∗ list] a∈adrs, ∃ v, r2a_mem_constant a (Some v)) ==∗
+  ([∗ list] a∈adrs, ∃ v, a ↦m (Some v)) ==∗
   r2a_mem_inv sp' (ssz + Z.to_N (sp' - sp)) mem.
 Proof.
   iIntros (? Hall ?) "Hinv Ha".
@@ -1027,7 +928,7 @@ Proof.
     rewrite (big_sepL_delete _ _ a1); [|done].
     rewrite (big_sepL_delete _ _ a2); [|done].
     iDestruct!. case_decide => //. iDestruct!.
-    iDestruct (r2a_mem_constant_excl with "[$] [$]") as %[].
+    iDestruct (memUR_ptsto_excl with "[$] [$]") as %[].
   }
   iAssert ⌜∀ a, a ∈ adrs → a ∈ seqZ sp (sp' - sp)⌝%I as %Hsub%NoDup_submseteq => //. {
     iIntros (??).
@@ -1049,172 +950,105 @@ Proof. iIntros "[??] ?". iFrame. Qed.
 
 Lemma r2a_heap_get_statics h :
   r2a_heap_inv h -∗ r2a_statics (h_static_provs h).
-Proof. by iDestruct 1 as (? Hdom Hc) "[Hsh [Hs [Hauth Hag]]]". Qed.
+Proof. by iDestruct 1 as "[Hsh [Hs Hag]]". Qed.
 
 Lemma r2a_heap_alloc h l n:
   heap_is_fresh h l →
   r2a_heap_inv h ==∗
-  r2a_heap_inv (heap_alloc h l n) ∗ r2a_heap_constant l.1 (h_block (heap_alloc h l n) l.1).
+  r2a_heap_inv (heap_alloc h l n) ∗ l.1 ↦∗h zero_block n.
 Proof.
   iIntros ([Hl [? ?]]).
-  iDestruct 1 as (? Hdom Hc) "[Hsh [Hs [Hauth Hag]]]".
-  iMod (r2a_heap_alloc' with "Hauth") as "[Hauth $]".
-  { apply not_elem_of_dom => /Hdom //. }
-  iModIntro. iExists _. iFrame. rewrite r2a_rh_shared_insert_const.
-  2: { move => ?. contradict Hl. apply Hdom. by apply elem_of_dom. }
-  iFrame. repeat iSplit.
-  - iPureIntro. rewrite h_provs_heap_alloc // dom_insert_L. set_solver.
-  - iPureIntro. rewrite r2a_rh_constant_insert.
-    eapply heap_preserved_insert_const.
-    eapply heap_preserved_alloc. 2: apply lookup_delete.
-    eapply heap_preserved_mono; [done| apply delete_subseteq].
-  - rewrite /r2a_heap_shared_agree big_sepM_union. 2: {
-      apply map_disjoint_spec => ??? /lookup_kmap_Some[?[??]] /lookup_heap_Some_elem_of_h_provs?.
-      naive_solver.
-    }
-    iSplitR.
-    + iApply big_sepM_intro. iIntros "!>" (??[?[??]]%lookup_kmap_Some); [|apply _].
-      by simplify_map_eq.
-    + iApply (big_sepM_impl with "Hs"). iIntros "!>" (k??) "?".
-      rewrite lookup_insert_ne //. contradict Hl. rewrite Hl.
-      by eapply (lookup_heap_Some_elem_of_h_provs).
-  - by rewrite h_static_provs_heap_alloc.
+  iDestruct 1 as "[Hinv [Hsh Hag]]".
+  iMod (heapUR_alloc with "Hinv") as "[Hinv $]"; [done|].
+  iModIntro. iFrame. rewrite h_static_provs_heap_alloc //.
 Qed.
 
-Lemma r2a_heap_update h l v b:
+Lemma r2a_heap_update h l v v':
   r2a_heap_inv h -∗
-  r2a_heap_constant l.1 b ==∗
-  r2a_heap_inv (heap_update h l v) ∗ r2a_heap_constant l.1 (h_block (heap_update h l v) l.1).
+  l ↦h v ==∗
+  r2a_heap_inv (heap_update h l v') ∗ l ↦h v'.
 Proof.
-  iDestruct 1 as (? Hdom Hc) "[Hsh [Hs [Hauth Hag]]]". iIntros "Hc".
-  iDestruct (r2a_heap_lookup' with "[$] [$]") as %?.
-  iMod (r2a_heap_update' with "[$Hauth $Hc]") as "[Hauth $]".
-  iModIntro. iExists _. iFrame. rewrite r2a_rh_shared_insert_const.
-  2: { move => ??. simplify_map_eq. } iFrame. repeat iSplit.
-  - iPureIntro. rewrite h_provs_heap_update dom_insert_L.
-    have : l.1 ∈ dom rh by apply elem_of_dom.
-    set_solver.
-  - iPureIntro. rewrite r2a_rh_constant_insert //.
-    eapply heap_preserved_insert_const.
-    eapply heap_preserved_update. 2: apply lookup_delete.
-    eapply heap_preserved_mono; [done| apply delete_subseteq].
-  - rewrite /r2a_heap_shared_agree /= big_sepM_alter.
-    iApply (big_sepM_impl with "Hs"). iIntros "!>" (k ??) "?". case_bool_decide; subst; simplify_map_eq => //.
-    by destruct (decide (k.1 = l.1)) as [->|]; simplify_map_eq.
-  - by rewrite h_static_provs_heap_update.
+  iDestruct 1 as "[Hinv [Hsh Hag]]". iIntros "Hc".
+  iMod (heapUR_update with "Hinv Hc") as "[$ $]".
+  iModIntro. iFrame. by rewrite h_static_provs_heap_update.
 Qed.
 
 Lemma r2a_heap_free h l b:
   is_ProvBlock l.1 →
   r2a_heap_inv h -∗
-  r2a_heap_constant l.1 b ==∗
+  l.1 ↦∗h b ==∗
   r2a_heap_inv (heap_free h l).
 Proof.
-  iDestruct 1 as (? Hdom Hc) "[Hsh [Hs [Hauth Hag]]]". iIntros "Hc".
-  iDestruct (r2a_heap_lookup' with "[$] [$]") as %?.
-  iMod (r2a_heap_free' with "[$Hauth $Hc]") as "Hauth".
-  iModIntro. iExists _. iFrame. repeat iSplit.
-  - iPureIntro. rewrite dom_delete_L h_provs_heap_free //. set_solver.
-  - iPureIntro. rewrite r2a_rh_constant_delete.
-    eapply heap_preserved_free. 2: apply lookup_delete.
-    eapply heap_preserved_mono; [done| apply delete_subseteq].
-  - rewrite r2a_rh_shared_delete. by iApply big_sepM_delete_2.
-  - rewrite /r2a_heap_shared_agree big_sepM_filter.
-    iApply (big_sepM_impl with "Hs"). iIntros "!>" (???) "?". iIntros (?).
-    by rewrite lookup_delete_ne.
-  - by rewrite h_static_provs_heap_free.
+  iDestruct 1 as "[Hinv [Hsh Hag]]". iIntros "Hc".
+  iMod (heapUR_free with "Hinv Hc") as "[$ _]".
+  iModIntro. iFrame. by rewrite h_static_provs_heap_free.
 Qed.
 
 Lemma r2a_heap_lookup_shared h l v z mem ss ssz:
   h_heap h !! l = Some v →
   r2a_heap_inv h -∗
   r2a_mem_inv ss ssz mem -∗
-  r2a_heap_shared l.1 z -∗
+  r2a_shared l.1 z -∗
   ∃ av, ⌜mem !! (z + l.2)%Z = Some (Some av)⌝ ∗ r2a_val_rel v av.
 Proof.
   iIntros (?).
-  iDestruct 1 as (? ? Hag) "[Hsh [Hs [Hauth Hag]]]".
-  iIntros "Hmem Hl".
-  iDestruct (r2a_heap_shared_lookup' with "[$] [$]") as %?.
-  iDestruct (big_sepM_lookup with "Hs") as "Hv"; [done|]. simplify_map_eq.
-  iDestruct "Hv" as (?) "[??]".
-  iDestruct (r2a_mem_lookup with "[$] [$]") as %?. subst.
-  iSplit!.
+  iDestruct 1 as "[Hinv [Hsh Hag]]".
+  iIntros "[? Hmem] Hl".
+  iApply (r2a_in_inj_lookup with "[$] [$] [$] [$]"); [done|].
+  set_solver.
 Qed.
 
 Lemma r2a_heap_alloc_shared h l a n:
   heap_is_fresh h l →
   r2a_heap_inv h -∗
-  ([∗ list] a'∈seqZ a n, r2a_mem_constant a' (Some 0)) ==∗
-  r2a_heap_shared l.1 a ∗ r2a_heap_inv (heap_alloc h l n).
+  ([∗ list] a'∈seqZ a n, a' ↦m (Some 0)) ==∗
+  r2a_shared l.1 a ∗ r2a_heap_inv (heap_alloc h l n).
 Proof.
   iIntros ([?[??]]) "Hinv Ha".
   iMod (r2a_heap_alloc _ _ n with "Hinv") as "[Hinv Hl]"; [done..|].
-  iDestruct "Hinv" as (? Hdom Hpres) "[Hsh [Hs [Hauth Hag]]]".
-  iMod (r2a_heap_to_shared' with "[$]") as "[Hauth #Hs1]".
-  iModIntro. iFrame "Hs1".
-  iExists _. iFrame. iSplit!.
-  - set_solver.
-  - move => ?? /r2a_rh_constant_Some/lookup_insert_Some[[??]//|[??]].
-    apply Hpres. by apply r2a_rh_constant_Some.
-  - rewrite r2a_rh_shared_insert. by iApply big_sepM_insert_2.
-  - rewrite /r2a_heap_shared_agree /= !big_sepM_union.
-    2,3: apply map_disjoint_list_to_map_l, Forall_forall => ? /elem_of_list_fmap[?[??]];
-         simplify_eq/=; apply eq_None_not_Some => /lookup_heap_is_Some_elem_of_h_provs;
-         destruct l => /=; unfold heap_is_fresh in *; naive_solver.
-    iDestruct "Hs" as "[_ Hh]".
-    iSplitR "Hh".
-    + rewrite !big_sepM_kmap_intro. iApply big_sepM_zero_block.
-      have ->: a = a + 0 by lia.
-      rewrite -(fmap_add_seqZ a 0) big_sepL_fmap.
-      iApply (big_sepL_impl with "[$]"). iIntros "!>" (? o ?) "?". simplify_map_eq.
-      iSplit!. by rewrite Z.add_0_r.
-    + iApply (big_sepM_impl with "Hh"). iIntros "!>" (?? Hheap%lookup_heap_Some_elem_of_h_provs) "?".
-      rewrite lookup_insert_ne; [done|]. congruence.
+  iDestruct "Hinv" as "[Hinv [Hsh Hag]]".
+  iMod (r2a_in_inj_share _ _ _ (const 0 <$> zero_block n) with "Hsh Hl [Ha] []") as "[Hsh $]". { set_solver. }
+  3: by iFrame.
+  - rewrite big_sepM_fmap big_sepM_kmap_intro big_sepM_fmap.
+    rewrite big_sepM_zero_block.
+    by rewrite -(fmap_add_seqZ0 a) big_sepL_fmap.
+  - rewrite big_sepM2_fmap_l.
+    iApply big_sepM_sepM2_diag.
+    iApply big_sepM_intro.
+    iIntros "!>" (??[-> ?]%zero_block_lookup_Some).
+    done.
 Qed.
 
 Lemma r2a_share a h m p b:
   r2a_heap_inv h -∗
   r2a_mem_map m -∗
-  r2a_heap_constant p b -∗
+  p ↦∗h b -∗
   □ (∀ z v, ⌜b !! z = Some v⌝ -∗
       ∃ av, ⌜m !! (a + z)%Z = Some (Some av)⌝ ∗ r2a_val_rel v av) ==∗
-  r2a_heap_shared p a ∗ r2a_heap_inv h.
+  r2a_shared p a ∗ r2a_heap_inv h.
 Proof.
   iIntros "Hinv Hm Hh #Hmap".
-  iDestruct "Hinv" as (? Hdom Hpres) "[Hsh [Hs [Hauth Hag]]]".
-  iDestruct (r2a_heap_lookup' with "[$] [$]") as %?.
-  iMod (r2a_heap_to_shared' with "[$]") as "[Hauth #Hs1]".
-  iModIntro. iFrame "Hs1".
-  iExists _. iFrame. iSplit!.
-  - by rewrite dom_insert_lookup_L.
-  - apply: heap_preserved_mono; [done|].
-    apply map_subseteq_spec => ?? /r2a_rh_constant_Some/lookup_insert_Some?.
-    apply r2a_rh_constant_Some. naive_solver.
-  - rewrite r2a_rh_shared_insert. by iApply big_sepM_insert_2.
-  - rewrite -(map_filter_union_complement (λ l, l.1.1 = p) (h_heap h)).
-    rewrite !r2a_heap_shared_agree_union. 2,3: apply map_disjoint_filter_complement.
-    iDestruct "Hs" as "[_ Ha2]".
-    iSplitR "Ha2".
-    + rewrite /r2a_heap_shared_agree.
-      rewrite /r2a_mem_map.
-      have ? : Inj eq eq (λ z, (p, z - a)) by unfold Inj; naive_solver lia.
-      rewrite -(big_sepM_kmap_intro' (λ z, (p, z - a)) m).
-      iApply (big_sepM_impl_strong' with "Hm").
-      iIntros "!>" ([??] ?) "Hk". iIntros ([??]%map_lookup_filter_Some).
-      simplify_map_eq.
-      exploit heap_preserved_lookup_r; [done..|by apply r2a_rh_constant_Some|].
-      move => ?. simplify_eq/=. iDestruct ("Hmap" with "[//]") as (??) "?".
-      case_match eqn:Hk.
-      * move: Hk => /lookup_kmap_Some[i [??]]. simplify_eq.
-        iDestruct "Hk" as (j ?) "?". simplify_eq/=. have ? : j = i by lia. subst.
-        iExists _. iSplit; [done|].
-        have Hi : (a + (i - a)) = i by lia. rewrite ->Hi in *. by simplify_eq.
-      * move: Hk => /lookup_kmap_None Hi. exploit (Hi (a + z)); [f_equal; lia|].
-        naive_solver.
-    + iApply (r2a_heap_shared_agree_impl with "Ha2").
-      move => [??] ?? /map_lookup_filter_Some[??] /lookup_insert_Some[[??]|[??]]; simplify_eq/=.
-      split!. apply map_lookup_filter_Some. naive_solver.
+  iDestruct "Hinv" as "[Hinv [Hsh Hag]]".
+  iAssert (⌜∀ z v, b !! z = Some v → ∃ av, m !! (a + z)%Z = Some (Some av)⌝)%I as %Hb. {
+    iIntros (z v Hb).
+    iDestruct ("Hmap" $! _ _ Hb) as (?) "[% ?]".
+    iPureIntro. naive_solver. }
+  iMod (r2a_in_inj_share _ _ _ (map_imap (λ i v, (m!!!(a+i))) b) with "Hsh Hh [Hm] []") as "[Hsh $]". { set_solver. }
+  3: by iFrame.
+  - iApply (big_sepM_subseteq with "Hm").
+    apply map_subseteq_spec => ?? /lookup_fmap_Some[?[? /lookup_kmap_Some[?[? ]]]].
+    rewrite map_lookup_imap => /bind_Some[? [? Htot]]. simplify_eq.
+    odestruct Hb; [done|].
+    erewrite (lookup_total_correct m) in Htot; [|done]. naive_solver.
+  - iApply big_sepM2_intro. {
+      move => ?. rewrite map_lookup_imap /is_Some. setoid_rewrite bind_Some.
+      split; [naive_solver|].
+      move => [? Hl]. odestruct Hb; [done|].
+      split!. by apply lookup_total_correct. }
+    iIntros "!>" (??? Hm Hl).
+    iDestruct ("Hmap" $! _ _ Hl) as (??) "?".
+    move: Hm. rewrite map_lookup_imap => /bind_Some[? [?]].
+    erewrite (lookup_total_correct m); [|done] => ?. naive_solver.
 Qed.
 
 Lemma r2a_heap_free_shared h l a n:
@@ -1222,36 +1056,21 @@ Lemma r2a_heap_free_shared h l a n:
   l.2 = 0 →
   heap_range h l n →
   r2a_heap_inv h -∗
-  r2a_heap_shared l.1 a ==∗
+  r2a_shared l.1 a ==∗
   r2a_mem_uninit a n ∗ r2a_heap_inv (heap_free h l).
 Proof.
   iIntros (Hblok Hl2 Hr).
-  iDestruct 1 as (? Hdom Hc) "[Hsh [Hs [Hauth Hag]]]". iIntros "Hl".
-  iDestruct (r2a_heap_shared_lookup' with "[$] [$]") as %Hl.
-  iModIntro.
-  rewrite /r2a_heap_shared_agree -(map_filter_union_complement (λ '(l', _), l'.1 ≠ l.1) (h_heap h)).
-  rewrite big_sepM_union; [|apply map_disjoint_filter_complement].
-  iDestruct "Hs" as "[Hs Ha]". iSplitL "Ha".
-  - iApply big_sepM_map_seq_0.
-    have ?: Inj eq eq (λ n : nat, l +ₗ n) by move => ???; simplify_eq; lia.
-    iApply (big_sepM_kmap_intro' (λ n : nat, l +ₗ n)).
-    iApply (big_sepM_impl_strong' with "[$]").
-    iIntros "!>" (??) "Hm". iIntros ([i [?[?[??]%lookup_seqZ]%lookup_map_seq_Some]]%lookup_kmap_Some); [|done].
-    simplify_eq/=. rewrite map_lookup_filter_true; [|naive_solver].
-    case_match. 2: { exfalso. eapply not_eq_None_Some; [|done]. apply Hr; [done|]. simpl. lia. } simplify_map_eq.
-    iDestruct!. iSplit!; [done|]. by rewrite Nat.sub_0_r Hl2.
-  - iExists _. rewrite h_static_provs_heap_free //. iFrame. iPureIntro. split.
-    + by rewrite h_provs_heap_free.
-    + apply heap_preserved_free; [done|].
-      apply eq_None_ne_Some_2 => ?. rewrite r2a_rh_constant_Some. by rewrite Hl.
+  iDestruct 1 as "[Hinv [Hsh Hag]]". iIntros "Hl".
+  iMod (r2a_in_inj_free with "[$] [$] [$]") as "[$ [$$]]"; [set_solver|done|done|].
+  by rewrite h_static_provs_heap_free.
 Qed.
 
 Lemma r2a_heap_free_list_shared h ls h' adrs:
   heap_free_list ls h h' →
   Forall (λ l, l.2 = 0) ls.*1 →
   r2a_heap_inv h -∗
-  ([∗ list] l;a∈ls.*1;adrs, r2a_heap_shared l.1 a) ==∗
-  ([∗ list] a∈mjoin (zip_with (λ a n, seqZ a n) adrs ls.*2), ∃ v, r2a_mem_constant a (Some v)) ∗
+  ([∗ list] l;a∈ls.*1;adrs, r2a_shared l.1 a) ==∗
+  ([∗ list] a∈mjoin (zip_with (λ a n, seqZ a n) adrs ls.*2), ∃ v, a ↦m (Some v)) ∗
     r2a_heap_inv h'.
 Proof.
   elim: ls h h' adrs => /=.
@@ -1265,71 +1084,55 @@ Lemma r2a_heap_update_shared h l v z mem ss av ssz:
   heap_alive h l →
   r2a_heap_inv h -∗
   r2a_mem_inv ss ssz mem -∗
-  r2a_heap_shared l.1 z -∗
+  r2a_shared l.1 z -∗
   r2a_val_rel v av ==∗
   r2a_heap_inv (heap_update h l v) ∗ r2a_mem_inv ss ssz (<[z + l.2 := Some av]>mem).
 Proof.
-  iIntros ([??]).
-  iDestruct 1 as (? Hdom Hag) "[Hsh [Hs [Hauth Hag]]]".
-  iIntros "Hmem Hl Hv".
-  iDestruct (r2a_heap_shared_lookup' with "[$] [$]") as %Hl.
-  rewrite /r2a_heap_shared_agree (big_sepM_delete _ (h_heap h)); [|done]. simplify_map_eq.
-  iDestruct "Hs" as "[[% [??]] Hs]".
-  iMod (r2a_mem_update with "[$] [$]") as "[$ ?]". iModIntro.
-  iExists _. rewrite h_static_provs_heap_update. iFrame.
-  repeat iSplit; [iPureIntro..|].
-  - by rewrite h_provs_heap_update //= dom_alter_L.
-  - apply heap_preserved_update; [done|].
-    apply eq_None_ne_Some_2 => ?. rewrite r2a_rh_constant_Some. by rewrite Hl.
-  - rewrite /r2a_heap_shared_agree/= (big_sepM_delete _ (alter (λ _, v) _ _) l); [|by simplify_map_eq].
-    simplify_map_eq. rewrite delete_alter. by iFrame.
+  iIntros (?).
+  iDestruct 1 as "[Hinv [Hsh Hag]]".
+  iIntros "[? Hmem] Hl Hv".
+  iMod (r2a_in_inj_update with "[$] [$] [$] [$] [$]") as "[$ [$ $]]"; [set_solver| done |].
+  iFrame.
+  by rewrite h_static_provs_heap_update.
 Qed.
 
-Lemma r2a_heap_inv_add_blocks h ps :
-  r2a_heap_inv h -∗
-  r2a_heap_inv (heap_add_blocks h ps).
-Proof.
-  iDestruct 1 as (???) "[??]". iExists _. rewrite h_static_provs_heap_add_blocks.
-  iFrame. iPureIntro. split; [|done]. set_solver.
-Qed.
-
-Lemma r2a_res_init' mem rh provs f2i :
-  satisfiable (r2a_mem_auth mem ∗ ([∗ map] a↦v∈mem, r2a_mem_constant a v) ∗
-               r2a_heap_auth (R2AConstant <$> rh) ∗
-               ([∗ map] p↦b∈rh, r2a_heap_constant p b) ∗ r2a_statics provs ∗
+Lemma r2a_res_init' provs f2i :
+  satisfiable (r2a_memUR_inv ∅ ∗
+               r2a_heapUR_inv ∅ ∗
+               r2a_shared_auth ∅ ∗
+               r2a_statics provs ∗
                r2a_f2i_full f2i).
 Proof.
-  apply: (satisfiable_init (r2a_mem_inj (gmap_view_auth (DfracOwn 1) (to_agree <$> ∅)) ⋅
-                            r2a_heap_inj (gmap_view_auth (DfracOwn 1) (to_agree <$> ∅)) ⋅
-                            r2a_f2i_inj f2i ⋅
-                            r2a_statics_inj (to_agree provs))). {
-    split; [split;[split|]|] => /=.
-    1: by rewrite ?left_id ?Some_valid //.
-    1,2: rewrite ?left_id ?right_id; apply gmap_view_auth_valid.
-    (* TODO: rewrite ?left_id ?right_id. here gives Error: Anomaly "conversion was given unreduced term (FLambda)." *)
-    1: done. }
-  rewrite uPred.ownM_op. iIntros "[[[Hmem Hh] Hf2i] ?]".
-  iMod (r2a_mem_alloc_big' with "[$]") as "[? $]"; [solve_map_disjoint|].
-  rewrite right_id_L. iFrame.
-  iMod (r2a_heap_alloc_big' with "[$]") as "[? $]"; [solve_map_disjoint|].
-  rewrite right_id_L. by iFrame.
+  apply: (satisfiable_init (Some (to_agree provs),
+              (gmap_view_auth (DfracOwn 1) (to_agree <$> ∅),
+                (Some (to_agree f2i) :> (optionUR (agreeR (leibnizO (gmap string Z)))),
+                  (heapUR_init, memUR_init))))). {
+    split; [done|] => /=.
+    split; [by eapply (gmap_view_auth_dfrac_valid _ (DfracOwn 1))|].
+    split; [done|] => /=.
+    split; [apply heapUR_init_valid|].
+    apply memUR_init_valid.
+  }
+  rewrite (pair_split (Some _)) uPred.ownM_op.
+  rewrite (pair_split (gmap_view_auth _ _)) pair_op_2 uPred.ownM_op.
+  rewrite (pair_split (Some (to_agree f2i) :> (optionUR (agreeR (leibnizO (gmap string Z)))))) !pair_op_2  uPred.ownM_op.
+  rewrite (pair_split (heapUR_init)) !pair_op_2 uPred.ownM_op.
+  iIntros!. rewrite -!heapUR_init_own -!memUR_init_own /r2a_shared_auth big_sepM_empty. by iFrame.
 Qed.
 
 Lemma r2a_res_init mem h f2i:
-  satisfiable (r2a_mem_auth mem ∗ ([∗ map] a↦v∈mem, r2a_mem_constant a v) ∗
-   r2a_heap_inv h ∗ ([∗ map] p↦b ∈ gmap_curry (h_heap h), r2a_heap_constant p b) ∗
+  satisfiable (r2a_memUR_inv mem ∗ ([∗ map] a↦v∈mem, a ↦m v) ∗
+   r2a_heap_inv h ∗ ([∗ map] p↦b ∈ h_blocks h, p ↦∗h b) ∗
    r2a_f2i_full f2i).
 Proof.
-  apply: satisfiable_mono; [apply (r2a_res_init' mem (gmap_curry h.(h_heap)) (h_static_provs h) f2i)|].
-  iIntros "[$ [$ [Hauth [$ [$ $]]]]]".
-  iExists _. iFrame "Hauth". iSplit!.
-  - rewrite dom_fmap_L. move => p /elem_of_dom [? /lookup_gmap_curry_Some[/(map_choose _)[z [? Hl]] Hx]].
-    rewrite Hx in Hl. by move: Hl =>/lookup_heap_Some_elem_of_h_provs.
-  - rewrite r2a_rh_constant_fmap. move => ?? /lookup_gmap_curry_Some[? ->].
-    by rewrite -surjective_pairing.
-  - by rewrite r2a_rh_shared_fmap_constant.
-  - iApply big_sepM_intro. iIntros "!>" (???). rewrite lookup_fmap.
-    case_match eqn:Heq => //. move: Heq => /fmap_Some[?[??]]. by simplify_eq.
+  apply: satisfiable_bmono; [apply (r2a_res_init' (h_static_provs h) f2i)|].
+  iIntros "[Hmem [Hh [Hsh [$ $]]]]".
+  iDestruct (r2a_in_inj_init with "[$]") as "$".
+  iMod (memUR_alloc_big with "Hmem") as "[? $]".
+  { apply map_disjoint_empty_r. } rewrite right_id_L. iFrame.
+  iMod (heapUR_alloc_blocks with "Hh") as "[? $]".
+  { set_solver. } rewrite right_id_L heap_from_blocks_h_blocks.
+  by iFrame.
 Qed.
 
 Definition r2a_mem_stack_mem (sp : Z) (ssz : N) : gmap Z (option Z) :=
@@ -1340,7 +1143,7 @@ Lemma r2a_mem_stack_init ssz sp:
   r2a_mem_map (r2a_mem_stack_mem sp ssz) -∗
   r2a_mem_stack sp ssz.
 Proof.
-  iIntros "Hm". rewrite /r2a_mem_map/r2a_mem_stack_mem big_sepM_union.
+  iIntros "Hm". rewrite /r2a_mem_stack_mem big_sepM_union.
   2: { apply map_disjoint_spec => ???. rewrite !lookup_map_seqZ_Some.
        rewrite list_lookup_fmap fmap_Some. setoid_rewrite lookup_replicate. unlock. lia. }
   iDestruct "Hm" as "[$ ?]".
@@ -1518,7 +1321,7 @@ Definition rec_to_asm (ins : gset Z) (f2i : gmap string Z) (mo : gmap Z (option 
 
   Mod (rec_to_asm_trans ins f2i m.(m_trans))
       (SMFilter, m.(m_init), (PPOutside, R2A [] ∅, uPred_shrink (
-      r2a_mem_map mo ∗ ([∗ map] p↦b∈ h0, r2a_heap_constant p b) ∗
+      r2a_mem_map mo ∗ ([∗ map] p↦b∈ h0, p ↦∗h b) ∗
         r2a_f2i_incl f2i ins )%I)).
 
 Lemma rec_to_asm_trefines mo m m' ins f2i h0 `{!VisNoAng m.(m_trans)}:
@@ -1583,7 +1386,7 @@ Proof.
   (ips = Some SPRight ∧ x2 = (x ∗ x1 ∗ r2a_f2i_incl f2i1 ins1 ∗ r2a_f2i_incl f2i2 ins2)%I
       ∧ map_scramble touched_registers lr lr2)))). }
   { move => ?? [] /=*; naive_solver. }
-  { split!. econs. rewrite /r2a_mem_map !big_sepM_union //.
+  { split!. econs. rewrite !big_sepM_union //.
     rewrite r2a_f2i_incl_union. 2: by apply map_agree_spec.
     2: { move => *. unfold map_Forall in *. naive_solver. }
     2: { move => *. unfold map_Forall in *. naive_solver. }
@@ -1718,7 +1521,7 @@ Lemma rec_to_asm_proof INV ins fns ins_dom f2i mo h0 :
    r2a_heap_inv h -∗
    r2a_mem_map mo -∗
    r2a_f2i_incl f2i ins_dom -∗
-   ([∗ map] p↦b ∈ h0, r2a_heap_constant p b) ==∗
+   ([∗ map] p↦b ∈ h0, p ↦∗h b) ==∗
    INV ∗ r2a_mem_inv sp ssz mem ∗ r2a_heap_inv h) →
   (∀ n i rs mem K f fn vs h cs pc ssz rf rc lr,
       rs !!! "PC" = pc →

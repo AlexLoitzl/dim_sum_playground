@@ -220,17 +220,22 @@ Global Instance subG_satΣ Σ M :
   subG (satΣ M) Σ → satG Σ M.
 Proof. solve_inG. Qed.
 
+Record sat_name (M : ucmra) := {
+  sat_name_name : gname
+}.
+Arguments sat_name_name {_} _.
+
 (* TODO: make a nice abstraction for this disjunction? Some proofs about it are repeated below. *)
-Definition sat_embed {Σ M} `{!satG Σ M} (γ : gname) :
+Definition sat_embed {Σ M} `{!satG Σ M} (γ : sat_name M) :
   WeakEmbed (uPred M) (iProp Σ) := {|
     weak_embed P :=
-      (∃ m, ⌜uPred_holds P 0 m⌝ ∗ (⌜m ≼ ε⌝ ∨ own γ (auth_frag m)))%I;
-    weak_embed_tok := (∃ m, own γ (auth_auth (DfracOwn 1) m))%I;
+      (∃ m, ⌜uPred_holds P 0 m⌝ ∗ (⌜m ≼ ε⌝ ∨ own (sat_name_name γ) (auth_frag m)))%I;
+    weak_embed_tok := (∃ m, own (sat_name_name γ) (auth_auth (DfracOwn 1) m))%I;
 |}.
 
 Section sat.
   Context {Σ : gFunctors} {M : ucmra}.
-  Context {G : satG Σ M} {Hdiscrete : CmraDiscrete M} (γ : gname).
+  Context {G : satG Σ M} {Hdiscrete : CmraDiscrete M} (γ : sat_name M).
   Local Notation "⌈ P ⌉" := (weak_embed (sat_embed γ) P) : bi_scope.
   Implicit Types (P : uPred M).
 
@@ -398,8 +403,8 @@ Section sat.
   Proof using Hdiscrete.
     rewrite -weak_embed_bupd_elim /weak_embed/weak_embed_tok/=.
     iIntros "[%mf [%Hholds Hf]] [%ma Ha]".
-    iAssert (|==> own γ (◯ mf))%I with "[Hf]" as ">Hf". {
-      iDestruct "Hf" as "[%Hincl|$]"; [|done]. iMod (own_unit _ γ) as "Ho".
+    iAssert (|==> own (sat_name_name γ) (◯ mf))%I with "[Hf]" as ">Hf". {
+      iDestruct "Hf" as "[%Hincl|$]"; [|done]. iMod (own_unit _ (sat_name_name γ)) as "Ho".
       iModIntro. iApply (own_mono with "Ho"). by apply auth_frag_mono. }
     iCombine "Ha Hf" as "H".
     do [uPred.unseal] in Hholds.
@@ -421,7 +426,7 @@ Section sat.
 End sat.
 
 Definition sat_closed {Σ M} `{!satG Σ M} `{!CmraDiscrete M} :
-  gname → bool → uPred M → iProp Σ :=
+  sat_name M → bool → uPred M → iProp Σ :=
   λ γ b F, (∀ P', ⌜satisfiable (P' ∗ F)⌝ ==∗ ⌈{sat γ}⌉ ∗
     ⌈if b then P' ∗ F else P' @ sat γ⌉)%I.
 
@@ -438,14 +443,14 @@ Section sat.
   Proof using Hdiscrete.
     move => [x [/cmra_discrete_valid_iff Hvalid ?]].
     iMod (own_alloc (● x ⋅ ◯ x)) as (γ) "[Ha Hf]". { by apply auth_both_valid_discrete. }
-    iModIntro. iExists _. iSplitL "Ha"; iExists _; by iFrame.
+    iModIntro. iExists {|sat_name_name:=γ|}. iSplitL "Ha"; iExists _; by iFrame.
   Qed.
 
   Lemma sat_alloc_closed F :
     ⊢ |==> ∃ γ, sat_closed γ true F.
   Proof using Hdiscrete.
     iMod (own_alloc (● ε)) as (γ) "Ha". { by apply auth_auth_valid, ucmra_unit_valid. }
-    iModIntro. iExists γ. iIntros (P [x [?%cmra_discrete_valid_iff ?]]).
+    iModIntro. iExists {|sat_name_name:=γ|}. iIntros (P [x [?%cmra_discrete_valid_iff ?]]).
     iMod (own_update with "Ha") as "[Ha Hf]".
     - apply auth_update_alloc. apply (op_local_update_discrete _ _ x).
       move => _. by rewrite right_id.
@@ -490,7 +495,7 @@ Section sat.
   Proof using Hdiscrete.
     rewrite /weak_embed/weak_embed_tok/=.
     iIntros "[%m [%Hholds Hm]] [%a Ha]".
-    iAssert (own γ (◯ m) ∗ own γ (● a))%I with "[Ha Hm]" as "[Hm Ha]". {
+    iAssert (own (sat_name_name γ) (◯ m) ∗ own (sat_name_name γ) (● a))%I with "[Ha Hm]" as "[Hm Ha]". {
       iDestruct "Hm" as "[%Hincl|$]"; [|done].
       iDestruct (own_mono _ _ (ε ⋅ _) with "Ha") as "Ha"; [by rewrite left_id|].
       iDestruct "Ha" as "[Hε $]". iApply (own_mono with "Hε"). by apply auth_frag_mono.

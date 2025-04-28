@@ -1,5 +1,5 @@
 From dimsum.core Require Export proof_techniques.
-From dimsum.examples Require Import asm rec_to_asm.
+From dimsum.examples Require Import asm rec_to_asm2.
 From dimsum.examples.compiler Require Import monad linear_rec.
 
 Local Open Scope Z_scope.
@@ -390,7 +390,7 @@ Context `{!ProofFixedValues}.
 (** ** general invariants *)
 Definition stack_slot (sz : N) (slot : N) (v : Z) : uPred _ :=
   ⌜(slot < sz)%N⌝ ∗
-  r2a_mem_constant (pf_sp - Z.of_N slot - 1) (Some v).
+  (pf_sp - Z.of_N slot - 1) ↦m (Some v).
 
 Definition stack_slot_uninit (sz : N) (slots : list N) : uPred _ :=
   [∗ list] s∈slots, ∃ v, stack_slot sz s v.
@@ -398,7 +398,7 @@ Definition stack_slot_uninit (sz : N) (slots : list N) : uPred _ :=
 Lemma stack_slot_uninit_to_uninit slots sz:
   let adrs := (λ slot, pf_sp - Z.of_N slot - 1) <$> slots in
   stack_slot_uninit sz slots -∗
-  ⌜Forall (λ a, pf_sp - Z.of_N sz ≤ a < pf_sp) adrs⌝ ∗ [∗ list] a∈adrs, ∃ v, r2a_mem_constant a (Some v).
+  ⌜Forall (λ a, pf_sp - Z.of_N sz ≤ a < pf_sp) adrs⌝ ∗ [∗ list] a∈adrs, ∃ v, a ↦m (Some v).
 Proof.
   iIntros (?) "Hslots".
   iInduction slots as [|s slots] "IH"; csimpl. { iSplit; [|done]. iPureIntro. econs. }
@@ -548,8 +548,8 @@ Qed.
 
 Lemma sim_alloc_shared n b p e s rs h h' sz l a:
   heap_is_fresh h' l →
-  ([∗ list] a ∈ seqZ a sz, r2a_mem_constant a (Some 0)) -∗
-  (r2a_heap_shared l.1 a -∗ sim n b p e s rs h (heap_alloc h' l sz)) -∗
+  ([∗ list] a ∈ seqZ a sz, a ↦m (Some 0)) -∗
+  (r2a_shared l.1 a -∗ sim n b p e s rs h (heap_alloc h' l sz)) -∗
   sim n b p e s rs h h'.
 Proof.
   iIntros ([?[??]]) "Ha Hcont". iIntros (????) "Hrf ? (%&?&?&?)". iSatStop. iSatStartBupd.
@@ -593,8 +593,8 @@ Qed.
 
 Lemma sim_Astore r r1 o n b p' e rs s h h' a v:
   rs !!! r1 = a - o →
-  r2a_mem_constant a (Some v) -∗
-  (r2a_mem_constant a (Some (rs !!! r)) -∗ sim n true p' e s (<["PC" := rs !!! "PC" + 1]> rs) h h') -∗
+  a ↦m (Some v) -∗
+  (a ↦m (Some (rs !!! r)) -∗ sim n true p' e s (<["PC" := rs !!! "PC" + 1]> rs) h h') -∗
   sim n b (Astore r r1 o :: p') e s rs h h'.
 Proof.
   iIntros (?) "Ha Hcont".
@@ -745,7 +745,7 @@ Lemma clear_mem_correct_inv s s' p p' r res n rs e h h' sz a:
   (∀ rs',
       ⌜s' = s⌝ -∗
       ⌜map_scramble ["PC"] rs rs'⌝ -∗
-      ([∗ list] a ∈ seqZ a sz, r2a_mem_constant a (Some 0)) -∗
+      ([∗ list] a ∈ seqZ a sz, a ↦m (Some 0)) -∗
       sim n true p' e s' rs' h h') -∗
   sim n true (p ++ p') e s rs h h'.
 Proof.
@@ -769,7 +769,7 @@ Lemma clear_mem_correct s s' p p' r res n rs e h h' sz a:
   (∀ rs',
       ⌜s' = s⌝ -∗
       ⌜map_scramble ["PC"; "R1"] rs rs'⌝ -∗
-      ([∗ list] a ∈ seqZ a sz, r2a_mem_constant a (Some 0)) -∗
+      ([∗ list] a ∈ seqZ a sz, a ↦m (Some 0)) -∗
       sim n true p' e s' rs' h h') -∗
   sim n true (p ++ p') e s rs h h'.
 Proof.
@@ -1069,7 +1069,7 @@ Qed.
 Lemma initialize_statics_correct s base statics provs s' p p' r n e rs vm h h' sz:
   crun s (initialize_statics base statics) = CResult s' p (CSuccess r) →
   length provs = length statics →
-  ([∗ list]i↦p∈provs, r2a_heap_shared p (base + statics_offset statics i)) -∗
+  ([∗ list]i↦p∈provs, r2a_shared p (base + statics_offset statics i)) -∗
   cr2a_places_inv sz s.(s_places) s.(s_saved_registers) vm rs -∗
   (∀ rs',
      ⌜s' = s⌝ -∗
@@ -1115,7 +1115,7 @@ Lemma initialize_locals_correct_inv K s vars s' p p' r n e rs vm h h' ls e' ssz
      ⌜length ls = length vars⌝ -∗
      ⌜Forall (λ l, l.2 = 0) ls⌝ -∗
      ⌜Forall2 (λ a n, pf_sp - Z.of_N s'.(s_stacksize) ≤ a ∧ a + n ≤ pf_sp) adrs vars.*2⌝ -∗
-     ([∗ list] l;a∈ls;adrs, r2a_heap_shared l.1 a) -∗
+     ([∗ list] l;a∈ls;adrs, r2a_shared l.1 a) -∗
      cr2a_places_inv ssz s'.(s_places) s'.(s_saved_registers) (list_to_map (zip vars.*1 (ValLoc <$> ls)) ∪ vm) rs' -∗
      sim n true p' (expr_fill K e) s' rs' h h) -∗
   sim n true (p ++ p') e' s rs h h'.
@@ -1170,7 +1170,7 @@ Lemma initialize_locals_correct s vars s' p p' r n e rs vm h K ssz:
      ⌜length ls = length vars⌝ -∗
      ⌜Forall (λ l, l.2 = 0) ls⌝ -∗
      ⌜Forall2 (λ a n, pf_sp - Z.of_N s'.(s_stacksize) ≤ a ∧ a + n ≤ pf_sp) adrs vars.*2⌝ -∗
-     ([∗ list] l;a∈ls;adrs, r2a_heap_shared l.1 a) -∗
+     ([∗ list] l;a∈ls;adrs, r2a_shared l.1 a) -∗
      cr2a_places_inv ssz s'.(s_places) s'.(s_saved_registers) (list_to_map (zip vars.*1 (ValLoc <$> ls)) ∪ vm) rs' -∗
      sim n true p' (expr_fill K (FreeA (zip ls vars.*2) (subst_l vars.*1 (ValLoc <$> ls) e))) s' rs' h' h') -∗
   sim n true (p ++ p') (expr_fill K (AllocA vars e)) s rs h h.
@@ -1263,9 +1263,9 @@ Proof.
     iApply ("Hcont" with "[] [//] [$] Hp"). by simplify_map_eq'.
   - rewrite -!app_assoc.
     iApply (read_var_val_correct with "Hp"); [done|compute_done|].
-    iIntros (?? v1' ?) "? Hp". simplify_eq/=.
+    iIntros (?? v1' ?) "#? Hp". simplify_eq/=.
     iApply (read_var_val_correct with "Hp"); [done|compute_done|].
-    iIntros (?? v2' ?) "? Hp". simplify_eq/=.
+    iIntros (?? v2' ?) "#? Hp". simplify_eq/=.
     iIntros (??? Hins) "Hrf ? Hinv".
     iSatStop. tstep_s => ??.
     case_match; simplify_crun_eq; destruct v1' as [|b1| |], v2' as [|b2| |] => //; simplify_eq/=.
@@ -1525,9 +1525,9 @@ Lemma init_mem_statics_share base statics h f :
   Forall (λ z, 0 ≤ z) statics.*2 →
   r2a_heap_inv h -∗
   r2a_mem_map (init_mem_statics base statics) -∗
-  ([∗ map] p↦b ∈ fd_init_heap f statics, r2a_heap_constant p b) ==∗
+  ([∗ map] p↦b ∈ fd_init_heap f statics, p ↦∗h b) ==∗
   ([∗ list] i↦p ∈ static_provs f statics,
-     r2a_heap_shared p (base + statics_offset statics i)) ∗ r2a_heap_inv h.
+     r2a_shared p (base + statics_offset statics i)) ∗ r2a_heap_inv h.
 Proof.
   iIntros (Hs) "Hh Hmem Hheap".
   iInduction statics as [|s statics] "IH" using rev_ind forall (Hs).
@@ -1568,7 +1568,7 @@ Lemma pass_correct a f2i statics_base f s' dins ins fn :
               (linear_rec_mod (<[f := fn]> ∅))).
 Proof.
   move => Hrun ? Ha /NoDup_app[?[Hnd /NoDup_app[?[??]]]] Hf2i ?.
-  pose (INV := ([∗ list]i↦p∈(static_provs f fn.(lfd_static_vars)), r2a_heap_shared p (statics_base + statics_offset fn.(lfd_static_vars) i))%I).
+  pose (INV := ([∗ list]i↦p∈(static_provs f fn.(lfd_static_vars)), r2a_shared p (statics_base + statics_offset fn.(lfd_static_vars) i))%I).
   apply (rec_to_asm_proof INV); [done| | |]. {
     rewrite dom_fmap_L dom_insert_L dom_empty_L right_id_L.
     split.

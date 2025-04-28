@@ -36,7 +36,7 @@ Definition rhiv_proj_a (inj inja injb : gmap prov loc) (X : gset prov) : gmap pr
 
 (** [rhiv_residual] is what is left in the middle heap after the
 small injections are converted to large injection. *)
-Definition rhiv_residual {Σ} `{!satG Σ heap_injUR} (γa γb : gname) (l : loc) : iProp Σ :=
+Definition rhiv_residual {Σ} `{!satG Σ heap_injUR} (γa γb : sat_name _) (l : loc) : iProp Σ :=
   ∃ b, ⌜l.2 = 0⌝ ∗ ⌈l.1 ↦∗hi b @ sat γb⌉ ∗ ⌈l.1 ↦∗hs b @ sat γa⌉.
 
 (** *** Lookup lemmas *)
@@ -278,8 +278,11 @@ Proof.
   setoid_rewrite lookup_fmap_Some. naive_solver.
 Qed.
 
+Section vertical.
+Context {Σ} `{!satG Σ heap_injUR}.
+
 (** Combine the value relation. *)
-Lemma rhiv_combine_val {Σ} `{!satG Σ heap_injUR} inja' injb' γa γb γ vi vm vs:
+Lemma rhiv_combine_val inja' injb' γa γb γ vi vm vs:
   ⌈heap_inj_shared_auth inja' @ sat γa⌉ -∗
   ⌈heap_inj_shared_auth injb' @ sat γb⌉ -∗
   ⌈[∗ map] ps↦li0 ∈ rhiv_combine inja' injb', heap_inj_shared ps li0 @ sat γ⌉ -∗
@@ -300,7 +303,7 @@ Proof.
   iExists _. iFrame. by rewrite offset_loc_assoc.
 Qed.
 
-Lemma rhiv_combine_val_list {Σ} `{!satG Σ heap_injUR} inja' injb' γa γb γ vi vm vs:
+Lemma rhiv_combine_val_list inja' injb' γa γb γ vi vm vs:
   ⌈heap_inj_shared_auth inja' @ sat γa⌉ -∗
   ⌈heap_inj_shared_auth injb' @ sat γb⌉ -∗
   ⌈[∗ map] ps↦li0 ∈ rhiv_combine inja' injb', heap_inj_shared ps li0 @ sat γ⌉ -∗
@@ -321,7 +324,7 @@ Proof.
   iSplit; [done|]. iApply ("IH" with "[$] [$] [$] [$] [$]").
 Qed.
 
-Lemma rhiv_combine_val_map {Σ} `{!satG Σ heap_injUR} `{Countable K} inja' injb' γa γb γ (vi vm vs : gmap K val):
+Lemma rhiv_combine_val_map `{Countable K} inja' injb' γa γb γ (vi vm vs : gmap K val):
   ⌈heap_inj_shared_auth inja' @ sat γa⌉ -∗
   ⌈heap_inj_shared_auth injb' @ sat γb⌉ -∗
   ⌈[∗ map] ps↦li0 ∈ rhiv_combine inja' injb', heap_inj_shared ps li0 @ sat γ⌉ -∗
@@ -348,7 +351,7 @@ Proof.
 Qed.
 
 (** Split the value relation. *)
-Lemma rhiv_split_val {Σ} `{!satG Σ heap_injUR} inja' injb' γa γb γ vi vs:
+Lemma rhiv_split_val inja' injb' γa γb γ vi vs:
   ⌈[∗ map] ps↦li0 ∈ inja', heap_inj_shared ps li0 @ sat γa⌉ -∗
   ⌈[∗ map] ps↦li0 ∈ injb', heap_inj_shared ps li0 @ sat γb⌉ -∗
   ⌈heap_inj_shared_auth (rhiv_combine inja' injb') @ sat γ⌉ -∗
@@ -369,7 +372,7 @@ Proof.
   unfold loc_in_inj. simpl. iFrame. by rewrite offset_loc_assoc.
 Qed.
 
-Lemma rhiv_split_val_list {Σ} `{!satG Σ heap_injUR} inja' injb' γa γb γ vis vss:
+Lemma rhiv_split_val_list inja' injb' γa γb γ vis vss:
   ⌈[∗ map] ps↦li0 ∈ inja', heap_inj_shared ps li0 @ sat γa⌉ -∗
   ⌈[∗ map] ps↦li0 ∈ injb', heap_inj_shared ps li0 @ sat γb⌉ -∗
   ⌈heap_inj_shared_auth (rhiv_combine inja' injb') @ sat γ⌉ -∗
@@ -389,7 +392,7 @@ Proof.
   iExists (_::_) => /=. by repeat iSplit.
 Qed.
 
-Lemma rhiv_split_val_map {Σ A} `{!satG Σ heap_injUR} `{Countable A} inja' injb' γa γb γ (vis vss : gmap A val):
+Lemma rhiv_split_val_map {A} `{Countable A} inja' injb' γa γb γ (vis vss : gmap A val):
   ⌈[∗ map] ps↦li0 ∈ inja', heap_inj_shared ps li0 @ sat γa⌉ -∗
   ⌈[∗ map] ps↦li0 ∈ injb', heap_inj_shared ps li0 @ sat γb⌉ -∗
   ⌈heap_inj_shared_auth (rhiv_combine inja' injb') @ sat γ⌉ -∗
@@ -414,7 +417,7 @@ Proof.
 Qed.
 
 (** Allocate the residual for the new provs in the middle heap. *)
-Lemma rhiv_alloc_residual {Σ} `{!satG Σ heap_injUR} (m : gmap prov loc) hm γa γb:
+Lemma rhiv_alloc_residual (m : gmap prov loc) hm γa γb:
   map_img (fst <$> m) ## h_provs hm →
   (∀ i j k, (fst <$> m) !! i = Some k → (fst <$> m) !! j = Some k → i = j) →
   (∀ i k, m !! i = Some k → k.2 = 0%Z) →
@@ -510,7 +513,7 @@ Proof.
 Qed.
 
 (** Create the large invariant and the residual from the two small invariants. *)
-Lemma rhiv_shared_from_ab {Σ} `{!satG Σ heap_injUR} inja' injb' γa γb γ ha hb hm:
+Lemma rhiv_shared_from_ab inja' injb' γa γb γ ha hb hm:
   heapUR_trader (sat γ) (sat γa) own_heap_i own_heap_i -∗
   heapUR_trader (sat γ) (sat γb) own_heap_s own_heap_s -∗
   ⌈heap_inj_inv_i ha @ sat γa⌉ -∗
@@ -563,7 +566,7 @@ Proof.
 Qed.
 
 (** Create the two small invariants from the large invariant and the residual. *)
-Lemma rec_heap_inj_vertical_shared_to_ab {Σ} `{!satG Σ heap_injUR} inja' injb' γa γb γ ha hb hm:
+Lemma rhiv_shared_to_ab inja' injb' γa γb γ ha hb hm:
   ⌈{sat γa}⌉ -∗ ⌈{sat γb}⌉ -∗
   heapUR_trader (sat γa) (sat γ) own_heap_i own_heap_i -∗
   heapUR_trader (sat γb) (sat γ) own_heap_s own_heap_s -∗
@@ -623,6 +626,7 @@ Proof.
   - apply rhiv_core_a_lookup_Some. naive_solver.
   - iPureIntro. lia.
 Qed.
+End vertical.
 
 Lemma rec_heap_inj_vertical m hinit `{!VisNoAng m.(m_trans)} :
   trefines (rec_heap_inj hinit (rec_heap_inj hinit m))
@@ -755,7 +759,7 @@ Proof.
     rewrite map_difference_union. 2: { apply rhiv_core_b_proj_subseteq. }
 
     (** Create the small [heap_in_inj_inv]. *)
-    iMod (rec_heap_inj_vertical_shared_to_ab with "Hγa Hγb Hta Htb [$] [$] [$] [$] [$] [$] [$] [$] [$]") as (?) "([??] & ? & ? & ? & ? & ? & ? & ? & ? & ? & %Heqm')".
+    iMod (rhiv_shared_to_ab with "Hγa Hγb Hta Htb [$] [$] [$] [$] [$] [$] [$] [$] [$]") as (?) "([??] & ? & ? & ? & ? & ? & ? & ? & ? & ? & %Heqm')".
 
     iDestruct (heap_in_inj_inv_combine with "Hinja [$]") as "Hinja".
     iDestruct (heap_in_inj_inv_combine with "Hinjb [$]") as "Hinjb".

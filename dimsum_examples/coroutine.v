@@ -1,6 +1,6 @@
 From dimsum.core Require Export proof_techniques.
 From dimsum.core Require Import seq_product link spec_mod.
-From dimsum.examples Require Import rec asm rec_to_asm.
+From dimsum.examples Require Import rec asm rec_to_asm2.
 
 Local Open Scope Z_scope.
 Local Opaque map_union. (* without this simpl takes very long *)
@@ -587,7 +587,7 @@ Proof.
   tstep_i => *. simplify_eq.
   tstep_i. eexists true. split; [done|]. eexists h, ssz, vs, avs, f.
   split!. { fast_set_solver. }
-  { iSatMono. iIntros!. rewrite /r2a_mem_map/mo big_sepM_empty big_sepM_union //. iDestruct!.
+  { iSatMono. iIntros!. rewrite /mo big_sepM_empty big_sepM_union //. iDestruct!.
     iDestruct select (r2a_f2i_incl f2i1 _) as "#Hf2i1". iFrame "#∗".
     iDestruct (r2a_mem_stack_init with "[$]") as "?".
     iDestruct "Hf2i1" as "-#?". iSplit!. iAccu. }
@@ -652,7 +652,7 @@ Proof.
        end). }
   { split!. {
       iSplit; iIntros!; iDestruct select (r2a_f2i_incl f2i2 _) as "#?"; iFrame "#∗".
-      iSplit!. by iApply big_sepM_empty. } } { done. }
+      iSplit!. } } { done. }
   clear -Hyf Hidisj Hfdisj Hydisj Hy1 Hy2 Hwf1 Hwf2 Hag VisNoAng0 VisNoAng1.
   have ? : yield_addr ∈ yield_asm_dom by rewrite /yield_asm_dom /yield_asm; unlock; compute_done.
   move => n ? Hloop [[[σpy1 σpy2][yt yregs]][[[σpc1 σpc2][[σsm1 σ1][[pp1 [cs1 lr1]]x1]]][[σsm2 σ2][[pp2 [cs2 lr2]]x2]]]].

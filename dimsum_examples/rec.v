@@ -746,6 +746,10 @@ Global Program Instance heap_empty : Empty heap_state :=
   Heap ∅ ∅ _.
 Next Obligation. move => ?. rewrite lookup_empty => -[??]. done. Qed.
 
+Lemma h_blocks_empty :
+  h_blocks ∅ = ∅.
+Proof. done. Qed.
+
 Program Definition heap_update (h : heap_state) (l : loc) (v : val) : heap_state :=
   Heap (alter (λ _, v) l h.(h_heap)) h.(h_provs) _.
 Next Obligation. move => ????. rewrite lookup_alter_is_Some. apply heap_wf. Qed.

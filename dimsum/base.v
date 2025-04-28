@@ -756,6 +756,11 @@ Lemma list_subseteq_cons_l {A} x (xs ys : list A):
   x ∈ ys → xs ⊆ ys → x :: xs ⊆ ys.
 Proof. set_solver. Qed.
 
+Lemma list_to_singleton {A} `{!Inhabited A} (l : list A) :
+  length l = 1%nat →
+  l = [default inhabitant (head l)].
+Proof. by destruct l as [|? []]. Qed.
+
 Lemma elem_of_drop {A} x n (xs : list A):
   x ∈ drop n xs → x ∈ xs.
 Proof.  move => /elem_of_list_lookup. setoid_rewrite lookup_drop => -[??]. apply elem_of_list_lookup. naive_solver. Qed.
@@ -964,6 +969,13 @@ Lemma default_eq_neq {A} (x y : A) o:
   x ≠ y →
   default x o = y ↔ o = Some y.
 Proof. destruct o; naive_solver. Qed.
+
+(** * Lemmas about Z *)
+Lemma fmap_add_seqZ0 m n : Z.add m <$> seqZ 0 n = seqZ m n.
+Proof. rewrite fmap_add_seqZ. f_equal. lia. Qed.
+
+Global Instance Z_add_inj a : Inj eq eq (Z.add a).
+Proof. move => ??. lia. Qed.
 
 (** * Strings and pretty *)
 Notation string_to_list := String.list_ascii_of_string.
@@ -1414,6 +1426,51 @@ Proof.
   rewrite zip_with_zip big_sepL_fmap bi.pure_True // left_id.
   by f_equiv => ? [??].
 Qed.
+
+  Lemma big_sepL_impl_frame {A} Φ Φ' (l : list A) P :
+    ([∗ list] k↦v∈l, Φ k v) -∗
+    □ (∀ k v, ⌜l !! k = Some v⌝ → P -∗ Φ k v -∗ P ∗ Φ' k v) -∗
+    P -∗
+    ([∗ list] k↦v∈l, Φ' k v) ∗ P.
+  Proof.
+    iIntros "Hm #Himpl HP".
+    iInduction l as [|] "IH" forall (Φ Φ') => /=.
+    { by iFrame. }
+    iDestruct ("Hm") as "[??]".
+    iDestruct ("Himpl" with "[%] HP [$]") as "[??]". { by simplify_map_eq. }
+    iDestruct ("IH" with "[] [$] [$]") as "[? $]".
+    { iIntros "!>" (???) "? ?". iApply ("Himpl" with "[] [$]"). 2: done. done. }
+    iFrame.
+  Qed.
+
+  Lemma big_sepL_impl_bupd_ex_frame {A} `{!BiBUpd PROP} {B} (P : B → PROP) Φ Φ' (l : list A) b :
+    ([∗ list] k↦v∈l, Φ k v) -∗
+    □ (∀ k v b, ⌜l !! k = Some v⌝ → P b -∗ Φ k v ==∗ ∃ b', P b' ∗ Φ' k v) -∗
+    P b ==∗
+    ∃ b' : B, ([∗ list] k↦v∈l, Φ' k v) ∗ P b'.
+  Proof.
+    iIntros "Hm #Himpl HP".
+    iInduction l as [|] "IH" forall (Φ Φ' b) => /=.
+    { iFrame. by iModIntro. }
+    iDestruct ("Hm") as "[??]".
+    iMod ("Himpl" with "[%] HP [$]") as (?) "[??]". { by simplify_map_eq. }
+    iMod ("IH" with "[] [$] [$]") as (?) "[? $]".
+    { iIntros "!>" (????) "??". iApply ("Himpl" with "[] [$]"). 2: done. done. }
+    iModIntro. iFrame.
+  Qed.
+
+  Lemma big_sepL_impl_bupd_frame {A} `{!BiBUpd PROP} Φ Φ' (l : list A) P :
+    ([∗ list] k↦v∈l, Φ k v) -∗
+    □ (∀ k v, ⌜l !! k = Some v⌝ → P -∗ Φ k v ==∗ P ∗ Φ' k v) -∗
+    P ==∗
+    ([∗ list] k↦v∈l, Φ' k v) ∗ P.
+  Proof.
+    iIntros "Hm #Himpl HP".
+    iMod (big_sepL_impl_bupd_ex_frame (λ _ : unit, P) with "Hm [] HP") as (?) "$" => //.
+    iIntros "!>" (????) "? ?". iMod ("Himpl" with "[//] [$] [$]") as "$". iModIntro.
+    by iExists tt.
+  Qed.
+
 End big_op.
 
 (** * Lemmas about [big_sepM] *)

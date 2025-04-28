@@ -1,6 +1,6 @@
 From dimsum.core Require Export proof_techniques.
 From dimsum.core Require Import itree_mod.
-From dimsum.examples Require Import rec asm rec_to_asm.
+From dimsum.examples Require Import rec asm rec_to_asm2.
 From dimsum.examples.compiler Require Import compiler.
 
 Local Open Scope Z_scope.
@@ -96,7 +96,7 @@ Proof.
     σr2a.(r2a_calls) = [] ∧
     σf = SMFilter ∧
     pp = PPOutside ∧
-    (rP ⊢ r2a_f2i_incl int_to_ptr_f2i (dom int_to_ptr_asm) ∗ [∗ map] p↦z∈ps, r2a_heap_shared p z)). }
+    (rP ⊢ r2a_f2i_incl int_to_ptr_f2i (dom int_to_ptr_asm) ∗ [∗ map] p↦z∈ps, r2a_shared p z)). }
   { exists false. split!. iIntros!. iFrame "#". by rewrite big_sepM_empty. } { done. }
   move => n _ Hloop [????] [[?[? ps]][[??]?]] ?. destruct!/=.
   tstep_i => ????? Hi. tstep_s. split!.
@@ -138,7 +138,7 @@ Proof.
     { destruct (ps !! l.1) as [z'|] eqn:Hp => //=.
       iDestruct (big_sepM_lookup with "[$]") as "?"; [done|].
       iAssert ⌜z' = z⌝%I as %?; [|done].
-      by iApply (r2a_heap_shared_ag with "[$]"). }
+      by iApply (r2a_shared_agree with "[$]"). }
     iSatStop.
     go_s. eexists z. go.
     go_s. go_s. go_s.
@@ -392,7 +392,7 @@ Proof.
   split!.
   { simplify_map_eq'. rewrite/main_asm_dom. unlock. compute_done. }
   { apply: satisfiable_mono; [by eapply (r2a_res_init mem ∅ main_f2i)|].
-    iIntros!. rewrite /r2a_mem_map big_sepM_empty. iFrame.
+    iIntros!. rewrite big_sepM_empty. rewrite h_blocks_empty. iFrame.
     iDestruct select (r2a_f2i_full _) as "#Hf2i".
     iSplit!. 2: iSplitL; iSplit!.
     - unfold r2a_f2i_incl. iExists _. iFrame "#". iSplit!.

@@ -1,6 +1,6 @@
 From dimsum.core Require Export proof_techniques.
 From dimsum.core Require Import spec_mod.
-From dimsum.examples Require Import rec asm rec_to_asm print coroutine.
+From dimsum.examples Require Import rec asm rec_to_asm2 print coroutine.
 From dimsum.examples.compiler Require Import compiler.
 
 Local Open Scope Z_scope.
@@ -200,8 +200,8 @@ Proof.
   tstep_i. eexists true. split; [done|] => /=. eexists ∅, _, [], [], "main". split!.
   { simplify_map_eq'. unfold yield_asm_dom, yield_asm, main_asm_dom, stream_asm_dom; unlock; compute_done. } { rewrite !not_elem_of_union. naive_solver. }
   { apply: satisfiable_mono; [by eapply (r2a_res_init _ ∅ all_f2i)|].
-    iIntros!. iDestruct select (r2a_mem_auth _) as "$". iFrame.
-    iDestruct (big_sepM_subseteq with "[$]") as "?"; [done|].
+    iIntros!. iDestruct select (r2a_memUR_inv _) as "$". rewrite h_blocks_empty.
+    iFrame. iDestruct (big_sepM_subseteq with "[$]") as "?"; [eassumption|].
     rewrite big_sepM_union; [|done]. iDestruct!. iFrame.
     iDestruct select (r2a_f2i_full _) as "#Hf2i".
     iSplit!. 2: iSplitL; iSplit!.

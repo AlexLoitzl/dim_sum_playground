@@ -7,6 +7,8 @@ From dimsum.examples Require Import rec.
 
 Set Default Proof Using "Type".
 
+(** * THIS FILE IS OBSOLETE! USE rec_heap_inj INSTEAD! *)
+
 (** * rec_heap_bij *)
 (** [rec_heap_bij] allows transformations of memory when proving a
 refinement between two Rec modules. *)

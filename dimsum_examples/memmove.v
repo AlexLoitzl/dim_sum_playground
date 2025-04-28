@@ -1,6 +1,6 @@
 From dimsum.core Require Export proof_techniques.
 From dimsum.core Require Import spec_mod.
-From dimsum.examples Require Import rec asm rec_to_asm print.
+From dimsum.examples Require Import rec asm rec_to_asm2 print.
 From dimsum.examples.compiler Require Import compiler.
 
 Local Open Scope Z_scope.
@@ -61,7 +61,7 @@ Proof.
     σr2a.(r2a_calls) = [] ∧
     σf = SMFilter ∧
     pp = PPOutside ∧
-    (rP ⊢ r2a_f2i_incl locle_f2i (dom locle_asm) ∗ [∗ map] p↦z∈ps, r2a_heap_shared p z)). }
+    (rP ⊢ r2a_f2i_incl locle_f2i (dom locle_asm) ∗ [∗ map] p↦z∈ps, r2a_shared p z)). }
   { split!. iIntros!. iFrame "#". by rewrite big_sepM_empty. } { done. }
   move => n _ Hloop [????] [[?[? ps]][[??]?]] ?. destruct!/=.
   tstep_i => ????? Hi. tstep_s. split!.
@@ -90,17 +90,17 @@ Proof.
   go_s.
   go_s. eexists z1. go.
   go_s. split.
-  { iSatStart. iDestruct (r2a_heap_shared_ag_big with "[$] Hl1") as %?. iSatStop. done. }
+  { iSatStart. iDestruct (r2a_shared_agree_big with "[$] Hl1") as %?. iSatStop. done. }
   go.
   go_s.
   iSatStart.
-  iAssert ([∗ map] p↦z ∈ <[l1.1 := z1]>ps, r2a_heap_shared p z)%I as "#Hps'".
+  iAssert ([∗ map] p↦z ∈ <[l1.1 := z1]>ps, r2a_shared p z)%I as "#Hps'".
   { by iApply (big_sepM_insert_2 with "Hl1"). }
   iSatStop.
   go_s.
   go_s. eexists z2. go.
   go_s. split.
-  { iSatStart. iDestruct (r2a_heap_shared_ag_big with "Hps' Hl2") as %?. iSatStop. done. }
+  { iSatStart. iDestruct (r2a_shared_agree_big with "Hps' Hl2") as %?. iSatStop. done. }
   go.
   go_s.
   tstep_i => ??. simplify_map_eq'.
@@ -632,7 +632,7 @@ Proof.
   tstep_i. eexists true. split; [done|] => /=. eexists ∅, _, [], [], "main". split!.
   { simplify_map_eq'. unfold main_asm_dom, memmove_asm_dom, memcpy_asm_dom. unlock. compute_done. }
   { apply: satisfiable_mono; [by eapply (r2a_res_init mem ∅ main_f2i)|].
-    iIntros!. rewrite /r2a_mem_map big_sepM_empty. iFrame.
+    iIntros!. rewrite big_sepM_empty h_blocks_empty. iFrame.
     iDestruct select (r2a_f2i_full _) as "#Hf2i".
     iSplit!. 2: iSplitL; iSplit!.
     - unfold r2a_f2i_incl. iExists _. iFrame "#". iSplit!.

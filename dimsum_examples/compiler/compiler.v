@@ -1,5 +1,5 @@
 From dimsum.core Require Export proof_techniques.
-From dimsum.examples Require Import rec asm rec_to_asm r2a_bij_vertical.
+From dimsum.examples Require Import rec asm rec_to_asm2 r2a_bij_vertical2.
 From dimsum.examples.compiler Require Import monad linear_rec ssa linearize mem2reg codegen.
 
 Local Open Scope Z_scope.

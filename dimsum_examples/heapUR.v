@@ -572,6 +572,11 @@ Global Arguments heapUR_block : simpl never.
 
 (** * Trader for HeapUR *)
 (* TODO: Better name? Trade Post? Warp Gate? *)
+(* TODO: Create a Tradeable typeclass or even a modality? This would
+allow generalizing e.g. lifting to existential quantifiers and big
+separating conjunctions. Maybe even the [r2av_combine_val], ...,
+[r2av_shared_from_ab], [r2av_shared_to_ab] lemmas could be turned into
+instances of tradeable? *)
 
 Section trader.
   Context {PROP1 PROP2 PROP : bi} `{!BiBUpd PROP1} `{!BiBUpd PROP2}.

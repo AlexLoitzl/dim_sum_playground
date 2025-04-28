@@ -467,6 +467,18 @@ Definition heap_inj_inv (hi hs : heap_state) (rem : list prov) : uPred heap_injU
   heap_inj_statics (h_static_provs hs).
 
 
+Lemma heap_inj_inv_range hi hs l1 l2 z rem:
+  l2.2 = 0%Z →
+  heap_range hs l2 z →
+  l2.1 ∉ rem →
+  heap_inj_inv hi hs rem -∗
+  loc_in_inj l1 l2 -∗
+  ⌜heap_range hi l1 z⌝.
+Proof.
+  iIntros (???) "[Hinvi [Hinvs[?[??]]]]".
+  by iApply (heap_in_inj_range with "[$] [$] [$]").
+Qed.
+
 Lemma heap_inj_inv_lookup hi hs li ls v rem:
   h_heap hs !! ls = Some v →
   ls.1 ∉ rem →

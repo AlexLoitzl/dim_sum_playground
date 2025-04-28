@@ -35,6 +35,7 @@ Record BiWeakEmbedMixin (PROP1 PROP2 : bi) (W : WeakEmbed PROP1 PROP2) := {
   (* bi_weak_embed_mixin_impl_2 (P Q : PROP1) : *)
     (* (⌈P @ W⌉ → ⌈Q @ W⌉) ⊢@{PROP2} ⌈P → Q @ W⌉; *)
   (* This does not hold for sat since it requires commuting ∃ and ∀ *)
+  (* Maybe it could hold by using the axiom of choice and own_forall? *)
   (* bi_weak_embed_mixin_forall_2 A (Φ : A → PROP1) : *)
     (* (∀ x, ⌈Φ x @ W⌉) ⊢@{PROP2} ⌈∀ x, Φ x @ W⌉; *)
   bi_weak_embed_mixin_and_2 P Q :
@@ -390,6 +391,21 @@ Qed.
 Lemma weak_embed_bupd_elim P :
   (⌈{W}⌉ -∗ |==> ⌈{W}⌉ ∗ P) ⊢ |==>⌈W⌉ P.
 Proof. done. Qed.
+
+Lemma big_sepL_impl_weak_bupd_frame {A} (Φ Φ' : nat → A → PROP2) l P :
+  ([∗ list] k↦v∈l, Φ k v) -∗
+  □ (∀ k v, ⌜l !! k = Some v⌝ → P -∗ Φ k v ==∗⌈W⌉ P ∗ Φ' k v) -∗
+  P ==∗⌈W⌉
+  ([∗ list] k↦v∈l, Φ' k v) ∗ P.
+Proof.
+  rewrite -weak_embed_bupd_elim.
+  iIntros "Hm #Himpl HP Htok". rewrite comm -assoc.
+  iApply (big_sepL_impl_bupd_frame with "[$] []"). 2: iFrame.
+  iIntros "!>" (???) "[??] ?".
+  iApply (weak_embed_bupd_intro with "[$]").
+  iMod ("Himpl" with "[//] [$] [$]") as "[$ $]".
+  iModIntro. by iIntros "$".
+Qed.
 
 Lemma big_sepM_impl_weak_bupd_frame {K A} `{Countable K} (Φ Φ' : K → A → PROP2) m P :
   ([∗ map] k↦v∈m, Φ k v) -∗
