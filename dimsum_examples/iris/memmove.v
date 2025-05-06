@@ -135,7 +135,7 @@ Section memmove.
         ([∗ map] l↦v∈array s' hvss ∪ array d' hvsd, l ↦ v) ∗ RET (s', d', hvss))
       (λ '(s, d, hvss) v, ⌜v = 0⌝ ∗ ([∗ map] l↦v∈array d hvss ∪ array s hvss, l ↦ v)).
   Proof.
-    iIntros "#Hf". simpl. iApply rec_hoare_ctx. iIntros "#?".
+    iIntros "#Hf". iApply rec_hoare_ctx. iIntros "#?".
     iApply ord_loeb; [done|]. iIntros "!> #IH". iIntros (es Φ) "HΦ".
     iDestruct "HΦ" as (d s n o d' s' hvss hvsd ? Hn Hlen Ho Hd' Hs' Hle) "[Hm HΦ]"; simplify_eq/=.
     iApply (sim_tgt_rec_Call_internal with "Hf"); [done|]. iModIntro => /=.
