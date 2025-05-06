@@ -15,15 +15,18 @@ Definition curly_lambda1 {A B} (f : ∀ x : A, B x) : ∀ x : A, B x := f.
 Definition curly_lambda2 {A B} (f : ∀ x : A, B x) : ∀ x : A, B x := f.
 Definition curly_lambda3 {A B} (f : ∀ x : A, B x) : ∀ x : A, B x := f.
 Definition curly_lambda4 {A B} (f : ∀ x : A, B x) : ∀ x : A, B x := f.
+Definition curly_lambda5 {A B} (f : ∀ x : A, B x) : ∀ x : A, B x := f.
 Arguments curly_lambda1 _ _ & _.
 Arguments curly_lambda2 _ _ & _.
 Arguments curly_lambda3 _ _ & _.
 Arguments curly_lambda4 _ _ & _.
+Arguments curly_lambda5 _ _ & _.
 Arguments curly_lambda1 _ _ _ _ /.
 Arguments curly_lambda2 _ _ _ _ /.
 Arguments curly_lambda3 _ _ _ _ /.
 Arguments curly_lambda4 _ _ _ _ /.
-Strategy expand [curly_lambda1 curly_lambda2 curly_lambda3 curly_lambda4].
+Arguments curly_lambda5 _ _ _ _ /.
+Strategy expand [curly_lambda1 curly_lambda2 curly_lambda3 curly_lambda4 curly_lambda5].
 
 (* TODO: Is it good to burn ({{ as a token or should we use something
 else? E.g ({λ x , v }) ? *)
@@ -39,6 +42,9 @@ Notation "'({{' x y z , v } } )" := (curly_lambda3 (fun x y z => v))
 Notation "'({{' x y z a , v } } )" := (curly_lambda4 (fun x y z a => v))
     (x name, y name, z name, a name, at level 0,
       format "({{  x  y  z  a ,  '/' v  } } )") : stdpp_scope.
+Notation "'({{' x y z a b , v } } )" := (curly_lambda5 (fun x y z a b => v))
+    (x name, y name, z name, a name, b name, at level 0,
+      format "({{  x  y  z  a  b ,  '/' v  } } )") : stdpp_scope.
 (* The following notations cause too much of a right drift. *)
 (** By using level 200, we avoid parsing conflicts with the wp
 notation. It also means that the notation usually needs to be written
@@ -99,6 +105,13 @@ Section mstate_var.
   Lemma mstate_var_split γ σ :
     γ ⤳@{S} - ==∗ γ ⤳ σ ∗ γ ⤳ σ.
   Proof. iIntros "[% H]". by iMod (ghost_var_update with "H") as "[$ $]". Qed.
+
+  Lemma mstate_var_agree `{!mstateG Σ} γ (σ1 σ2 : S) :
+    γ ⤳ σ1 -∗ γ ⤳ σ2 -∗ ⌜σ1 = σ2⌝.
+  Proof.
+    iIntros "H1 H2". iDestruct (ghost_var_agree with "[H1] [H2]") as %[=]; [done..|].
+    inv H0. by dimsum.core.axioms.simplify_K.
+  Qed.
 
 End mstate_var.
 Global Arguments mstate_var_alloc {_} _ {_ _}.

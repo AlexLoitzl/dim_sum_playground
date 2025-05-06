@@ -174,7 +174,7 @@ Abort.
 Section echo.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
 
-  Lemma sim_echo_spec Π γσ_s (σ : m_state (spec_trans _ unit)) :
+  Lemma sim_echo_spec Π Π' γσ_s (σ : m_state (spec_trans _ unit)) :
     "echo" ↪ Some echo_rec -∗
     "getc" ↪ None -∗
     "putc" ↪ None -∗
@@ -182,10 +182,10 @@ Section echo.
     ⌜σ.1 ≡ Spec.forever echo_spec_body⌝ -∗
     □ switch_external Π ({{ _ σ POST,
         ∃ σ_s, γσ_s ⤳ σ_s ∗
-      POST (spec_trans _ unit) σ_s ({{ _ Π',
+      POST (spec_trans _ unit) σ_s Π' ({{ _,
       switch Π' ({{ κ σ_s' POST,
        ⌜κ = None⌝ ∗
-      POST Tgt _ _ ({{ σ' Π', ⌜σ' = σ⌝ ∗ ⌜Π' = Π⌝ ∗ γσ_s ⤳ σ_s'}})}})}})}}) -∗
+      POST Tgt _ _ Π ({{ σ', ⌜σ' = σ⌝ ∗ γσ_s ⤳ σ_s'}})}})}})}}) -∗
     rec_fn_spec_hoare Tgt Π "echo" ({{ es _, ⌜es = []⌝}}).
   Proof.
     iIntros "#?#?#? Hγσ_s Hσ_s #Hswitch". iApply rec_fn_spec_hoare_ctx. iIntros "#?".
@@ -203,79 +203,59 @@ Section echo.
     iApply (sim_tgt_rec_Call_external); [done|].
     iIntros (???) "Hfns' Hh !>". iIntros (??) "[-> [-> Hσ]]".
     iApply "Hswitch". iFrame. iSplit!.
-    iIntros (??). iDestruct 1 as (->) "Hs".
+    iIntros (?). iDestruct 1 as (->) "Hs".
     iApply (sim_gen_expr_intro _ tt with "[Hγ] [-]"); simpl; [done..|].
     rewrite ->unfold_forever. rewrite {2}/echo_spec_body.
     rewrite bind_bind. iApply (sim_src_TExist with "[-]").
     rewrite bind_bind.
-    (* TODO: don't unfold TCallRet *)
-    rewrite /TCallRet bind_bind.
-    iApply sim_gen_TVis. iIntros ([]) "Hγ". iIntros (??) "[-> [-> _]]".
-    iApply "Hs". iSplit!. iIntros (??) "[-> Hs]".
-    iApply (sim_gen_stop with "[-]"). iApply "Hs". iSplit!.
-    iIntros (??) "[-> [-> ?]]".
-    iApply (sim_tgt_rec_Waiting_raw with "[-]"). iSplit.
-    { iIntros. iModIntro. iApply "Hswitch". iFrame. iSplit!.
-      iIntros (??) "[-> Hs]".
-      iApply (sim_gen_expr_intro _ tt with "[Hγ] [-]"); simpl; [done..|].
-      rewrite bind_bind. iApply (sim_src_TExist with "[-]").
-      rewrite bind_bind. iApply sim_gen_TVis.
-      iIntros ([]) "Hγ". iIntros (??) "[-> [-> _]]".
-      iApply "Hs". iSplit!. iIntros (??) "[-> _]".
-      iApply (sim_gen_expr_intro _ tt with "[Hγ] [-]"); simpl; [done..|].
-      iApply sim_src_TUb. }
-    iIntros. iModIntro. iApply "Hswitch". iFrame. iSplit!.
-    iIntros (??) "[-> Hs]".
-    iApply (sim_gen_expr_intro _ tt with "[Hγ] [-]"); simpl; [done..|].
-    rewrite bind_bind. iApply (sim_src_TExist with "[-]").
-    rewrite bind_bind. iApply sim_gen_TVis.
-    iIntros ([]) "Hγ". iIntros (??) "[-> [-> _]]".
-    iApply "Hs". iSplit!. iIntros (??) "[-> Hs]".
-    iApply (sim_gen_expr_intro _ tt with "[Hγ] [-]"); simpl; [done..|].
-    rewrite bind_ret_l bind_bind. iApply (sim_src_TAssume with "[-]").
-    iIntros (<-). iApply sim_gen_expr_None => /=.
-    iIntros (? [] ?) "Hγ". iIntros (??) "[-> [-> _]]".
-    iApply "Hs". iSplit!. iIntros (??) "[-> [-> ?]]".
-    iApply "Hσ". iSplit!. iFrame. iApply "HΦ".
 
+    iApply sim_src_TCallRet.
+    iIntros (??) "(% & % & % & -> & -> & -> & -> & HC)".
+    iApply "Hs". iSplit!. iIntros (?) "[-> Hs]".
+    iApply sim_gen_stop.
+    iApply "Hs". iSplit!.
+    iIntros (?) "[-> ?]".
+
+    iApply (sim_tgt_rec_Waiting_all_raw with "[-]"). iIntros (?) "!>".
+    iApply "Hswitch". iFrame. iSplit!. iIntros (?) "[<- Hs]".
+    iApply "HC". iSplit!. iIntros (??) "[-> Hm]". iApply "Hs".
+    iSplit!. iIntros (?) "[-> Hs]". iApply "Hm".
+    iSplit!. rewrite /sim_post.
+    iIntros (??->). rewrite bind_bind.
+    iApply sim_src_TAssume.
+    iIntros (<-). iApply sim_gen_expr_None => /=.
+    iIntros (? [] ?) "Hγ".  iIntros (??) "[-> [-> _]]".
+    iApply "Hs". iSplit!. iIntros (?) "[-> ?]".
+    iApply "Hσ". iSplit!. iFrame. iApply "HΦ".
     iIntros (es ?). iDestruct 1 as (->) "HΦ".
     iApply (sim_tgt_rec_Call_external); [done|].
     iIntros (???) "Hfns'' Hh !>". iIntros (??) "[-> [-> Hσ]]".
     iApply "Hswitch". iFrame. iSplit!.
-    iIntros (??). iDestruct 1 as (->) "Hs".
+    iIntros (?) "[-> Hs]".
     iApply (sim_gen_expr_intro _ tt with "[Hγ] [-]"); simpl; [done..|].
     rewrite bind_bind. iApply (sim_src_TExist with "[-]").
     rewrite bind_bind.
-    (* TODO: don't unfold TCallRet *)
-    setoid_rewrite bind_bind.
-    iApply sim_gen_TVis. iIntros ([]) "Hγ". iIntros (??) "[-> [-> _]]".
-    iApply "Hs". iSplit!. iIntros (??) "[-> Hs]".
-    iApply (sim_gen_stop with "[-]"). iApply "Hs". iSplit!.
-    iIntros (??) "[-> [-> ?]]".
-    iApply (sim_tgt_rec_Waiting_raw with "[-]"). iSplit.
-    { iIntros. iModIntro. iApply "Hswitch". iFrame. iSplit!.
-      iIntros (??) "[-> Hs]".
-      iApply (sim_gen_expr_intro _ tt with "[Hγ] [-]"); simpl; [done..|].
-      setoid_rewrite bind_bind. iApply (sim_src_TExist with "[-]").
-      setoid_rewrite bind_bind. iApply sim_gen_TVis.
-      iIntros ([]) "Hγ". iIntros (??) "[-> [-> _]]".
-      iApply "Hs". iSplit!. iIntros (??) "[-> _]".
-      iApply (sim_gen_expr_intro _ tt with "[Hγ] [-]"); simpl; [done..|].
-      iApply sim_src_TUb. }
-    iIntros. iModIntro. iApply "Hswitch". iFrame. iSplit!.
-    iIntros (??) "[-> Hs]".
-    iApply (sim_gen_expr_intro _ tt with "[Hγ] [-]"); simpl; [done..|].
-    setoid_rewrite bind_bind. iApply (sim_src_TExist with "[-]").
-    setoid_rewrite bind_bind. iApply sim_gen_TVis.
-    iIntros ([]) "Hγ". iIntros (??) "[-> [-> _]]".
-    iApply "Hs". iSplit!. iIntros (??) "[-> Hs]".
-    iApply (sim_gen_expr_intro _ tt with "[Hγ] [-]"); simpl; [done..|].
-    rewrite bind_ret_l bind_bind. iApply (sim_src_TAssume with "[-]").
-    iIntros (<-). rewrite bind_ret_l. iApply sim_gen_expr_None => /=.
-    iIntros (? [] ?) "Hγ". iIntros (??) "[-> [-> _]]".
-    iApply "Hs". iSplit!. iIntros (??) "[-> [-> ?]]".
-    iApply "Hσ". iSplit!. iFrame. iApply "HΦ". iApply "HLOOP".
-    iApply ("IH" with "[$] [//]").
+
+    iApply sim_src_TCallRet.
+    iIntros (??) "(% & % & % & -> & -> & -> & -> & HC)"=> /=.
+    iApply "Hs". iSplit!.
+    iIntros (?) "[-> Hs]".
+    iApply sim_gen_stop.
+    iApply "Hs". iSplit!.
+    iIntros (?) "[-> ?]".
+
+    iApply (sim_tgt_rec_Waiting_all_raw with "[-]").
+    iIntros (?) "!>". iApply "Hswitch". iFrame. iSplit!. iIntros (?) "[<- Hs]".
+    iApply "HC". iSplit!. iIntros (??) => /=. iIntros "[-> Hm]". iApply "Hs".
+    simpl. iSplit!. iIntros (?) "[-> Hs]". iApply "Hm".
+    iSplit!. rewrite /sim_post.
+    iIntros (??->). rewrite bind_bind.
+    iApply sim_src_TAssume. iIntros (<-). rewrite bind_ret_l.
+    iApply sim_gen_expr_None => /=.
+    iIntros (? [] ?) "Hγ".  iIntros (??) "[-> [-> _]]".
+    iApply "Hs". iSplit!. iIntros (?) "[-> Hγσ_s]".
+    iApply "Hσ". iSplit!. iFrame. iApply "HΦ".
+    iApply "HLOOP". by iApply ("IH" with "Hγσ_s").
   Qed.
 
   Lemma echo_spec_sim :
@@ -495,12 +475,12 @@ Section read.
       switch Π ({{ κ σ POST,
         ∃ args mem, ⌜κ = Some (Outgoing, EASyscallCall args mem)⌝ ∗
         ⌜args !! 8%nat = Some __NR_READ⌝ ∗ ⌜args !! 0%nat = Some r0⌝ ∗
-      POST Tgt _ asm_trans ({{ σ' Π',
+      POST Tgt _ asm_trans Π ({{ σ',
         ⌜σ' = σ⌝ ∗
-      switch Π' ({{ κ σ POST,
+      switch Π ({{ κ σ POST,
         ∃ r mem', ⌜κ = Some (Incoming, EASyscallRet r mem')⌝ ∗
-      POST Tgt _ asm_trans ({{ σ' Π',
-        ⌜σ' = σ⌝ ∗ ⌜Π' = Π⌝ ∗ ⌜mem' = mem⌝ ∗
+      POST Tgt _ asm_trans Π ({{ σ',
+        ⌜σ' = σ⌝ ∗ ⌜mem' = mem⌝ ∗
     POST0 (∃ r8', "PC" ↦ᵣ ret ∗ "R30" ↦ᵣ ret ∗ "R0" ↦ᵣ r ∗ "R8" ↦ᵣ r8') }}) }}) }}) }}) }}).
   Proof.
     iIntros "#Hins" (?). iDestruct 1 as (???) "(HPC&HR30&HR0&HR8&Hret)".
@@ -524,10 +504,10 @@ Section read.
       iApply (learn_regs_reg with "HR8").
       iApply learn_regs_done. }
     iIntros ([? [? _]]) "HC".
-    iApply "Hret". iSplit!. iIntros (??) "[-> Hret]".
+    iApply "Hret". iSplit!. iIntros (?) "[-> Hret]".
     iApply "HC". iSplit!. iFrame.
     iIntros (??). iDestruct 1 as (?? ->) "[HR0 HC]". iApply "Hret". iSplit!.
-    iIntros (??) "[-> [-> [-> Hret]]]". iApply "HC". iSplit!. iFrame.
+    iIntros (?) "[-> [-> Hret]]". iApply "HC". iSplit!. iFrame.
     iApply sim_WriteReg. iSplit.
     { iApply (learn_regs_reg with "HPC").
       iApply learn_regs_done. }
@@ -550,36 +530,36 @@ Section getc_read.
   Definition switch_r2a (mr : mod_trans rec_event) (ma : mod_trans asm_event) ts Πr K : iProp Σ :=
       switch Πr ({{ κr σr POST,
         (∃ f vs h, ⌜κr = Some (Outgoing, ERCall f vs h)⌝ ∗
-        K f vs h ({{ a K2,
+        K f vs h ({{ Πa a K2,
         (* replace this with f2i f a *) ⌜a = 1⌝ ∗
-      POST ts _ ma ({{ σa Πa,
+      POST ts _ ma Πa ({{ σa,
         K2 σa ({{ K3,
 
       switch Πa ({{ κa σa POST,
         ∃ regs mem, ⌜κa = Some (Incoming, EAJump regs mem)⌝ ∗
         K3 ({{ K4,
-      POST ts _ ma ({{ σa Πa,
-        K4 σa Πa ({{ K5,
+      POST ts _ ma Πa ({{ σa,
+        K4 σa ({{ K5,
       (* Permission to switch back *)
       switch Πa ({{ κa σa' POST,
         ∃ regs' mem', ⌜κa = Some (Outgoing, EAJump regs' mem')⌝ ∗
         ⌜regs' !!! "PC" = regs !!! "R30"⌝ ∗
         K5 ({{ K6,
-      POST ts _ mr ({{ σr' Πr',
-        ⌜Πr' = Πr⌝ ∗ K6 σr'
+      POST ts _ mr Πr ({{ σr',
+        K6 σr'
       }}) }}) }}) }}) }}) }}) }}) }}) }}) }}) )%I }}).
 
-  Lemma sim_getc_read Π :
+  Lemma sim_getc_read Π Πa :
     "getc" ↪ Some getc_rec -∗
     "read" ↪ None -∗
     ↪ₐ∗ read_asm -∗
     rec_fn_spec_hoare Tgt Π "getc" ({{ es POST0, ⌜es = []⌝ ∗
       switch_r2a rec_trans asm_trans Tgt Π ({{ f vs h POST,
-      POST read_addr ({{ σa ACCEPT,
+      POST Πa read_addr ({{ σa ACCEPT,
         ⌜asm_cur_instr σa = AWaiting⌝ ∗
 
       ACCEPT ({{ POST,
-      POST ({{ σa Πa RET,
+      POST ({{ σa RET,
       ⌜asm_cur_instr σa = ARunning []⌝ ∗
       (* TODO: the following should maybe come from switch_r2a? *)
         asm_state_interp σa ∗
@@ -598,10 +578,10 @@ Section getc_read.
     iIntros (K h fns) "? ? !>".
     iIntros (??) => /=. iDestruct 1 as (??) "HR". simplify_eq.
     iApply "HC" => /=. iSplit!. { admit. }
-    iIntros ([i regs0 mem0 instrs]?) "[% HC]"; simplify_eq/=.
+    iIntros ([i regs0 mem0 instrs]) "[% HC]"; simplify_eq/=.
     iApply sim_tgt_asm_Waiting.
     iIntros (????). iModIntro.
-    iApply "HC" => /=. iSplit!. iIntros ([????] ?) "[% [? HC]]"; simplify_eq/=.
+    iApply "HC" => /=. iSplit!. iIntros ([????]) "[% [? HC]]"; simplify_eq/=.
     iApply (sim_gen_expr_intro (Λ:=asm_mod_lang) with "[$]"). { done. }
     iApply sim_read; [done|] => /=.
     iDestruct "HC" as (???) "(?&?&?&?&HC)". iFrame.

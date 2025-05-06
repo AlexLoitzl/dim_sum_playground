@@ -74,6 +74,7 @@ dimsum_examples/iris/rec2.v
 dimsum_examples/iris/asm.v
 dimsum_examples/iris/memmove.v
 dimsum_examples/iris/echo.v
+dimsum_examples/iris/echo2.v
 
 dimsum/itree/program_logic/language.v
 # dimsum/itree/program_logic/bi_weakestpre.v

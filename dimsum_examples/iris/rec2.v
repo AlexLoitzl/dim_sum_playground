@@ -34,12 +34,16 @@ Definition rec_hoare `{!dimsumGS Σ} `{!recGS Σ} {A : Type} (ts : tgt_src) (Π 
   (f : string) (pre : list expr → (A → iProp Σ) → iProp Σ) (post : A → val → iProp Σ) : iProp Σ :=
   (∀ es Φ, pre es (λ a, ∀ v, post a v -∗ Φ (Val v)) -∗ TGT Call (Val (ValFn f)) es @ Π {{ Φ }}).
 
+(* TODO: Simple Notation that works *)
+Notation "{{[ es ret , P ]}} f @ ts ; Π {{[ p v , Q ]}}" :=
+  (rec_hoare ts Π f (fun es ret => P) (fun p v => Q))%I
+    (at level 20, es name, ret name, p name, v name).
 
 (* TODO: Can we make a notation like the following work? *)
-Notation "'{{[' a .. b , 'ARGS' args ; ret , P ] } } f @ ts ; Π {{[ x .. y , 'RET' retv ; reta , Q ] } }" :=
-  (∀ Φ,
-     (∀ a, .. (∀ b, let ret reta := (∀ x, .. (∀ y, Q -∗ Φ retv) .. ) in P -∗ WP{ts} Call (Val (ValFn f)) args @ Π {{ Φ }}) .. ))%I
-    (at level 20, a closed binder, b closed binder, x closed binder, y closed binder, ret closed binder, reta closed binder) : bi_scope.
+(* Notation "'{{[' a .. b , 'ARGS' args ; ret , P ] } } f @ ts ; Π {{[ x .. y , 'RET' retv ; reta , Q ] } }" := *)
+(*   (∀ Φ, *)
+(*     (∀ a, .. (∀ b, let ret reta := (∀ x, .. (∀ y, Q -∗ Φ retv) .. ) in P -∗ WP{ts} Call (Val (ValFn f)) args @ Π {{ Φ }}) .. ))%I *)
+(*     (at level 20, a closed binder, b closed binder, x closed binder, y closed binder, ret closed binder, reta closed binder) : bi_scope. *)
 
 Section echo.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
@@ -53,8 +57,23 @@ Section echo.
                      (λ _ v, RET tt)))
       (λ _ v, True).
   Proof. Abort.
-  (* Lemma sim_echo Π : *)
-    (* {{[ a, ARGS [] ; _ , ret tt ] } } "echo" @ Tgt; Π {{[ v, RET v; '(), True ] } }. *)
+
+  Lemma sim_echo0 Π :
+    ⊢ {{[ es ret, ⌜es = [Val 0]⌝ ∗ ret tt ]}} "echo" @ Tgt ; Π {{[ arg v, True ]}}.
+  Proof. Abort.
+
+  Lemma sim_echo0 Π :
+    ⊢ {{[es RET, ⌜es = []⌝ ∗
+          {{[es RET, ⌜es = []⌝ ∗ RET tt]}}
+            "getc" @ Tgt ; Π
+          {{[_ v,
+              {{[ es RET, ⌜es = [Val v]⌝ ∗ RET tt]}}
+                "putc" @ Tgt ; Π
+              {{[_ _, RET tt]}}]}}]}}
+        "echo" @ Tgt ; Π
+      {{[_ v, True]}}.
+
+  Proof. Abort.
 End echo.
 
 Section fn_spec.
@@ -67,8 +86,54 @@ Section fn_spec.
     (ord_later_ctx -∗ rec_fn_spec_hoare ts Π f C) -∗
     rec_fn_spec_hoare ts Π f C.
   Proof. iIntros "Hc" (??) "?". iApply sim_gen_expr_ctx. iIntros "?". by iApply ("Hc" with "[$]"). Qed.
+  Lemma rec_hoare_ctx {A} ts Π f pre (post : A → _ → _) :
+    (ord_later_ctx -∗ rec_hoare ts Π f pre post) -∗
+    rec_hoare ts Π f pre post.
+  Proof. iIntros "Hc" (??) "?". iApply sim_gen_expr_ctx. iIntros "?". by iApply ("Hc" with "[$]"). Qed.
 End fn_spec.
 
+(* Call with direct return *)
+Definition TCallRet {S} (f : string) (vs : list val) (h : heap_state) :
+  spec rec_event S (val * heap_state) :=
+  TVis (Outgoing, ERCall f vs h);;
+  e ← TExist _;
+  TVis (Incoming, e);;
+  if e is ERReturn v h' then
+    TRet (v, h')
+  else
+    TUb.
+
+Section TCallRet.
+  Context `{!dimsumGS Σ} `{!specGS} {S : Type}.
+
+  Lemma sim_src_TCallRet f vs h (k: _ → spec rec_event S void) Π Π' Φ :
+    switch Π ({{κ σ POST,
+      ∃ f' vs' h1,
+      ⌜f' = f⌝ ∗ ⌜vs' = vs⌝ ∗ ⌜h1 = h⌝ ∗ ⌜κ = Some (Outgoing, ERCall f vs h)⌝ ∗
+    POST Src _ (spec_trans rec_event S) Π' ({{σ',
+      ⌜σ = σ'⌝ ∗  ∃ e,
+    switch Π' ({{κ σ POST,
+      ⌜κ = Some (Incoming, e)⌝ ∗
+    POST Src _ (spec_trans rec_event S) Π ({{ σ'',
+      ⌜σ = σ''⌝ ∗ (∀ v h', ⌜e = ERReturn v h'⌝ -∗ (SRC (k (v, h')) @ Π {{ Φ }}))}})}})}})}}) -∗
+    SRC (Spec.bind (TCallRet f vs h) k) @ Π {{ Φ }}.
+  Proof.
+    iIntros "HC" => /=. rewrite /TCallRet bind_bind.
+    iApply sim_gen_TVis. iIntros (s) "Hs". iIntros "% % /=". iIntros "[% [% HΠ]]". subst.
+    iApply "HC" => /=. iSplit!.
+    iIntros (?) "[% [% HC]]" => /=. subst.
+    iApply (sim_gen_expr_intro _ tt with "[Hs] [-]"); simpl; [done..|]. rewrite bind_bind.
+    iApply (sim_src_TExist _). rewrite bind_bind.
+    iApply sim_gen_TVis. iIntros (s') "Hs". iIntros (??) "[% [% HΠ']]" => /=.
+    subst. iApply "HC" => /=. iSplit!.
+    iIntros (?) "[% HC]". destruct!/=.
+    iApply "HΠ". iSplit!. iSplitL "Hs". 1: done.
+    destruct e. iApply sim_src_TUb.
+    rewrite bind_ret_l.
+    by iApply "HC".
+  Qed.
+
+End TCallRet.
 
 Section lifting.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
@@ -91,6 +156,24 @@ Section lifting.
       iModIntro. iSplit!. do 2 iModIntro. done.
     - iDestruct "HΠ" as "[_ HΠ]". iDestruct ("HΠ" with "[//]") as "HΠ".
       iModIntro. iSplit!. do 2 iModIntro. done.
+  Qed.
+
+  Lemma sim_tgt_rec_Waiting_all_raw fns K Π (b : bool) h :
+    (∀ e, ▷ₒ Π (Some (Incoming, e)) (Rec (expr_fill K
+    (match e with
+    | ERCall f vs h' => (ReturnExt b (Call (Val (ValFn f)) (Val <$> vs)))
+    | ERReturn v h' => (Val v)
+    end))
+    (match e with
+    | ERCall f vs h' => h'
+    | ERReturn v h' => h'
+    end)
+    fns)) -∗
+    Rec (expr_fill K (Waiting b)) h fns ≈{rec_trans}≈>ₜ Π.
+  Proof.
+   iIntros "H". iApply sim_tgt_rec_Waiting_raw. iSplit.
+   - iIntros (?????). iApply "H".
+   - iIntros (???). iApply "H".
   Qed.
 
   Lemma sim_tgt_rec_ReturnExt v Π Φ (b : bool) :
