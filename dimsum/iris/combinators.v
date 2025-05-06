@@ -689,9 +689,9 @@ Section link.
     tgt_link_left_constP R Π γ_s γ_σ1 γ_σ2 γ_oe κ σ1'.
   Proof.
     iIntros "Hγ_s Hγ_σ2 Hγ_oe Hrecv" (???) "Hγ_s' Hγ_σ1 Hγ_σ2' Hγ_oe'".
-    iDestruct (mstate_var_merge with "Hγ_s Hγ_s'") as "[-> Hγ_s]".
-    iDestruct (mstate_var_merge with "Hγ_σ2 Hγ_σ2'") as "[-> Hγ_σ2]".
-    iDestruct (mstate_var_merge with "Hγ_oe Hγ_oe'") as "[<- Hγ_oe]".
+    iDestruct (mstate_var_merge with "Hγ_s Hγ_s'") as "[-> ?]".
+    iDestruct (mstate_var_merge with "Hγ_σ2 Hγ_σ2'") as "[-> ?]".
+    iDestruct (mstate_var_merge with "Hγ_oe Hγ_oe'") as "[<- ?]".
     iApply ("Hrecv" with "[$] [$] [$] [$]").
   Qed.
 
@@ -704,9 +704,9 @@ Section link.
     tgt_link_left_constP R Π γ_s γ_σ1 γ_σ2 γ_oe κ σ1'.
   Proof.
     iIntros "Hγ_s Hγ_σ2 Hγ_oe Hrecv" (???) "Hγ_s' Hγ_σ1 Hγ_σ2' Hγ_oe'".
-    iDestruct (mstate_var_merge with "Hγ_s Hγ_s'") as "[-> Hγ_s]".
-    iDestruct (mstate_var_merge with "Hγ_σ2 Hγ_σ2'") as "[-> Hγ_σ2]".
-    iDestruct (mstate_var_merge with "Hγ_oe Hγ_oe'") as "[<- Hγ_oe]".
+    iDestruct (mstate_var_merge with "Hγ_s Hγ_s'") as "[-> ?]".
+    iDestruct (mstate_var_merge with "Hγ_σ2 Hγ_σ2'") as "[-> ?]".
+    iDestruct (mstate_var_merge with "Hγ_oe Hγ_oe'") as "[<- ?]".
     iApply ("Hrecv" with "[$] [$] [$] [$]").
   Qed.
 
@@ -826,9 +826,9 @@ Section link.
     tgt_link_right_constP R Π γ_s γ_σ1 γ_σ2 γ_oe κ σ2'.
   Proof.
     iIntros "Hγ_s Hγ_σ1 Hγ_oe Hrecv" (???) "Hγ_s' Hγ_σ1' Hγ_σ2 Hγ_oe'".
-    iDestruct (mstate_var_merge with "Hγ_s Hγ_s'") as "[-> Hγ_s]".
-    iDestruct (mstate_var_merge with "Hγ_σ1 Hγ_σ1'") as "[-> Hγ_σ1]".
-    iDestruct (mstate_var_merge with "Hγ_oe Hγ_oe'") as "[<- Hγ_oe]".
+    iDestruct (mstate_var_merge with "Hγ_s Hγ_s'") as "[-> ?]".
+    iDestruct (mstate_var_merge with "Hγ_σ1 Hγ_σ1'") as "[-> ?]".
+    iDestruct (mstate_var_merge with "Hγ_oe Hγ_oe'") as "[<- ?]".
     iApply ("Hrecv" with "[$] [$] [$] [$]").
   Qed.
 
@@ -841,9 +841,9 @@ Section link.
     tgt_link_right_constP R Π γ_s γ_σ1 γ_σ2 γ_oe κ σ2'.
   Proof.
     iIntros "Hγ_s Hγ_σ1 Hγ_oe Hrecv" (???) "Hγ_s' Hγ_σ1' Hγ_σ2 Hγ_oe'".
-    iDestruct (mstate_var_merge with "Hγ_s Hγ_s'") as "[-> Hγ_s]".
-    iDestruct (mstate_var_merge with "Hγ_σ1 Hγ_σ1'") as "[-> Hγ_σ1]".
-    iDestruct (mstate_var_merge with "Hγ_oe Hγ_oe'") as "[<- Hγ_oe]".
+    iDestruct (mstate_var_merge with "Hγ_s Hγ_s'") as "[-> ?]".
+    iDestruct (mstate_var_merge with "Hγ_σ1 Hγ_σ1'") as "[-> ?]".
+    iDestruct (mstate_var_merge with "Hγ_oe Hγ_oe'") as "[<- ?]".
     iApply ("Hrecv" with "[$] [$] [$] [$]").
   Qed.
 
