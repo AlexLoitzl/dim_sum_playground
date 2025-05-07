@@ -39,6 +39,14 @@ Notation "{{[ es ret , P ]}} f @ ts ; Π {{[ p v , Q ]}}" :=
   (rec_hoare ts Π f (fun es ret => P) (fun p v => Q))%I
     (at level 20, es name, ret name, p name, v name).
 
+(* TODO - Things introduced by P should be accesible in RET *)
+Notation "{{[ es , P ; 'RET' x ]}} f @ ts ; Π {{[ p v , Q ]}}" :=
+  (∀ args Φ, (fun es => P) args ∗ (∀ v', (fun p v => Q) x v' -∗ Φ (Val v')) -∗ WP{ts} Call (Val (ValFn f)) args @ Π {{ Φ }})%I
+    (at level 20, es name, p name, v name).
+
+Notation "{{[ es , P ]}} f @ ts ; Π {{[ v , Q ]}}" :=
+  (∀ es Φ, (fun es => P) es ∗ (∀ v', (fun v => Q) v' -∗ Φ (Val v')) -∗ WP{ts} Call (Val (ValFn f)) es @ Π {{ Φ }})%I
+    (at level 20, es name, v name).
 (* TODO: Can we make a notation like the following work? *)
 (* Notation "'{{[' a .. b , 'ARGS' args ; ret , P ] } } f @ ts ; Π {{[ x .. y , 'RET' retv ; reta , Q ] } }" := *)
 (*   (∀ Φ, *)
@@ -47,6 +55,11 @@ Notation "{{[ es ret , P ]}} f @ ts ; Π {{[ p v , Q ]}}" :=
 
 Section echo.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
+
+  Fail Definition getc_hoare (P : Z → iProp Σ) ts Π : iProp Σ :=
+    {{[es, ∃ v, P v ∗ ⌜es = []⌝ ; RET v]}}
+       "getc" @ ts ; Π
+    {{[a v, ⌜v = a⌝ ∗ P (a + 1)]}}.
 
   Lemma sim_echo0 Π :
     ⊢ rec_hoare Tgt Π "echo" (λ es RET, ⌜es = []⌝ ∗
@@ -72,9 +85,80 @@ Section echo.
               {{[_ _, RET tt]}}]}}]}}
         "echo" @ Tgt ; Π
       {{[_ v, True]}}.
-
   Proof. Abort.
+
+  Lemma sim_echo0 Π :
+    ⊢ {{[ es, ⌜es = [Val 0]⌝ ; RET tt ]}} "echo" @ Tgt ; Π {{[ arg v, True ]}}.
+  Proof. Abort.
+  (* Mixing Notations *)
+  Lemma sim_echo0 Π :
+    ⊢ {{[es RET, ⌜es = []⌝ ∗
+          {{[es, ⌜es = []⌝]}}
+            "getc" @ Tgt ; Π
+          {{[v,
+              {{[es, ⌜es = [Val v]⌝]}}
+                "putc" @ Tgt ; Π
+              {{[v, RET tt]}}]}}]}}
+        "echo" @ Tgt ; Π
+      {{[_ _, True]}}.
+  Proof. Abort.
+
 End echo.
+Section getc.
+
+  Context `{!dimsumGS Σ} `{!recGS Σ}.
+  Definition switch' `{!dimsumGS Σ} {S EV A} (Π : option EV → S → iProp Σ)
+    (pre : option EV → S → (tgt_src → ∀ EV2, ∀ m : mod_trans EV2, ∀ Π', A → iProp Σ) → iProp Σ)
+    (post : (tgt_src → ∀ EV2, ∀ m : mod_trans EV2, ∀ Π', A → m_state m → iProp Σ)) : iProp Σ :=
+    (∀ κ σ, pre κ σ (λ ts' EV2 m' Π' a, post ts' EV2 m' Π' a ⇒{ts', m'} Π') -∗  Π κ σ).
+
+  Definition switch'' `{!dimsumGS Σ} {S EV A} (Π : option EV → S → iProp Σ)
+    (pre : option EV → S → (tgt_src → ∀ EV2, ∀ m : mod_trans EV2, ∀ Π', A → iProp Σ) → iProp Σ)
+    (post : (tgt_src → ∀ EV2, ∀ m : mod_trans EV2, ∀ Π', A → m_state m → iProp Σ)) : iProp Σ :=
+    (∀ κ σ, pre κ σ (λ ts' EV2 m' Π' a, ∀ (σ' : m_state m'), post ts' EV2 m' Π' a σ' -∗ σ' ≈{ts', m'}≈> Π') -∗  Π κ σ).
+
+  Check switch'.
+
+  Lemma sim_getc_spec `{!specGS} (Π : _ → m_state (spec_trans rec_event unit) → _) Φ :
+    switch Π ({{ κ σ1 POST,
+      ∃ f es h, ⌜κ = Some (Incoming, ERCall f es h)⌝ ∗
+    let ts := if decide (f = "getc") then Tgt else Src in
+    POST ts _ _ Π ({{ σ',
+      ∃ v, ⌜f = "getc"⌝ ∗ ⌜es = []⌝ ∗ spec_state v ∗ ⌜σ' = σ1⌝ ∗
+    switch Π ({{ κ σ POST,
+      ⌜κ = Some (Outgoing, ERReturn (ValNum v) h)⌝ ∗ spec_state (v + 1) ∗
+    POST Tgt _ _ Π ({{σ',
+      ⌜σ' = σ⌝ ∗ TGT TNb @ Π {{ Φ }}
+    }})}})}})}}) -∗
+    TGT TNb @ Π {{ Φ }}.
+  Proof. Abort.
+
+  Notation "{{[ es ret , P ]}} f @ ts ; Π {{[ p v , Q ]}}" :=
+    (rec_hoare ts Π f (fun es ret => P) (fun p v => Q))%I
+      (at level 20, es name, ret name, p name, v name).
+
+
+
+  Fail Lemma sim_getc_spec `{!specGS} (Π : _ → m_state (spec_trans rec_event unit) → _) Φ :
+    switch' Π
+      ({{ κ σ1 RET, ∃ f es h, ⌜κ = Some (Incoming, ERCall f es h)⌝ ∗ RET Tgt _ _ Π σ1}})
+      (λ _ _ _ _ σ σ', ⌜σ' = σ⌝) -∗
+    (* POST Tgt _ _ Π ({{ σ', *)
+    (*   ∃ v, ⌜f = "getc"⌝ ∗ ⌜es = []⌝ ∗ spec_state v ∗ ⌜σ' = σ1⌝ ∗ *)
+    (* switch Π ({{ κ σ POST, *)
+    (*   ⌜κ = Some (Outgoing, ERReturn (ValNum v) h)⌝ ∗ spec_state (v + 1) ∗ *)
+    (* POST Tgt _ _ Π ({{σ', *)
+    (*   ⌜σ' = σ⌝ ∗ TGT TNb @ Π {{ Φ }} *)
+    (* }})}})}})}}) -∗ *)
+    TGT TNb @ Π {{ Φ }}.
+
+Fail Definition switch_id' {EV} (ts : tgt_src) (m : mod_trans EV)
+  (Π : option EV → m.(m_state) → iProp Σ)
+  (κ : option EV) (σ : m.(m_state)) (C : m.(m_state) → iProp Σ) : iProp Σ :=
+  switch'' Π ({{ κs σs RET, ⌜κs = κ⌝ ∗ ⌜σs = σ⌝ ∗ RET ts EV m Π}})%I
+             ({{ ts1 EV1 m1 Π1 σ'1, True}})%I.
+
+End getc.
 
 Section fn_spec.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
